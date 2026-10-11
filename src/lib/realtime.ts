@@ -3,8 +3,7 @@ import { after } from "next/server";
 import { teamTopic } from "./realtime-topic";
 
 /**
- * The push half of the live chat, through Supabase Realtime's Broadcast — the same
- * arrangement as HomeHub's live lists.
+ * The push half of the live chat, through Supabase Realtime's Broadcast.
  *
  * Serverless functions cannot hold a socket open to a phone; Supabase can. A phone with
  * the chat open keeps one websocket to Realtime, and a write here tells Realtime about

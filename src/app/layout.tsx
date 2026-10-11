@@ -5,7 +5,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { BAND, DEFAULT_THEME } from "@/lib/theme";
 import "./globals.css";
 
-/** Vendored rather than fetched from Google at build time — see HomeHub for why. */
+/**
+ * Vendored rather than fetched through `next/font/google`, which makes a live request to
+ * Google Fonts on every build — a network flake there would fail the deploy.
+ */
 const heading = localFont({
   src: "./fonts/quicksand-variable.woff2",
   weight: "500 700",

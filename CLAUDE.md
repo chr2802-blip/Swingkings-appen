@@ -1,8 +1,13 @@
 # Swingkings
 
 A football team's app: fine box (bødekasse), task distribution tied to DBU KampKlar
-matches, team chat and a photo feed. Same stack and conventions as HomeHub
-(`chr2802-blip/HomeApp`), with **team** where HomeHub has **home**. Danish UI only.
+matches, team chat and a photo feed. Next.js 15, Prisma/Postgres, Tailwind, Web Push,
+Supabase Realtime, Vercel. Danish UI only.
+
+**This app shares nothing with any other app**: its own repository, database, Supabase
+project, Vercel project, secrets (`AUTH_SECRET`, VAPID keys, `CRON_SECRET`), session cookie
+(`swingkings_session`) and Realtime channels (`team:<id>`). Never point it at another app's
+database or reuse another app's keys, and never import code from another repository.
 
 ## Commands
 

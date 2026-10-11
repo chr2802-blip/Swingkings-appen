@@ -1,8 +1,11 @@
 # Swingkings
 
-Holdets app: **bødekasse**, **opgavefordeler**, **chat** og **feed**. Bygget på samme
-løsning som HomeHub: Next.js 15 (App Router) · Prisma · PostgreSQL (Supabase) · Tailwind 4 ·
-Web Push · Supabase Realtime · Vercel.
+Holdets app: **bødekasse**, **opgavefordeler**, **chat** og **feed**.
+Next.js 15 (App Router) · Prisma · PostgreSQL (Supabase) · Tailwind 4 · Web Push ·
+Supabase Realtime · Vercel.
+
+Appen er helt selvstændig og deler intet med andre apps: egen kode, egen database, eget
+Supabase-projekt, eget Vercel-projekt og egne nøgler.
 
 ## Funktioner
 
@@ -64,7 +67,9 @@ Integrationstestene bruger deres egen database (`<db>_test`) og rører aldrig ud
 
 ## Deploy (Vercel + Supabase)
 
-1. Opret et Supabase-projekt og et Vercel-projekt fra dette repo.
+1. Opret et **nyt** Supabase-projekt og et **nyt** Vercel-projekt fra dette repo — genbrug
+   ikke en anden apps database, projekt eller nøgler. Generér nye værdier til
+   `AUTH_SECRET`, `CRON_SECRET` og VAPID-nøglerne.
 2. Sæt miljøvariablerne fra `.env.example` i Vercel (`DATABASE_URL` = pooled forbindelse,
    `DIRECT_URL` = direkte forbindelse).
 3. Push til `main`. Buildet kører unit-tests og `prisma migrate deploy`. Kun `main` deployes.

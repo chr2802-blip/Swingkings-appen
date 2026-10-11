@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Warm neutrals, the same trick as HomeHub: every grey is written as Tailwind's `slate`,
+ * Warm neutrals: every grey is written as Tailwind's `slate`,
  * and redefining the scale here warms all of them at once. Never write `stone`, `zinc`,
  * `gray` or `neutral` — a screen in a second neutral family sits a shade colder.
  */
