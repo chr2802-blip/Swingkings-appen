@@ -1,0 +1,527 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Pooled connection, used at runtime by serverless functions.
+  url       = env("DATABASE_URL")
+  // Unpooled connection; migrations need a direct session. Locally both are the same.
+  directUrl = env("DIRECT_URL")
+}
+
+/// What somebody may do across the whole installation: look after every team, or not.
+enum PlatformRole {
+  SUPER_ADMIN
+  USER
+}
+
+/**
+ * What somebody may do on one team. Answered per team, on TeamMember, because the
+ * treasurer of the first team can be an ordinary player on the second.
+ *
+ * ADMIN     træner/holdleder: everything, including members, matches and settings.
+ * TREASURER kasserer/bødeformand: fine types, fines and payments.
+ * PLAYER    everybody else: challenges, tasks, chat and the feed.
+ */
+enum MemberRole {
+  ADMIN
+  TREASURER
+  PLAYER
+}
+
+/// The colour a team is dressed in. What each one looks like lives in globals.css.
+enum TeamTheme {
+  GREEN
+  BLUE
+  RED
+  BLACK
+  ORANGE
+  PURPLE
+}
+
+/// Where a calendar entry came from: typed in here, or read from DBU KampKlar's feed.
+enum MatchSource {
+  MANUAL
+  KAMPKLAR
+}
+
+/// KampKlar's feed holds every activity on the team; only some of them are matches.
+enum ActivityKind {
+  MATCH
+  TRAINING
+  OTHER
+}
+
+/**
+ * Where a challenge is. A challenge is a bet between two players; the loser pays
+ * `units` fines, written as an ordinary Fine when it is settled.
+ *
+ * PENDING   sent, waiting for the opponent to accept or decline
+ * ACCEPTED  on — waiting for a winner to be agreed
+ * DECLINED  the opponent said no
+ * CANCELLED the challenger withdrew it before it was accepted
+ * SETTLED   a winner is agreed and the loser's fine has been written
+ */
+enum ChallengeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  SETTLED
+}
+
+model Team {
+  id          String    @id @default(cuid())
+  name        String
+  photoId     String?
+  theme       TeamTheme @default(GREEN)
+  /**
+   * What one fine (én bøde) costs in kroner. A fine type costs a number of these, so
+   * "for sent til træning" can be 2 bøder and "rødt kort" 10. Each Fine copies the
+   * price as it was when it was given, so changing this never rewrites what somebody
+   * already owes.
+   */
+  finePriceKr Int       @default(10)
+  /**
+   * The team's calendar link from DBU KampKlar ("Eksporter kalender"): an iCalendar
+   * feed, read by the sync on the matches page and by the daily job.
+   */
+  calendarUrl String?
+  /// When the calendar was last read successfully.
+  calendarSyncedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  members        TeamMember[]
+  activeFor      User[]          @relation("ActiveTeam")
+  invites        Invite[]
+  fineTypes      FineType[]
+  fines          Fine[]
+  payments       Payment[]
+  challenges     Challenge[]
+  matches        Match[]
+  tasks          Task[]
+  taskTemplates  TaskTemplate[]
+  chatMessages   ChatMessage[]
+  posts          Post[]
+  photos         Photo[]         @relation("PhotoTeam")
+  photo          Photo?          @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+
+  @@index([photoId])
+}
+
+/**
+ * One person, who may be on any number of teams. `activeTeamId` is only which of them
+ * is on screen; what they may reach is answered from `memberships`.
+ */
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  /// Bumped when the password changes; a session cookie naming an older version is dead.
+  tokenVersion Int          @default(0)
+  role         PlatformRole @default(USER)
+  activeTeamId String?
+  photoId      String?
+  createdAt    DateTime     @default(now())
+
+  activeTeam        Team?              @relation("ActiveTeam", fields: [activeTeamId], references: [id], onDelete: SetNull)
+  photo             Photo?             @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  memberships       TeamMember[]
+  pushSubscriptions PushSubscription[]
+  invitesCreated    Invite[]           @relation("InviteCreatedBy")
+
+  finesReceived     Fine[]             @relation("FinePlayer")
+  finesIssued       Fine[]             @relation("FineIssuedBy")
+  payments          Payment[]          @relation("PaymentPlayer")
+  paymentsRecorded  Payment[]          @relation("PaymentRecordedBy")
+
+  challengesSent     Challenge[]       @relation("ChallengeChallenger")
+  challengesReceived Challenge[]       @relation("ChallengeOpponent")
+  challengesWon      Challenge[]       @relation("ChallengeWinner")
+  challengesClaimed  Challenge[]       @relation("ChallengeClaimedBy")
+  challengesClaimedWinner Challenge[]  @relation("ChallengeClaimedWinner")
+
+  tasksCreated  Task[]         @relation("TaskCreatedBy")
+  tasksDone     Task[]         @relation("TaskDoneBy")
+  taskAssigned  TaskAssignee[]
+
+  chatMessages  ChatMessage[]
+  posts         Post[]
+  postLikes     PostLike[]
+  postComments  PostComment[]
+
+  @@index([activeTeamId])
+  @@index([photoId])
+}
+
+/// One person on one team, and what they may do there.
+model TeamMember {
+  userId       String
+  teamId       String
+  role         MemberRole @default(PLAYER)
+  /// Shirt number, shown beside the name. Optional: not everybody on a team plays.
+  shirtNumber  Int?
+  /**
+   * Whether the automatic task distribution may hand this person jobs. A coach who
+   * never washes the kit can be on the team without being picked for it.
+   */
+  takesTasks   Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
+  @@index([teamId])
+}
+
+model Invite {
+  id          String     @id @default(cuid())
+  email       String
+  teamId      String
+  role        MemberRole @default(PLAYER)
+  codeHash    String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdById String
+  createdAt   DateTime   @default(now())
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([email])
+  @@index([createdById])
+}
+
+/**
+ * An entry in the team's fine catalogue (bødekataloget): what it is for and how many
+ * fines it costs. Archived rather than deleted once used, so the history keeps its name.
+ */
+model FineType {
+  id          String    @id @default(cuid())
+  teamId      String
+  name        String
+  description String?
+  /// How many fines (bøder) this costs. One fine is `Team.finePriceKr` kroner.
+  units       Int
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fines Fine[]
+
+  @@index([teamId])
+}
+
+/**
+ * A fine somebody has been given. It copies the type's name, the number of fines and
+ * the price of one at the moment it was given: the catalogue and the price can change
+ * afterwards without changing what this person owes.
+ */
+model Fine {
+  id          String   @id @default(cuid())
+  teamId      String
+  playerId    String
+  fineTypeId  String?
+  /// What it was for, as the catalogue called it then (or written freely).
+  reason      String
+  note        String?
+  units       Int
+  unitPriceKr Int
+  issuedById  String
+  matchId     String?
+  /// The challenge this fine settled, for a fine that came from losing one.
+  challengeId String?  @unique
+  createdAt   DateTime @default(now())
+
+  team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player    User       @relation("FinePlayer", fields: [playerId], references: [id], onDelete: Cascade)
+  fineType  FineType?  @relation(fields: [fineTypeId], references: [id], onDelete: SetNull)
+  issuedBy  User       @relation("FineIssuedBy", fields: [issuedById], references: [id], onDelete: Cascade)
+  match     Match?     @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([playerId])
+  @@index([fineTypeId])
+  @@index([issuedById])
+  @@index([matchId])
+}
+
+/**
+ * Money paid into the fine box. Payments are a ledger rather than a "paid" tick on
+ * each fine, because nobody pays fine by fine: somebody MobilePays 200 kr and it covers
+ * whatever they owed. What a player owes is their fines minus their payments.
+ */
+model Payment {
+  id           String   @id @default(cuid())
+  teamId       String
+  playerId     String
+  amountKr     Int
+  note         String?
+  recordedById String
+  createdAt    DateTime @default(now())
+
+  team       Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player     User @relation("PaymentPlayer", fields: [playerId], references: [id], onDelete: Cascade)
+  recordedBy User @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([playerId])
+  @@index([recordedById])
+}
+
+/**
+ * Two players betting fines on something — "jeg scorer før dig på lørdag". See
+ * ChallengeStatus for the life of one and `src/lib/challenges.ts` for who may move it.
+ */
+model Challenge {
+  id              String          @id @default(cuid())
+  teamId          String
+  challengerId    String
+  opponentId      String
+  description     String
+  /// How many fines the loser pays.
+  units           Int
+  matchId         String?
+  status          ChallengeStatus @default(PENDING)
+  /**
+   * A winner one of the two has claimed and the other has not yet agreed to. Cleared
+   * when it is disputed; turned into `winnerId` when it is confirmed.
+   */
+  claimedWinnerId String?
+  claimedById     String?
+  winnerId        String?
+  respondedAt     DateTime?
+  settledAt       DateTime?
+  createdAt       DateTime        @default(now())
+
+  team          Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  challenger    User   @relation("ChallengeChallenger", fields: [challengerId], references: [id], onDelete: Cascade)
+  opponent      User   @relation("ChallengeOpponent", fields: [opponentId], references: [id], onDelete: Cascade)
+  winner        User?  @relation("ChallengeWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  claimedBy     User?  @relation("ChallengeClaimedBy", fields: [claimedById], references: [id], onDelete: SetNull)
+  claimedWinner User?  @relation("ChallengeClaimedWinner", fields: [claimedWinnerId], references: [id], onDelete: SetNull)
+  match         Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  fine          Fine?
+
+  @@index([teamId, createdAt])
+  @@index([challengerId])
+  @@index([opponentId])
+  @@index([winnerId])
+  @@index([claimedById])
+  @@index([claimedWinnerId])
+  @@index([matchId])
+}
+
+/**
+ * A match (or another activity) on the team's calendar. Either typed in, or read from
+ * the team's DBU KampKlar calendar feed, in which case `externalUid` is the feed's own
+ * UID and the sync updates the row in place rather than adding it twice.
+ */
+model Match {
+  id          String       @id @default(cuid())
+  teamId      String
+  title       String
+  opponent    String?
+  kind        ActivityKind @default(MATCH)
+  startsAt    DateTime
+  endsAt      DateTime?
+  location    String?
+  /// Home or away, where it can be told; null when nobody knows.
+  isHome      Boolean?
+  note        String?
+  source      MatchSource  @default(MANUAL)
+  externalUid String?
+  /// Set when the feed marks it cancelled or it disappears from the feed.
+  cancelledAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  team       Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+  fines      Fine[]
+  challenges Challenge[]
+
+  @@unique([teamId, externalUid])
+  @@index([teamId, startsAt])
+}
+
+/**
+ * A job somebody on the team has to do: wash the kit, bring fruit, drive. Belongs to a
+ * match, or stands alone with a deadline of its own — `dueAt` is the deadline in both
+ * cases (a match's task defaults to the match's kick-off).
+ */
+model Task {
+  id          String    @id @default(cuid())
+  teamId      String
+  title       String
+  description String?
+  matchId     String?
+  dueAt       DateTime?
+  /// Null for a task the calendar sync added from a template rather than a person.
+  createdById String?
+  doneAt      DateTime?
+  doneById    String?
+  /// When the reminder job last told the assignees, so they hear once a day at most.
+  lastNotifiedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  match     Match?         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  createdBy User?          @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  doneBy    User?          @relation("TaskDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
+  assignees TaskAssignee[]
+
+  @@index([teamId, dueAt])
+  @@index([matchId])
+  @@index([createdById])
+  @@index([doneById])
+}
+
+/// Who a task is handed to. Reached through its task, which carries the team.
+model TaskAssignee {
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+/**
+ * A job every match needs ("Tøjvask", "Frugt"). Added to a match on request, or
+ * automatically to every match the KampKlar sync brings in, and handed out fairly.
+ */
+model TaskTemplate {
+  id          String   @id @default(cuid())
+  teamId      String
+  title       String
+  description String?
+  /// How many people the job is handed to.
+  people      Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  teamId    String
+  authorId  String
+  body      String
+  photoId   String?
+  createdAt DateTime @default(now())
+
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  photo  Photo? @relation(fields: [photoId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([authorId])
+  @@index([photoId])
+}
+
+/// A post on the team's feed: a picture, some words, or both.
+model Post {
+  id        String   @id @default(cuid())
+  teamId    String
+  authorId  String
+  body      String?
+  photoId   String?
+  createdAt DateTime @default(now())
+
+  team     Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  photo    Photo?        @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  likes    PostLike[]
+  comments PostComment[]
+
+  @@index([teamId, createdAt])
+  @@index([authorId])
+  @@index([photoId])
+}
+
+/// Reached through its post.
+model PostLike {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId])
+}
+
+/// Reached through its post.
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId])
+}
+
+/**
+ * A picture, its bytes in Postgres: a full size and a thumbnail, both already shrunk
+ * in the browser and measured again on arrival (`src/lib/photo-file.ts`).
+ */
+model Photo {
+  id          String   @id @default(cuid())
+  teamId      String
+  contentType String
+  width       Int
+  height      Int
+  bytes       Bytes
+  thumbWidth  Int
+  thumbHeight Int
+  thumbBytes  Bytes
+  createdAt   DateTime @default(now())
+
+  team Team @relation("PhotoTeam", fields: [teamId], references: [id], onDelete: Cascade)
+
+  teams        Team[]        @relation("TeamPhoto")
+  users        User[]        @relation("UserPhoto")
+  posts        Post[]
+  chatMessages ChatMessage[]
+
+  @@index([teamId, createdAt])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+  @@index([createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

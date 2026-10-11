@@ -1,0 +1,322 @@
+@import "tailwindcss";
+
+/*
+ * Warm neutrals, the same trick as HomeHub: every grey is written as Tailwind's `slate`,
+ * and redefining the scale here warms all of them at once. Never write `stone`, `zinc`,
+ * `gray` or `neutral` — a screen in a second neutral family sits a shade colder.
+ */
+@theme {
+  --color-slate-50: #fafaf6;
+  --color-slate-100: #f2f1ea;
+  --color-slate-200: #e5e3d8;
+  --color-slate-300: #d0cdbd;
+  --color-slate-400: #9d9a88;
+  --color-slate-500: #6c6a5b;
+  --color-slate-600: #555346;
+  --color-slate-700: #403f34;
+  --color-slate-800: #2b2a22;
+  --color-slate-900: #1d1c16;
+  --color-slate-950: #12110d;
+  --color-white: #fffffb;
+
+  --shadow-sm: 0 1px 0 rgb(60 70 40 / 0.05), 0 8px 22px -16px rgb(60 70 40 / 0.4);
+}
+
+:root {
+  --page: #f8f7f1;
+}
+
+html {
+  background-color: var(--band);
+}
+
+body {
+  background-color: var(--page);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+}
+
+h1,
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  font-optical-sizing: auto;
+}
+
+.accent-tint-bg {
+  background-color: color-mix(in srgb, var(--accent) 14%, white);
+}
+
+/*
+ * What a team is dressed in: five values per colour, set once as `data-theme` on
+ * <html> so sheets portalled into <body> wear it too. `--band` (the frame: header, tab
+ * bar, the phone's own bars) is the same literal in every block, and equals `BAND` in
+ * src/lib/theme.ts. White on --accent and --accent-text on white both read as words.
+ */
+:root,
+[data-theme="GREEN"] {
+  --band: #f4f1ea;
+  --accent: #166534;
+  --accent-hover: #14532d;
+  --accent-text: #166534;
+  --accent-line: #cfe3d3;
+}
+
+[data-theme="BLUE"] {
+  --band: #f4f1ea;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --accent-text: #1e40af;
+  --accent-line: #c7d7fb;
+}
+
+[data-theme="RED"] {
+  --band: #f4f1ea;
+  --accent: #b91c1c;
+  --accent-hover: #991b1b;
+  --accent-text: #991b1b;
+  --accent-line: #f6cccc;
+}
+
+[data-theme="BLACK"] {
+  --band: #f4f1ea;
+  --accent: #1d1c16;
+  --accent-hover: #403f34;
+  --accent-text: #1d1c16;
+  --accent-line: #e5e3d8;
+}
+
+[data-theme="ORANGE"] {
+  --band: #f4f1ea;
+  --accent: #c2410c;
+  --accent-hover: #9a3412;
+  --accent-text: #9a3412;
+  --accent-line: #fbd5bf;
+}
+
+[data-theme="PURPLE"] {
+  --band: #f4f1ea;
+  --accent: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent-text: #5b21b6;
+  --accent-line: #ddd6fe;
+}
+
+:root {
+  --ease-arrive: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-leave: cubic-bezier(0.4, 0, 1, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --dur-press: 70ms;
+  --dur-release: 260ms;
+  --dur-quick: 150ms;
+  --dur-base: 240ms;
+  --dur-row: 200ms;
+  --dur-sheet-in: 300ms;
+  --dur-sheet-out: 200ms;
+}
+
+/*
+ * Anything tappable presses in one of three ways, by size: the smaller the thing, the
+ * further it goes in. In a layer below the utilities, so a utility beside it still wins.
+ */
+@layer components {
+  .press-icon,
+  .press-button,
+  .press-card {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      scale var(--dur-release) var(--ease-spring),
+      background-color var(--dur-quick) ease-out,
+      border-color var(--dur-quick) ease-out,
+      color var(--dur-quick) ease-out,
+      opacity var(--dur-quick) ease-out;
+  }
+
+  .press-icon:active:not(:disabled, [aria-disabled="true"]),
+  .press-button:active:not(:disabled, [aria-disabled="true"]),
+  .press-card:active:not(:disabled, [aria-disabled="true"]) {
+    transition-duration: var(--dur-press);
+    transition-timing-function: ease-out;
+  }
+
+  .press-icon:active:not(:disabled, [aria-disabled="true"]) {
+    scale: 0.9;
+  }
+
+  .press-button:active:not(:disabled, [aria-disabled="true"]) {
+    scale: 0.96;
+  }
+
+  .press-card:active:not(:disabled, [aria-disabled="true"]) {
+    scale: 0.98;
+    background-color: var(--color-slate-100);
+  }
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes sheet-in {
+  from {
+    translate: 0 100%;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes sheet-out {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 100%;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    scale: 0.95;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.95;
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0.5;
+    translate: 0 6px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes pop {
+  0% {
+    scale: 1;
+  }
+  40% {
+    scale: 1.25;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.animate-sheet-in,
+.animate-sheet-out,
+.animate-backdrop-in,
+.animate-backdrop-out,
+.animate-row-in,
+.animate-page-in {
+  animation-fill-mode: both;
+}
+
+.animate-sheet-in {
+  animation: sheet-in var(--dur-sheet-in) var(--ease-sheet) both;
+}
+
+.animate-sheet-out {
+  animation: sheet-out var(--dur-sheet-out) var(--ease-leave) both;
+}
+
+.animate-backdrop-in {
+  animation: backdrop-in var(--dur-sheet-in) ease-out both;
+}
+
+.animate-backdrop-out {
+  animation: backdrop-out var(--dur-sheet-out) ease-out both;
+}
+
+@media (width >= theme(--breakpoint-sm)) {
+  .animate-sheet-in {
+    animation: panel-in var(--dur-sheet-in) var(--ease-arrive) both;
+  }
+
+  .animate-sheet-out {
+    animation: panel-out var(--dur-sheet-out) var(--ease-leave) both;
+  }
+}
+
+.animate-row-in {
+  animation: row-in var(--dur-row) var(--ease-arrive) both;
+}
+
+.animate-page-in {
+  animation: page-in var(--dur-base) var(--ease-arrive) both;
+}
+
+.animate-pop {
+  animation: pop 320ms var(--ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
