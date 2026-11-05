@@ -71,7 +71,7 @@ export async function sweepUnclaimedPhotos(teamId: string) {
       createdAt: { lt: new Date(Date.now() - UNCLAIMED_MS) },
       teams: { none: {} },
       users: { none: {} },
-      posts: { none: {} },
+      postPhotos: { none: {} },
       chatMessages: { none: {} },
     },
     select: { id: true },
@@ -80,4 +80,21 @@ export async function sweepUnclaimedPhotos(teamId: string) {
   if (unclaimed.length === 0) return 0;
   await db.photo.deleteMany({ where: { id: { in: unclaimed.map((photo) => photo.id) } } });
   return unclaimed.length;
+}
+
+/**
+ * Reads every picture a form is attaching (a feed post takes several), in the order
+ * chosen. Each id is looked up through `teamDb`, so another team's picture is not found.
+ */
+export async function readPhotoChoices(
+  formData: FormData,
+  teamId: string,
+  max: number,
+): Promise<{ ok: true; photoIds: string[] } | { ok: false; error: string }> {
+  const ids = [...new Set(formData.getAll(PHOTO_FIELD).map((v) => String(v).trim()).filter(Boolean))];
+  if (ids.length > max) return { ok: false, error: `Højst ${max} billeder pr. opslag.` };
+  if (ids.length === 0) return { ok: true, photoIds: [] };
+  const found = await teamDb(teamId).photo.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (found.length !== ids.length) return { ok: false, error: "Et af billederne findes ikke længere." };
+  return { ok: true, photoIds: ids };
 }

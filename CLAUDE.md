@@ -44,6 +44,13 @@ In a bare cloud container: `service postgresql start`, set the postgres password
   are never touched by the sync. New future MATCH rows get the team's `TaskTemplate`s,
   distributed by `src/lib/distribution.ts` (fewest jobs in the last year first).
 - **Dates go through `src/lib/time.ts`** (Europe/Copenhagen). Tests run with `TZ=UTC`.
+- **Polls** live on a feed post. Rules are `src/lib/polls.ts`; writing a vote is `castVote`
+  (`src/lib/voting.ts`); what reaches the browser is built by `pollView` (`src/lib/feed.ts`).
+  An anonymous poll's `PollVote` rows have `voterId` null and no timestamp, and who has voted
+  is only in `PollBallot` — never add a column, log line or query that links the two, and
+  never send results to somebody who has not voted while the poll is open.
+- **A feed post's pictures** are `PostPhoto` rows (up to `MAX_POST_PHOTOS`), read with
+  `readPhotoChoices`.
 - **Pictures** are shrunk in the browser (`downscale.ts`), re-measured on arrival
   (`photo-file.ts`), stored in Postgres, served from `/api/photos/<id>` behind the session.
   Pages read `photoId`, never the bytes.

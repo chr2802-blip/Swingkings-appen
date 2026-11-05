@@ -12,18 +12,21 @@
  * trust the result: `lib/photo-file.ts` measures whatever actually arrives.
  */
 
-
-/** Longest edge of the stored picture. Wide enough to fill a phone screen twice over. */
-export const MAX_EDGE = 1600;
+/**
+ * Longest edge of the stored picture: sharp on a phone held either way, and at quality
+ * 0.78 a typical match photo lands around 150–250 KB rather than the 3–6 MB the camera
+ * wrote. The feed takes up to ten per post, so this is what keeps a season of photos in
+ * the database small.
+ */
+export const MAX_EDGE = 1280;
 
 /**
- * Longest edge of the thumbnail, sized for a card rather than a page. Wider than the
- * widest card the layout produces, so a cover is never stretched past what it holds.
+ * Longest edge of the thumbnail (avatars, the overview's grid, the chat): about 30–50 KB.
  */
-export const THUMB_EDGE = 600;
+export const THUMB_EDGE = 480;
 
-const QUALITY = 0.82;
-const THUMB_QUALITY = 0.72;
+const QUALITY = 0.78;
+const THUMB_QUALITY = 0.7;
 
 /**
  * Everything the browser will decode goes far below this; it is here so that picking a

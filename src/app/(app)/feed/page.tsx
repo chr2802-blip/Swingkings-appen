@@ -1,36 +1,28 @@
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
-import { teamDb } from "@/lib/team-db";
+import { feedPosts } from "@/lib/feed";
+import { matchOptions } from "@/lib/fine-data";
 import { stampLabel } from "@/lib/time";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
-import { Avatar, Photo, photoUrl } from "@/components/photo";
+import { Avatar } from "@/components/photo";
+import { PhotoCarousel } from "@/components/photo-carousel";
+import { PollView } from "@/components/poll-view";
 import { PostDialog } from "@/components/post-dialog";
 import { CommentForm } from "@/components/comment-form";
 import { ActionButton } from "@/components/action-button";
 import { deleteComment, deletePost, toggleLike } from "@/app/actions/social";
 
-const person = { select: { id: true, name: true, photoId: true } } as const;
-
 export default async function FeedPage() {
   const user = await requireTeamUser();
   const admin = canAdministerTeam(user, user.teamId);
-  const posts = await teamDb(user.teamId).post.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 40,
-    select: {
-      id: true,
-      body: true,
-      photoId: true,
-      createdAt: true,
-      author: person,
-      likes: { select: { userId: true, user: { select: { name: true } } } },
-      comments: { orderBy: { createdAt: "asc" }, select: { id: true, body: true, createdAt: true, author: person } },
-    },
-  });
+  const [posts, matches] = await Promise.all([
+    feedPosts(user.teamId, { id: user.id, canAdminister: admin }),
+    matchOptions(user.teamId),
+  ]);
 
   return (
     <div className="mx-auto max-w-xl">
-      <PageHeader title="Feed" description="Billeder og historier fra holdet." action={<PostDialog />} />
+      <PageHeader title="Feed" description="Billeder, historier og afstemninger fra holdet." action={<PostDialog matches={matches} />} />
       {posts.length === 0 ? (
         <EmptyState icon="📸">Ingen opslag endnu. Del det første billede fra omklædningsrummet!</EmptyState>
       ) : (
@@ -56,12 +48,11 @@ export default async function FeedPage() {
                     />
                   )}
                 </div>
-                {post.photoId && (
-                  <a href={photoUrl(post.photoId)} target="_blank" rel="noreferrer" className="block bg-slate-100">
-                    <Photo photoId={post.photoId} alt={post.body ?? `Billede fra ${post.author.name}`} className="max-h-[70vh] w-full object-contain" />
-                  </a>
+                {post.photoIds.length > 0 && (
+                  <PhotoCarousel photoIds={post.photoIds} alt={post.body ?? `Billede fra ${post.author.name}`} />
                 )}
                 <div className="space-y-3 px-4 py-3">
+                  {post.poll && <PollView poll={post.poll} />}
                   <div className="flex items-center gap-3">
                     <ActionButton
                       action={toggleLike}

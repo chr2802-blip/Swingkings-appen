@@ -19,7 +19,6 @@ enum PlatformRole {
 /**
  * What somebody may do on one team. Answered per team, on TeamMember, because the
  * treasurer of the first team can be an ordinary player on the second.
- *
  * ADMIN     træner/holdleder: everything, including members, matches and settings.
  * TREASURER kasserer/bødeformand: fine types, fines and payments.
  * PLAYER    everybody else: challenges, tasks, chat and the feed.
@@ -56,7 +55,6 @@ enum ActivityKind {
 /**
  * Where a challenge is. A challenge is a bet between two players; the loser pays
  * `units` fines, written as an ordinary Fine when it is settled.
- *
  * PENDING   sent, waiting for the opponent to accept or decline
  * ACCEPTED  on — waiting for a winner to be agreed
  * DECLINED  the opponent said no
@@ -72,40 +70,41 @@ enum ChallengeStatus {
 }
 
 model Team {
-  id          String    @id @default(cuid())
-  name        String
-  photoId     String?
-  theme       TeamTheme @default(GREEN)
+  id               String    @id @default(cuid())
+  name             String
+  photoId          String?
+  theme            TeamTheme @default(GREEN)
   /**
    * What one fine (én bøde) costs in kroner. A fine type costs a number of these, so
    * "for sent til træning" can be 2 bøder and "rødt kort" 10. Each Fine copies the
    * price as it was when it was given, so changing this never rewrites what somebody
    * already owes.
    */
-  finePriceKr Int       @default(10)
+  finePriceKr      Int       @default(10)
   /**
    * The team's calendar link from DBU KampKlar ("Eksporter kalender"): an iCalendar
    * feed, read by the sync on the matches page and by the daily job.
    */
-  calendarUrl String?
+  calendarUrl      String?
   /// When the calendar was last read successfully.
   calendarSyncedAt DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt        DateTime  @default(now())
 
-  members        TeamMember[]
-  activeFor      User[]          @relation("ActiveTeam")
-  invites        Invite[]
-  fineTypes      FineType[]
-  fines          Fine[]
-  payments       Payment[]
-  challenges     Challenge[]
-  matches        Match[]
-  tasks          Task[]
-  taskTemplates  TaskTemplate[]
-  chatMessages   ChatMessage[]
-  posts          Post[]
-  photos         Photo[]         @relation("PhotoTeam")
-  photo          Photo?          @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  members       TeamMember[]
+  activeFor     User[]         @relation("ActiveTeam")
+  invites       Invite[]
+  fineTypes     FineType[]
+  fines         Fine[]
+  payments      Payment[]
+  challenges    Challenge[]
+  matches       Match[]
+  tasks         Task[]
+  taskTemplates TaskTemplate[]
+  chatMessages  ChatMessage[]
+  posts         Post[]
+  polls         Poll[]
+  photos        Photo[]        @relation("PhotoTeam")
+  photo         Photo?         @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
 
   @@index([photoId])
 }
@@ -132,25 +131,28 @@ model User {
   pushSubscriptions PushSubscription[]
   invitesCreated    Invite[]           @relation("InviteCreatedBy")
 
-  finesReceived     Fine[]             @relation("FinePlayer")
-  finesIssued       Fine[]             @relation("FineIssuedBy")
-  payments          Payment[]          @relation("PaymentPlayer")
-  paymentsRecorded  Payment[]          @relation("PaymentRecordedBy")
+  finesReceived    Fine[]    @relation("FinePlayer")
+  finesIssued      Fine[]    @relation("FineIssuedBy")
+  payments         Payment[] @relation("PaymentPlayer")
+  paymentsRecorded Payment[] @relation("PaymentRecordedBy")
 
-  challengesSent     Challenge[]       @relation("ChallengeChallenger")
-  challengesReceived Challenge[]       @relation("ChallengeOpponent")
-  challengesWon      Challenge[]       @relation("ChallengeWinner")
-  challengesClaimed  Challenge[]       @relation("ChallengeClaimedBy")
-  challengesClaimedWinner Challenge[]  @relation("ChallengeClaimedWinner")
+  challengesSent          Challenge[] @relation("ChallengeChallenger")
+  challengesReceived      Challenge[] @relation("ChallengeOpponent")
+  challengesWon           Challenge[] @relation("ChallengeWinner")
+  challengesClaimed       Challenge[] @relation("ChallengeClaimedBy")
+  challengesClaimedWinner Challenge[] @relation("ChallengeClaimedWinner")
 
-  tasksCreated  Task[]         @relation("TaskCreatedBy")
-  tasksDone     Task[]         @relation("TaskDoneBy")
-  taskAssigned  TaskAssignee[]
+  tasksCreated Task[]         @relation("TaskCreatedBy")
+  tasksDone    Task[]         @relation("TaskDoneBy")
+  taskAssigned TaskAssignee[]
 
-  chatMessages  ChatMessage[]
-  posts         Post[]
-  postLikes     PostLike[]
-  postComments  PostComment[]
+  chatMessages ChatMessage[]
+  posts        Post[]
+  pollOptions  PollOption[]  @relation("PollOptionPlayer")
+  pollVotes    PollVote[]    @relation("PollVoter")
+  pollBallots  PollBallot[]  @relation("PollBallot")
+  postLikes    PostLike[]
+  postComments PostComment[]
 
   @@index([activeTeamId])
   @@index([photoId])
@@ -158,17 +160,17 @@ model User {
 
 /// One person on one team, and what they may do there.
 model TeamMember {
-  userId       String
-  teamId       String
-  role         MemberRole @default(PLAYER)
+  userId      String
+  teamId      String
+  role        MemberRole @default(PLAYER)
   /// Shirt number, shown beside the name. Optional: not everybody on a team plays.
-  shirtNumber  Int?
+  shirtNumber Int?
   /**
    * Whether the automatic task distribution may hand this person jobs. A coach who
    * never washes the kit can be on the team without being picked for it.
    */
-  takesTasks   Boolean    @default(true)
-  createdAt    DateTime   @default(now())
+  takesTasks  Boolean    @default(true)
+  createdAt   DateTime   @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -345,6 +347,7 @@ model Match {
   tasks      Task[]
   fines      Fine[]
   challenges Challenge[]
+  polls      Poll[]
 
   @@unique([teamId, externalUid])
   @@index([teamId, startsAt])
@@ -356,19 +359,19 @@ model Match {
  * cases (a match's task defaults to the match's kick-off).
  */
 model Task {
-  id          String    @id @default(cuid())
-  teamId      String
-  title       String
-  description String?
-  matchId     String?
-  dueAt       DateTime?
+  id             String    @id @default(cuid())
+  teamId         String
+  title          String
+  description    String?
+  matchId        String?
+  dueAt          DateTime?
   /// Null for a task the calendar sync added from a template rather than a person.
-  createdById String?
-  doneAt      DateTime?
-  doneById    String?
+  createdById    String?
+  doneAt         DateTime?
+  doneById       String?
   /// When the reminder job last told the assignees, so they hear once a day at most.
   lastNotifiedAt DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt      DateTime  @default(now())
 
   team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
   match     Match?         @relation(fields: [matchId], references: [id], onDelete: Cascade)
@@ -430,24 +433,122 @@ model ChatMessage {
   @@index([photoId])
 }
 
-/// A post on the team's feed: a picture, some words, or both.
+/**
+ * A post on the team's feed: pictures, some words, a poll — any of them, at least one.
+ * Its pictures are `PostPhoto` rows, in the order they were chosen.
+ */
 model Post {
   id        String   @id @default(cuid())
   teamId    String
   authorId  String
   body      String?
-  photoId   String?
   createdAt DateTime @default(now())
 
   team     Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
   author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  photo    Photo?        @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  photos   PostPhoto[]
+  poll     Poll?
   likes    PostLike[]
   comments PostComment[]
 
   @@index([teamId, createdAt])
   @@index([authorId])
+}
+
+/// One of a post's pictures. Reached through its post.
+model PostPhoto {
+  postId   String
+  photoId  String
+  position Int
+
+  post  Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@id([postId, photoId])
   @@index([photoId])
+}
+
+/**
+ * A poll on a feed post: "Kampens spiller", "Hvornår skal vi holde fest?".
+ * `anonymous` is decided when the poll is made and never changed afterwards. An
+ * anonymous poll's votes carry no voter at all (`PollVote.voterId` is null) and no time,
+ * and who has voted is kept apart in `PollBallot` — so nobody, admins included, can see
+ * who voted for what, and a vote once cast cannot be changed (there is nothing linking
+ * it to its voter to change). An open poll keeps the voter on each vote, shows names,
+ * and lets somebody change their mind until it closes.
+ * Open while `closedAt` is null and `closesAt` (if any) is in the future — see
+ * `src/lib/polls.ts`.
+ */
+model Poll {
+  id             String    @id @default(cuid())
+  teamId         String
+  postId         String    @unique
+  question       String
+  anonymous      Boolean   @default(false)
+  multipleChoice Boolean   @default(false)
+  /// The match a "kampens spiller" vote is about, if any.
+  matchId        String?
+  closesAt       DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime  @default(now())
+
+  team    Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  post    Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  match   Match?       @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  options PollOption[]
+  votes   PollVote[]
+  ballots PollBallot[]
+
+  @@index([teamId, createdAt])
+  @@index([matchId])
+}
+
+/// One answer to choose. `playerId` when the answer is a player on the team. Reached through its poll.
+model PollOption {
+  id       String  @id @default(cuid())
+  pollId   String
+  text     String
+  playerId String?
+  position Int
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  player User?      @relation("PollOptionPlayer", fields: [playerId], references: [id], onDelete: SetNull)
+  votes  PollVote[]
+
+  @@index([pollId])
+  @@index([playerId])
+}
+
+/**
+ * One vote for one option. In an anonymous poll `voterId` is null and the row has a
+ * random id and no timestamp, so it cannot be traced back to a ballot. Reached through
+ * its poll.
+ */
+model PollVote {
+  id       String  @id @default(uuid())
+  pollId   String
+  optionId String
+  voterId  String?
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  voter  User?      @relation("PollVoter", fields: [voterId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, voterId])
+  @@index([pollId])
+  @@index([voterId])
+}
+
+/// That somebody has voted in a poll — and nothing about what. Reached through its poll.
+model PollBallot {
+  pollId String
+  userId String
+
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user User @relation("PollBallot", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, userId])
+  @@index([userId])
 }
 
 /// Reached through its post.
@@ -498,7 +599,7 @@ model Photo {
 
   teams        Team[]        @relation("TeamPhoto")
   users        User[]        @relation("UserPhoto")
-  posts        Post[]
+  postPhotos   PostPhoto[]
   chatMessages ChatMessage[]
 
   @@index([teamId, createdAt])

@@ -22,6 +22,10 @@ const NO_TEAM_ID: Record<string, { refuse: true; because: string } | { refuse: f
   TaskAssignee: { refuse: true, because: "reached through its task" },
   PostLike: { refuse: true, because: "reached through its post" },
   PostComment: { refuse: true, because: "reached through its post" },
+  PostPhoto: { refuse: true, because: "reached through its post" },
+  PollOption: { refuse: true, because: "reached through its poll" },
+  PollVote: { refuse: true, because: "reached through its poll" },
+  PollBallot: { refuse: true, because: "reached through its poll" },
 
   Team: { refuse: false },
   LoginAttempt: { refuse: false },

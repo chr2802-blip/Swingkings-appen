@@ -23,8 +23,8 @@ const TENANCY = [
       "Read team-scoped models through teamDb(teamId) so the team cannot be left out. Use prisma directly only where crossing teams is the point.",
   },
   {
-    selector: "MemberExpression[object.name='prisma'][property.name=/^(taskAssignee|postLike|postComment)$/]",
-    message: "These carry no teamId. Read them as an include on a teamDb query of their task or post.",
+    selector: "MemberExpression[object.name='prisma'][property.name=/^(taskAssignee|postLike|postComment|postPhoto|pollOption|pollVote|pollBallot)$/]",
+    message: "These carry no teamId. Read them as an include on a teamDb query of their task, post or poll.",
   },
 ];
 

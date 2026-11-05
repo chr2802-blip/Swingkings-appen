@@ -35,8 +35,17 @@ Tildelte får en notifikation, og dagen før fristen en påmindelse.
 
 **Chat** — Én holdchat med tekst og billeder. Live via Supabase Realtime, ellers poller den.
 
-**Feed** — Opslag med billede og/eller tekst, likes og kommentarer. Billeder skaleres ned i
-browseren og gemmes i Postgres bag login — der er ingen offentlige billed-URL'er.
+**Feed** — Opslag med op til 10 billeder (swipes som karrusel), tekst, likes og
+kommentarer. Billeder gøres mindre på telefonen før upload (1280 px, typisk 150–300 KB i
+stedet for flere MB) og gemmes i Postgres bag login — der er ingen offentlige billed-URL'er.
+
+**Afstemninger** — Et opslag kan have en afstemning: *Kampens spiller* (alle spillere er
+svarmuligheder, evt. knyttet til en kamp), *Hvornår skal vi holde fest?* eller egne svar.
+Ét eller flere svar, valgfrit sluttidspunkt, og den der laver den (eller træneren) kan
+lukke den. Resultatet vises, når man har stemt, eller når afstemningen er lukket.
+**Anonym afstemning:** stemmerne gemmes uden nogen kobling til den, der stemte, så ingen —
+heller ikke trænere eller admin — kan se hvem der stemte hvad. Derfor kan en anonym stemme
+ikke ændres, og en afstemning kan ikke gøres anonym (eller ikke-anonym) bagefter.
 
 **Roller** (pr. hold): *Træner/holdleder* (alt), *Kasserer* (bøder og betalinger),
 *Spiller*. En super admin opretter hold under **Admin**. Invitationer laves under

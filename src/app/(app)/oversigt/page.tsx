@@ -14,7 +14,7 @@ import { NotificationSetup } from "@/components/notification-setup";
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, nextMatch, myTasks, openChallenges, posts] = await Promise.all([
+  const [board, nextMatch, myTasks, openChallenges, posts, pollsWaiting] = await Promise.all([
     fineBoard(user.teamId),
     db.match.findFirst({
       where: { kind: "MATCH", cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
@@ -32,16 +32,24 @@ export default async function OverviewPage() {
       select: { status: true, challengerId: true, opponentId: true, claimedById: true, claimedWinnerId: true },
     }),
     db.post.findMany({
-      where: { photoId: { not: null } },
+      where: { photos: { some: {} } },
       orderBy: { createdAt: "desc" },
       take: 6,
-      select: { id: true, photoId: true },
+      select: { id: true, photos: { orderBy: { position: "asc" }, take: 6, select: { photoId: true } } },
+    }),
+    db.poll.count({
+      where: {
+        closedAt: null,
+        OR: [{ closesAt: null }, { closesAt: { gt: new Date() } }],
+        ballots: { none: { userId: user.id } },
+      },
     }),
   ]);
   const mine = board.balances.find((row) => row.userId === user.id);
   const waitingOnMe = openChallenges.filter((c) => movesFor(c, user.id, false).some((m) => m !== "cancel")).length;
   const topOwers = board.balances.filter((row) => row.owesKr > 0).slice(0, 3);
   const firstName = user.name.split(" ")[0];
+  const pictures = posts.flatMap((post) => post.photos.map((p) => p.photoId)).slice(0, 6);
 
   return (
     <div className="space-y-8">
@@ -51,6 +59,21 @@ export default async function OverviewPage() {
       </div>
 
       <NotificationSetup compact />
+
+      {pollsWaiting > 0 && (
+        <Link
+          href="/feed"
+          className="press-card flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <span aria-hidden className="text-xl">
+            🗳️
+          </span>
+          <span className="flex-1">
+            {pollsWaiting === 1 ? "1 afstemning venter på din stemme" : `${pollsWaiting} afstemninger venter på din stemme`}
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link href="/boder" className="press-card block rounded-2xl">
@@ -132,13 +155,13 @@ export default async function OverviewPage() {
         <SectionTitle action={<Link href="/feed" className="text-sm text-[var(--accent-text)] underline">Til feedet</Link>}>
           Seneste billeder
         </SectionTitle>
-        {posts.length === 0 ? (
+        {pictures.length === 0 ? (
           <Card className="text-sm text-slate-500">Ingen billeder endnu.</Card>
         ) : (
           <div className="grid grid-cols-3 gap-2">
-            {posts.map((post) => (
-              <Link key={post.id} href="/feed" className="press-card block overflow-hidden rounded-xl">
-                <Photo photoId={post.photoId!} alt="" size="thumb" className="aspect-square w-full object-cover" />
+            {pictures.map((photoId) => (
+              <Link key={photoId} href="/feed" className="press-card block overflow-hidden rounded-xl">
+                <Photo photoId={photoId} alt="" size="thumb" className="aspect-square w-full object-cover" />
               </Link>
             ))}
           </div>

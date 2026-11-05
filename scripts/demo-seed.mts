@@ -122,5 +122,49 @@ const post = await prisma.post.create({ data: { teamId: team.id, authorId: frede
 await prisma.postLike.createMany({ data: [mads, oliver, emil].map((u) => ({ postId: post.id, userId: u.id })) });
 await prisma.postComment.create({ data: { postId: post.id, authorId: oliver.id, body: "Det mål i 89. minut 🤩" } });
 
+const roster = [mads, jonas, frederik, oliver, emil, lucas, victor, noah];
+const motm = await prisma.post.create({
+  data: {
+    teamId: team.id,
+    authorId: mads.id,
+    body: "Stem på kampens spiller fra sejren over Hvidovre 🏆",
+    poll: {
+      create: {
+        teamId: team.id,
+        question: "Kampens spiller",
+        matchId: lastMatch.id,
+        options: { create: roster.map((u, position) => ({ text: u.name, playerId: u.id, position })) },
+      },
+    },
+  },
+  include: { poll: { include: { options: true } } },
+});
+const optionFor = (player: (typeof roster)[number]) => motm.poll!.options.find((o) => o.playerId === player.id)!.id;
+for (const [voter, pick] of [[jonas, frederik], [emil, frederik], [victor, noah]] as const) {
+  await prisma.pollBallot.create({ data: { pollId: motm.poll!.id, userId: voter.id } });
+  await prisma.pollVote.create({ data: { pollId: motm.poll!.id, optionId: optionFor(pick), voterId: voter.id } });
+}
+const party = await prisma.post.create({
+  data: {
+    teamId: team.id,
+    authorId: jonas.id,
+    poll: {
+      create: {
+        teamId: team.id,
+        question: "Hvornår skal vi holde fest?",
+        anonymous: true,
+        multipleChoice: true,
+        options: { create: ["Fredag d. 21. november", "Lørdag d. 22. november", "Lørdag d. 29. november"].map((text, position) => ({ text, position })) },
+      },
+    },
+  },
+  include: { poll: { include: { options: true } } },
+});
+const [fri, sat] = party.poll!.options.sort((a, b) => a.position - b.position);
+for (const [voter, choices] of [[mads, [fri!, sat!]], [emil, [sat!]], [lucas, [sat!]]] as const) {
+  await prisma.pollBallot.create({ data: { pollId: party.poll!.id, userId: voter.id } });
+  await prisma.pollVote.createMany({ data: choices.map((o) => ({ pollId: party.poll!.id, optionId: o.id, voterId: null })) });
+}
+
 console.log(`Demo team "${TEAM}" ready. Log in as mads@demo.swingkings.dk (admin), jonas@ (kasserer) or oliver@ — password demo-password.`);
 await prisma.$disconnect();
