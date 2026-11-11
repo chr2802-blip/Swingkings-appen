@@ -63,7 +63,7 @@ export const ROLE_LABEL: Record<MemberRole, string> = {
 export const ROLE_DESCRIPTION: Record<MemberRole, string> = {
   PLAYER: "Alt det daglige: aktiviteter, opgaver, bøder til andre, udfordringer, opslag og afstemninger.",
   TREASURER: "Som spiller, og opretter, retter og sletter bødekataloget.",
-  ADMIN: "Det hele, også holdindstillinger, medlemmer, roller og invitationslinks.",
+  ADMIN: "Det hele, også holdindstillinger, medlemmer, roller, invitationslinks og standardopgaver.",
 };
 
 /** The one person who looks after every team; not a role anybody is given on a team. */

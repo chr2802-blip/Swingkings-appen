@@ -23,17 +23,23 @@ lørdag"). Modstanderen accepterer eller afviser. Bagefter melder den ene en vin
 anden bekræfter (eller er uenig). Bødekasseformanden eller en admin kan afgøre en uenighed. Når udfordringen er
 afgjort, får taberen automatisk en bøde på indsatsen.
 
-**Kampe fra DBU KampKlar** — En admin indsætter holdets kalenderlink fra KampKlar
+**Aktiviteter** — Kampe, træninger og alt det andet (afslutningsfest, klubdag). De fleste
+kommer fra **DBU KampKlar**: en admin indsætter holdets kalenderlink
 (*Fodbold-appen / Mit DBU → KampKlar → holdets kalender → "Eksporter kalender"*) under
-Holdindstillinger. Kampene hentes hver morgen og med knappen **Hent fra KampKlar**. Flyttede
-kampe opdateres, fjernede/aflyste markeres som aflyst, og træninger vises separat. Alle på
-holdet kan oprette aktiviteter i hånden (pokal, træningskamp) og hente fra KampKlar.
+Holdindstillinger, og kalenderen hentes hver morgen og med knappen **Hent fra KampKlar**.
+Flyttede aktiviteter opdateres, fjernede/aflyste markeres som aflyst, og træninger vises kun
+under "Med træninger" (medmindre de har opgaver). Alle på holdet kan oprette aktiviteter i
+hånden og hente fra KampKlar.
 
-**Opgaver** — En opgave hører til en kamp (fristen er kampstart) eller står alene med sin
-egen frist. Den gives til udvalgte personer, **fordeles retfærdigt** (dem med færrest
-opgaver det seneste år først), eller lades åben, så nogen kan tage den. **Standardopgaver**
-(tøjvask, frugt, kørsel…) lægges automatisk på hver ny kamp fra KampKlar og fordeles.
-Tildelte får en notifikation, og dagen før fristen en påmindelse.
+**Opgaver** hører til en aktivitet (fristen er dens start, hvis ikke andet er valgt) — der er
+intet særskilt opgavemenupunkt; dine egne opgaver står på forsiden. En opgave gives til
+udvalgte personer, **fordeles retfærdigt** (dem med færrest opgaver det seneste år først),
+eller lades åben, så nogen kan tage den. **Standardopgaver** (trøjevask, opkridtning, frugt,
+kørsel…) sættes op under Holdindstillinger, sammen med KampKlar-linket. Man vælger dem, når en
+aktivitet oprettes (eller senere på aktivitetens side), og dem markeret *automatisk* lægges
+selv på hver ny kamp fra KampKlar. Man kan også **kopiere opgaverne fra en tidligere
+aktivitet** — samme antal personer og frist i forhold til starten, fordelt på ny. Tildelte får
+en notifikation, og dagen før fristen en påmindelse.
 
 **Chat** — Én holdchat med tekst og billeder. Live via Supabase Realtime, ellers poller den.
 
@@ -50,12 +56,12 @@ heller ikke trænere eller admin — kan se hvem der stemte hvad. Derfor kan en 
 ikke ændres, og en afstemning kan ikke gøres anonym (eller ikke-anonym) bagefter.
 
 **Roller** styres under Holdindstillinger → *Medlemmer og roller*:
-- *Spiller* — alt det daglige: aktiviteter, opgaver og standardopgaver, bøder til andre,
-  udfordringer, opslag, kommentarer og afstemninger.
+- *Spiller* — alt det daglige: aktiviteter (og at sætte standardopgaver på dem), opgaver,
+  bøder til andre, udfordringer, opslag, kommentarer og afstemninger.
 - *Bødekasseformand* — som spiller, og opretter, retter og sletter bødekataloget (sletter
   også andres bøder og afgør uenige udfordringer).
-- *Admin* — det hele, også holdindstillinger, medlemmer, roller og invitationslinks, og kan
-  rydde op i andres opslag, beskeder og opgaver.
+- *Admin* — det hele, også holdindstillinger, medlemmer, roller, invitationslinks og listen
+  over standardopgaver, og kan rydde op i andres opslag, beskeder og opgaver.
 - *Super admin* — én på hele installationen (databasen tillader ikke flere). Opretter hold
   under **Admin** og kan åbne og administrere alle hold.
 
@@ -77,7 +83,7 @@ npm run db:seed           # super admin + holdet "Swingkings" med startkatalog
 npm run dev
 ```
 
-`npm run db:demo` laver et demohold med spillere, bøder, udfordringer, kampe, opgaver, chat
+`npm run db:demo` laver et demohold med spillere, bøder, udfordringer, aktiviteter, opgaver, chat
 og feed (login `mads@demo.swingkings.dk` / `demo-password`).
 
 ## Tests

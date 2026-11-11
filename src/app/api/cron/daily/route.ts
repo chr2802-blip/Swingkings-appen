@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { presentsCronSecret } from "@/lib/cron-secret";
 import { sendPushToUsers } from "@/lib/push";
 import { syncTeamCalendar } from "@/lib/kampklar";
-import { OPEN_TASK } from "@/lib/tasks";
+import { OPEN_TASK, taskUrl } from "@/lib/tasks";
 import { deadlineLabel, endOfDayInZone } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       {
         title: `Husk: ${task.title}`,
         body: task.dueAt ? deadlineLabel(task.dueAt, now).text : "Opgaven venter på dig.",
-        url: task.matchId ? `/kampe/${task.matchId}` : `/opgaver/${task.id}`,
+        url: taskUrl(task),
         tag: `task-${task.id}`,
       },
     );

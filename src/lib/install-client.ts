@@ -61,6 +61,24 @@ export function isStandalone() {
   );
 }
 
+/**
+ * Chrome can hold its prompt back for the first moments of a visit. Waits for it, a little,
+ * so a tap right after the page opens still gets the one-tap install rather than the guide.
+ * Short enough that the tap still counts as the user's own when the prompt is shown.
+ */
+export function waitForPrompt(ms: number) {
+  return new Promise<boolean>((resolve) => {
+    if (window.__installPrompt) return resolve(true);
+    const done = () => {
+      clearTimeout(timer);
+      window.removeEventListener(CHANGED, done);
+      resolve(Boolean(window.__installPrompt));
+    };
+    const timer = setTimeout(done, ms);
+    window.addEventListener(CHANGED, done);
+  });
+}
+
 export type InstallState = {
   /** False until the browser has been asked, so the server's first paint stays put. */
   ready: boolean;

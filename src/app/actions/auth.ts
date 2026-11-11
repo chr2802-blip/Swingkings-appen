@@ -12,6 +12,14 @@ import { checkRateLimit, clearAttempts, recordAttempt, takeAttempt } from "@/lib
 export type FormState = { error?: string } | undefined;
 
 /**
+ * Where to land after logging in: the form says "/hent-appen" on a phone without the app.
+ * Only these two, so the field cannot send anybody elsewhere.
+ */
+function landing(formData: FormData) {
+  return formData.get("next") === "/hent-appen" ? "/hent-appen" : "/oversigt";
+}
+
+/**
  * A bcrypt hash of nothing anybody can type, compared against when the email has no
  * account — so "no such account" takes as long to answer as "wrong password".
  */
@@ -36,7 +44,7 @@ export async function login(_prev: FormState, formData: FormData): Promise<FormS
 
   await clearAttempts("login", email);
   await createSession(user.id, user.tokenVersion);
-  redirect("/oversigt");
+  redirect(landing(formData));
 }
 
 export async function logout() {
@@ -111,7 +119,7 @@ export async function joinWithLink(_prev: FormState, formData: FormData): Promis
 
   await clearAttempts("join", email);
   await createSession(result.userId, existing?.tokenVersion ?? 0);
-  redirect("/oversigt");
+  redirect(landing(formData));
 }
 
 /** Somebody already logged in joins the link's team with one press. */

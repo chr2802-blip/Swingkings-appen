@@ -3,13 +3,14 @@
 import { useActionState } from "react";
 import { joinWithLink, joinWithLinkAsMe } from "@/app/actions/auth";
 import { Button, Card, Field, Input } from "@/components/ui";
-import { markJustLoggedIn } from "@/components/install-app";
+import { AfterLoginField } from "@/components/install-app";
 
 export function JoinForm({ token }: { token: string }) {
   const [state, formAction, pending] = useActionState(joinWithLink, undefined);
   return (
     <Card>
-      <form action={formAction} onSubmit={markJustLoggedIn} className="space-y-4">
+      <form action={formAction} className="space-y-4">
+        <AfterLoginField />
         <input type="hidden" name="token" value={token} />
         <Field label="Dit navn" htmlFor="name">
           <Input id="name" name="name" autoComplete="name" required maxLength={100} />

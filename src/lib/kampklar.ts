@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { safeFetch } from "./safe-fetch";
 import { classify, normalizeCalendarUrl, parseCalendar, type CalendarEvent } from "./ical";
-import { addTemplatesToMatch } from "./tasks";
+import { addTemplatesToActivity } from "./tasks";
 
 /** Past this, a calendar feed is not a team's season. */
 const MAX_FEED_BYTES = 2_000_000;
@@ -34,13 +34,13 @@ export async function fetchCalendar(rawUrl: string): Promise<{ ok: true; text: s
 }
 
 /**
- * Brings a team's matches in line with its KampKlar feed.
+ * Brings a team's activities in line with its KampKlar feed.
  *
  * - An entry is matched to a row by its UID, so a moved match is updated rather than
  *   added twice, and a row typed in by hand is never touched.
- * - Training sessions and other activities are imported too (KampKlar's feed holds them
- *   all) and shown apart from matches; only a new **match** gets the team's standard
- *   jobs added and handed out.
+ * - Every entry becomes an activity — matches, trainings and the rest of KampKlar's feed.
+ *   Only a new upcoming **match** gets the standard jobs marked to be added automatically
+ *   (`TaskTemplate.autoAdd`), handed out fairly.
  * - An upcoming entry that has disappeared from the feed is marked cancelled rather than
  *   deleted: tasks and fines may already hang off it.
  */
@@ -92,7 +92,7 @@ export async function applyCalendar(
       });
       created++;
       if (kind === "MATCH" && !event.cancelled && match.startsAt > now) {
-        tasksAdded += (await addTemplatesToMatch(teamId, match, actorId)).length;
+        tasksAdded += (await addTemplatesToActivity(teamId, match, actorId, "auto")).length;
       }
     }
   }

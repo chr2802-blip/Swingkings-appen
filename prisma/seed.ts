@@ -21,9 +21,10 @@ const STARTER_FINES = [
 ];
 
 const STARTER_JOBS = [
-  { title: "Vask spilletøj", people: 1 },
+  { title: "Trøjevask", people: 1 },
   { title: "Medbring frugt", people: 1 },
   { title: "Kørsel til udekamp", people: 2 },
+  { title: "Opkridtning", people: 2, autoAdd: false },
 ];
 
 async function main() {

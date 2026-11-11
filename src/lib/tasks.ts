@@ -74,7 +74,7 @@ export async function createDistributedTasks(teamId: string, jobs: Job[], create
       {
         title: `Ny opgave: ${task.title}`,
         body: "Du er blevet valgt til en opgave på holdet.",
-        url: task.matchId ? `/kampe/${task.matchId}` : `/opgaver/${task.id}`,
+        url: taskUrl(task),
         tag: `task-${task.id}`,
       },
     );
@@ -82,21 +82,76 @@ export async function createDistributedTasks(teamId: string, jobs: Job[], create
   return tasks;
 }
 
-/** The team's standard match jobs, added to one match and handed out. */
-export async function addTemplatesToMatch(
+export type ActivityRef = { id: string; startsAt: Date };
+
+/** Where a job about an activity is opened from: the activity's page. */
+export function taskUrl(task: { id: string; matchId: string | null }) {
+  return task.matchId ? `/aktiviteter/${task.matchId}` : `/opgaver/${task.id}`;
+}
+
+/**
+ * The team's standard jobs, added to one activity and handed out. `which` picks them:
+ * a list of template ids (anything not the team's is ignored, being read through the
+ * team), or "auto" for the ones the KampKlar sync adds by itself.
+ */
+export async function addTemplatesToActivity(
   teamId: string,
-  match: { id: string; startsAt: Date },
+  activity: ActivityRef,
   createdById: string | null,
+  which: string[] | "auto",
 ) {
-  const templates = await prisma.taskTemplate.findMany({ where: { teamId }, orderBy: { createdAt: "asc" } });
+  if (Array.isArray(which) && which.length === 0) return [];
+  const templates = await prisma.taskTemplate.findMany({
+    where: { teamId, ...(which === "auto" ? { autoAdd: true } : { id: { in: which } }) },
+    orderBy: { createdAt: "asc" },
+  });
   return createDistributedTasks(
     teamId,
     templates.map((template) => ({
       title: template.title,
       description: template.description,
-      matchId: match.id,
-      dueAt: match.startsAt,
+      matchId: activity.id,
+      dueAt: activity.startsAt,
       people: template.people,
+    })),
+    createdById,
+  );
+}
+
+/**
+ * Copies another activity's jobs onto this one — "the same as last year's
+ * afslutningsfest". Each copy goes to as many people as the original had (at least one),
+ * chosen afresh by the fair distribution, and keeps its deadline's distance from the
+ * start: due two days before then is due two days before now. Who did what, and whether
+ * it was done, is not copied. `fromId` is looked up on the team, so another team's
+ * activity copies nothing.
+ */
+export async function copyTasksFromActivity(
+  teamId: string,
+  fromId: string,
+  to: ActivityRef,
+  createdById: string | null,
+) {
+  if (fromId === to.id) return [];
+  const source = await prisma.match.findFirst({
+    where: { id: fromId, teamId },
+    select: {
+      startsAt: true,
+      tasks: {
+        orderBy: { createdAt: "asc" },
+        select: { title: true, description: true, dueAt: true, _count: { select: { assignees: true } } },
+      },
+    },
+  });
+  if (!source) return [];
+  return createDistributedTasks(
+    teamId,
+    source.tasks.map((task) => ({
+      title: task.title,
+      description: task.description,
+      matchId: to.id,
+      dueAt: task.dueAt ? new Date(to.startsAt.getTime() + (task.dueAt.getTime() - source.startsAt.getTime())) : to.startsAt,
+      people: Math.max(1, task._count.assignees),
     })),
     createdById,
   );
