@@ -1,11 +1,8 @@
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam, ROLE_LABEL } from "@/lib/access";
+import { canAdministerTeam, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamRoster } from "@/lib/roster";
-import { Badge, Card, PageHeader } from "@/components/ui";
+import { Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
 import { Avatar } from "@/components/photo";
-import { MemberDialog } from "@/components/member-dialog";
-import { ActionButton } from "@/components/action-button";
-import { removeMember } from "@/app/actions/teams";
 
 export default async function RosterPage() {
   const user = await requireTeamUser();
@@ -13,7 +10,17 @@ export default async function RosterPage() {
   const roster = await teamRoster(user.teamId);
   return (
     <div>
-      <PageHeader title="Spillere" description={`${roster.length} på ${user.teamName}`} />
+      <PageHeader
+        title="Spillere"
+        description={`${roster.length} på ${user.teamName}`}
+        action={
+          admin && (
+            <ButtonLink href="/hold#medlemmer" variant="secondary">
+              Ret roller
+            </ButtonLink>
+          )
+        }
+      />
       <Card padded={false}>
         <ul className="divide-y divide-slate-100">
           {roster.map((member) => (
@@ -25,25 +32,11 @@ export default async function RosterPage() {
                   {member.shirtNumber != null && <span className="ml-1.5 text-sm text-slate-400">#{member.shirtNumber}</span>}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
+                  {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
                   {member.role !== "PLAYER" && <Badge tone="accent">{ROLE_LABEL[member.role]}</Badge>}
                   {!member.takesTasks && <Badge>Ingen opgaver</Badge>}
                 </div>
               </div>
-              {admin && (
-                <>
-                  <MemberDialog member={member} />
-                  {member.userId !== user.id && (
-                    <ActionButton
-                      action={removeMember}
-                      fields={{ userId: member.userId }}
-                      label="Fjern"
-                      variant="ghost"
-                      confirm={`Fjern ${member.name} fra holdet?`}
-                      confirmLabel="Fjern fra holdet"
-                    />
-                  )}
-                </>
-              )}
             </li>
           ))}
         </ul>

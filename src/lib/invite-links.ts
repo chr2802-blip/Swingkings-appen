@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import type { InviteLink, MemberRole } from "@prisma/client";
+import type { InviteLink } from "@prisma/client";
 import { prisma } from "./prisma";
 
 /** 32 random bytes: a link nobody guesses, so it needs no code beside it. */
@@ -56,8 +56,8 @@ export type RedeemResult =
  * people pressing at once on the last place cannot both get in, and a new account is
  * only created when there was a place for it.
  *
- * Somebody already on the team uses up no place and keeps their role: a player's link
- * never demotes the coach who opens it.
+ * Everybody joins as a player. Somebody already on the team uses up no place and keeps
+ * their role.
  */
 export async function redeemInviteLink(linkId: string, joiner: Joiner, now = new Date()): Promise<RedeemResult> {
   return prisma.$transaction(async (tx) => {
@@ -80,12 +80,11 @@ export async function redeemInviteLink(linkId: string, joiner: Joiner, now = new
     });
     if (counted.count === 0) return { ok: false, problem: linkProblem(link, now) ?? "used-up" } as const;
 
-    const role: MemberRole = link.role;
     const userId =
       "userId" in joiner
         ? joiner.userId
         : (await tx.user.create({ data: joiner.newUser, select: { id: true } })).id;
-    await tx.teamMember.create({ data: { userId, teamId: link.teamId, role } });
+    await tx.teamMember.create({ data: { userId, teamId: link.teamId, role: "PLAYER" } });
     await tx.user.update({ where: { id: userId }, data: { activeTeamId: link.teamId } });
     return { ok: true, userId, teamId: link.teamId, joined: true } as const;
   });

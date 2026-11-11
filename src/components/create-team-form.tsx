@@ -14,7 +14,7 @@ export function CreateTeamForm() {
       </Field>
       <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
         <input type="checkbox" name="adminLink" value="on" className="h-4 w-4 accent-[var(--accent)]" />
-        Lav et link til træneren (ellers bliver du selv træner)
+        Lav et link til holdets første person (ellers bliver du selv admin)
       </label>
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
         <Button type="submit" disabled={pending} aria-busy={pending}>
@@ -27,7 +27,14 @@ export function CreateTeamForm() {
         )}
         {state?.ok && !isJoinPath(state.note) && <p className="text-sm text-emerald-700">{state.note}</p>}
       </div>
-      {state?.ok && isJoinPath(state.note) && <ShareLink path={state.note} />}
+      {state?.ok && isJoinPath(state.note) && (
+        <div className="space-y-2 sm:col-span-2">
+          <ShareLink path={state.note} />
+          <p className="text-xs text-slate-500">
+            Når personen har oprettet sig, så åbn holdet her under Admin og gør dem til admin under Holdindstillinger.
+          </p>
+        </div>
+      )}
     </form>
   );
 }

@@ -1,5 +1,5 @@
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam, canManageFines } from "@/lib/access";
+import { canManageFines } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { prisma } from "@/lib/prisma";
 import { foundOr404 } from "@/lib/scoped";
@@ -21,7 +21,6 @@ const person = { select: { id: true, name: true, photoId: true } } as const;
 export default async function MatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireTeamUser();
-  const admin = canAdministerTeam(user, user.teamId);
   const manages = canManageFines(user, user.teamId);
   const db = teamDb(user.teamId);
 
@@ -43,7 +42,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
   );
   const [roster, board, team] = await Promise.all([
     teamRoster(user.teamId),
-    manages ? fineBoard(user.teamId) : null,
+    fineBoard(user.teamId),
     prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true } }),
   ]);
   const label = match.opponent ?? match.title;
@@ -54,7 +53,6 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
       <PageHeader
         title={match.kind === "MATCH" && match.opponent ? `${match.isHome === false ? "Ude mod" : match.isHome ? "Hjemme mod" : "Mod"} ${match.opponent}` : match.title}
         action={
-          admin &&
           match.source === "MANUAL" && (
             <MatchDialog
               match={{
@@ -88,9 +86,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         <SectionTitle
           action={
             <div className="flex gap-2">
-              {admin && (
-                <ActionButton action={addStandardTasks} fields={{ matchId: match.id }} label="+ Standardopgaver" variant="ghost" />
-              )}
+              <ActionButton action={addStandardTasks} fields={{ matchId: match.id }} label="+ Standardopgaver" variant="ghost" />
               <TaskDialog members={roster} matches={option} defaultMatchId={match.id} triggerLabel="Ny opgave" />
             </div>
           }
@@ -110,43 +106,39 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         )}
       </section>
 
-      {(match.fines.length > 0 || manages) && (
-        <section className="mb-8">
-          <SectionTitle
-            action={
-              board && (
-                <GiveFineDialog
-                  members={board.roster}
-                  fineTypes={board.fineTypes}
-                  finePriceKr={board.finePriceKr}
-                  matches={option}
-                  defaultMatchId={match.id}
-                />
-              )
-            }
-          >
-            Bøder fra kampen
-          </SectionTitle>
-          {match.fines.length === 0 ? (
-            <EmptyState>Ingen bøder fra kampen.</EmptyState>
-          ) : (
-            <Card padded={false}>
-              <ul className="divide-y divide-slate-100">
-                {match.fines.map((fine) => (
-                  <li key={fine.id} className="flex justify-between gap-3 px-4 py-3 text-sm">
-                    <span>
-                      <strong>{fine.player.name}</strong> · {fine.reason}
-                    </span>
-                    <span className="shrink-0 text-slate-500">
-                      {fineUnits(fine.units)} · {kr(fineAmount(fine))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </section>
-      )}
+      <section className="mb-8">
+        <SectionTitle
+          action={
+            <GiveFineDialog
+              members={board.roster}
+              fineTypes={board.fineTypes}
+              finePriceKr={board.finePriceKr}
+              matches={option}
+              defaultMatchId={match.id}
+            />
+          }
+        >
+          Bøder fra kampen
+        </SectionTitle>
+        {match.fines.length === 0 ? (
+          <EmptyState>Ingen bøder fra kampen.</EmptyState>
+        ) : (
+          <Card padded={false}>
+            <ul className="divide-y divide-slate-100">
+              {match.fines.map((fine) => (
+                <li key={fine.id} className="flex justify-between gap-3 px-4 py-3 text-sm">
+                  <span>
+                    <strong>{fine.player.name}</strong> · {fine.reason}
+                  </span>
+                  <span className="shrink-0 text-slate-500">
+                    {fineUnits(fine.units)} · {kr(fineAmount(fine))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+      </section>
 
       {match.challenges.length > 0 && (
         <section className="mb-8">
@@ -165,7 +157,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
         </section>
       )}
 
-      {admin && match.source === "MANUAL" && (
+      {match.source === "MANUAL" && (
         <ActionButton
           action={deleteMatch}
           fields={{ id: match.id }}

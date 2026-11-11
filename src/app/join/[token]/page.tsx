@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { ROLE_LABEL } from "@/lib/access";
 import { findInviteLink, LINK_PROBLEM_TEXT, linkProblem } from "@/lib/invite-links";
 import { Card } from "@/components/ui";
 import { LogoutButton } from "@/components/logout-button";
@@ -28,9 +27,7 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
         {link && !problem ? (
           <>
             <h1 className="text-3xl">Kom med på {link.team.name}</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Du er inviteret som {ROLE_LABEL[link.role].toLowerCase()}.
-            </p>
+            <p className="mt-1 text-sm text-slate-500">Opret dig, så er du med på holdet.</p>
           </>
         ) : (
           <h1 className="text-3xl">Invitation</h1>

@@ -54,12 +54,10 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
               : undefined
         }
         action={
-          admin && (
-            <>
-              {team.calendarUrl && <SyncButton />}
-              <MatchDialog />
-            </>
-          )
+          <>
+            {team.calendarUrl && <SyncButton />}
+            <MatchDialog />
+          </>
         }
       />
       <Tabs

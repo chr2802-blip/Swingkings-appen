@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { MemberRole } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
@@ -68,19 +67,17 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
 }
 
 const inviteLinkSchema = z.object({
-  role: z.enum(ROLES),
   days: z.coerce.number().refine((d) => (LINK_DAYS as readonly number[]).includes(d), "Vælg hvor længe linket gælder."),
   maxUses: z.coerce
     .number()
     .refine((n) => (LINK_MAX_USES as readonly number[]).includes(n), "Vælg hvor mange der kan bruge linket."),
 });
 
-async function makeInviteLink(teamId: string, createdById: string, role: MemberRole, days: number, maxUses: number) {
+async function makeInviteLink(teamId: string, createdById: string, days: number, maxUses: number) {
   const token = generateLinkToken();
   await teamDb(teamId).inviteLink.create({
     data: {
       teamId,
-      role,
       tokenHash: hashLinkToken(token),
       maxUses,
       expiresAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
@@ -100,7 +97,7 @@ export async function createInviteLink(_prev: ActionResult, formData: FormData):
   assertTeamAdmin(user, user.teamId);
   const form = readForm(inviteLinkSchema, formData);
   if (!form.ok) return fail(form.error);
-  const path = await makeInviteLink(user.teamId, user.id, form.fields.role, form.fields.days, form.fields.maxUses);
+  const path = await makeInviteLink(user.teamId, user.id, form.fields.days, form.fields.maxUses);
   revalidatePath("/hold");
   return ok(path);
 }
@@ -138,7 +135,7 @@ export async function updateMember(_prev: ActionResult, formData: FormData): Pro
 
   if (member.role === "ADMIN" && form.fields.role !== "ADMIN") {
     const admins = await db.teamMember.count({ where: { role: "ADMIN" } });
-    if (admins <= 1) return fail("Holdet skal have mindst én træner/holdleder.");
+    if (admins <= 1) return fail("Holdet skal have mindst én admin.");
   }
 
   await db.teamMember.updateMany({
@@ -162,7 +159,7 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
   const member = await db.teamMember.findFirst({ where: { userId } });
   if (!member) return ok();
   if (member.role === "ADMIN" && (await db.teamMember.count({ where: { role: "ADMIN" } })) <= 1) {
-    return fail("Holdet skal have mindst én træner/holdleder.");
+    return fail("Holdet skal have mindst én admin.");
   }
   await db.teamMember.deleteMany({ where: { userId } });
   // Their open jobs on this team go back to nobody, rather than waiting on somebody gone.
@@ -177,7 +174,7 @@ const createTeamSchema = z.object({
 });
 
 /**
- * The super admin creates a team and, optionally, a one-use link for its first admin.
+ * The super admin creates a team and, optionally, a one-use link for its first coach.
  * They join it themselves only if no link is asked for — somebody has to be able to run it.
  */
 export async function createTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -187,8 +184,9 @@ export async function createTeam(_prev: ActionResult, formData: FormData): Promi
 
   const team = await prisma.team.create({ data: { name: form.fields.name } });
   if (form.fields.adminLink) {
-    // One place, as an admin: the link makes exactly one coach.
-    const path = await makeInviteLink(team.id, user.id, "ADMIN", INVITE_DAYS, 1);
+    // One place: the coach joins as a player, and is made admin under Holdindstillinger
+    // (the super admin can open any team's).
+    const path = await makeInviteLink(team.id, user.id, INVITE_DAYS, 1);
     revalidatePath("/", "layout");
     return ok(path);
   }

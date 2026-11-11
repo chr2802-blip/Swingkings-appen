@@ -183,7 +183,8 @@ model TeamMember {
 /**
  * A link that lets people sign up and join a team (`/join/<token>`). The admin posts it
  * wherever the team talks; whoever opens it creates an account, or joins with the one
- * they have. Only a hash of the token is stored, so the link is shown once.
+ * they have. Only a hash of the token is stored, so the link is shown once. A link
+ * carries no role: everybody joins as a player, and an admin gives roles afterwards.
  * `maxUses` is the hard limit on how many people one link can bring in, so a link that
  * escapes the group chat cannot become an account factory. `uses` is only ever raised
  * through a guarded update that compares it with `maxUses` (`redeemInviteLink`).
@@ -191,7 +192,6 @@ model TeamMember {
 model InviteLink {
   id          String     @id @default(cuid())
   teamId      String
-  role        MemberRole @default(PLAYER)
   tokenHash   String     @unique
   maxUses     Int
   uses        Int        @default(0)

@@ -32,7 +32,7 @@ describe("invitation links", () => {
     expect(await findInviteLink("")).toBeNull();
   });
 
-  it("make an account and a membership with the link's role, and count the place", async () => {
+  it("make an account and a player membership, and count the place", async () => {
     const team = await makeTeam();
     const coach = await makeMember(team.id, "Træner", "ADMIN");
     const { link } = await makeLink(team.id, coach.id, 5);
@@ -107,5 +107,16 @@ describe("sign-up limit", () => {
     clientIp = "192.0.2.250";
     expect(await takeAttempt("join-link", "link-1")).toMatchObject({ allowed: false });
     expect(await takeAttempt("join-link", "link-2")).toEqual({ allowed: true });
+  });
+});
+
+describe("the super admin", () => {
+  it("is one person: the database refuses a second", async () => {
+    await prisma.user.create({ data: { email: "boss@test.dk", name: "Boss", passwordHash: "x", role: "SUPER_ADMIN" } });
+    await expect(
+      prisma.user.create({ data: { email: "boss2@test.dk", name: "Boss 2", passwordHash: "x", role: "SUPER_ADMIN" } }),
+    ).rejects.toThrow();
+    await prisma.user.create({ data: { email: "ok@test.dk", name: "Almindelig", passwordHash: "x" } });
+    expect(await prisma.user.count({ where: { role: "SUPER_ADMIN" } })).toBe(1);
   });
 });

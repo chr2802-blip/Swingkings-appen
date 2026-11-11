@@ -1,5 +1,4 @@
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { teamRoster } from "@/lib/roster";
 import { upcomingMatchOptions } from "@/lib/match-data";
@@ -16,7 +15,6 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const view = vis === "alle" ? "alle" : vis === "udfort" ? "udfort" : "mine";
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const admin = canAdministerTeam(user, user.teamId);
 
   const where =
     view === "mine"
@@ -57,7 +55,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
           { href: "/opgaver", label: "Mine" },
           { href: "/opgaver?vis=alle", label: "Alle åbne" },
           { href: "/opgaver?vis=udfort", label: "Udført" },
-          ...(admin ? [{ href: "/opgaver/standard", label: "Standardopgaver" }] : []),
+          { href: "/opgaver/standard", label: "Standardopgaver" },
         ]}
       />
 

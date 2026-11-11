@@ -14,7 +14,6 @@ DROP TABLE "Invite";
 CREATE TABLE "InviteLink" (
     "id" TEXT NOT NULL,
     "teamId" TEXT NOT NULL,
-    "role" "MemberRole" NOT NULL DEFAULT 'PLAYER',
     "tokenHash" TEXT NOT NULL,
     "maxUses" INTEGER NOT NULL,
     "uses" INTEGER NOT NULL DEFAULT 0,

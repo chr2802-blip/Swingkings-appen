@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireTeamUser } from "@/lib/auth";
-import { canManageFines } from "@/lib/access";
+import { canDeleteFine } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { fineBoard, matchOptions } from "@/lib/fine-data";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
@@ -8,14 +8,12 @@ import { readInZone } from "@/lib/time";
 import { Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
-import { PaymentDialog } from "@/components/payment-dialog";
 import { ActionButton } from "@/components/action-button";
-import { deleteFine, deletePayment } from "@/app/actions/fines";
+import { deleteFine } from "@/app/actions/fines";
 
 export default async function PlayerFinesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireTeamUser();
-  const manages = canManageFines(user, user.teamId);
   const db = teamDb(user.teamId);
   const board = await fineBoard(user.teamId);
   const person = board.people.get(id);
@@ -33,6 +31,7 @@ export default async function PlayerFinesPage({ params }: { params: Promise<{ id
         units: true,
         unitPriceKr: true,
         createdAt: true,
+        issuedById: true,
         issuedBy: { select: { name: true } },
         match: { select: { opponent: true, title: true } },
       },
@@ -42,7 +41,7 @@ export default async function PlayerFinesPage({ params }: { params: Promise<{ id
       orderBy: { createdAt: "desc" },
       select: { id: true, amountKr: true, note: true, createdAt: true, recordedBy: { select: { name: true } } },
     }),
-    manages ? matchOptions(user.teamId) : Promise.resolve([]),
+    matchOptions(user.teamId),
   ]);
 
   return (
@@ -50,19 +49,14 @@ export default async function PlayerFinesPage({ params }: { params: Promise<{ id
       <PageHeader
         title={person.name}
         action={
-          manages && (
-            <>
-              <PaymentDialog members={board.roster} defaultPlayerId={id} defaultAmount={account.owesKr} />
-              {person.onTeam && (
-                <GiveFineDialog
-                  members={board.roster}
-                  fineTypes={board.fineTypes}
-                  finePriceKr={board.finePriceKr}
-                  matches={matches}
-                  defaultPlayerId={id}
-                />
-              )}
-            </>
+          person.onTeam && (
+            <GiveFineDialog
+              members={board.roster}
+              fineTypes={board.fineTypes}
+              finePriceKr={board.finePriceKr}
+              matches={matches}
+              defaultPlayerId={id}
+            />
           )
         }
       />
@@ -105,7 +99,7 @@ export default async function PlayerFinesPage({ params }: { params: Promise<{ id
                     </p>
                     {fine.note && <p className="mt-1 text-xs text-slate-600">{fine.note}</p>}
                   </div>
-                  {manages && (
+                  {canDeleteFine(user, user.teamId, fine) && (
                     <ActionButton
                       action={deleteFine}
                       fields={{ id: fine.id }}
@@ -125,7 +119,7 @@ export default async function PlayerFinesPage({ params }: { params: Promise<{ id
       <section>
         <SectionTitle>Betalinger</SectionTitle>
         {payments.length === 0 ? (
-          <EmptyState>Ingen betalinger registreret.</EmptyState>
+          <EmptyState>Ingen betalinger.</EmptyState>
         ) : (
           <Card padded={false}>
             <ul className="divide-y divide-slate-100">
@@ -138,16 +132,6 @@ export default async function PlayerFinesPage({ params }: { params: Promise<{ id
                       {payment.note && ` · ${payment.note}`}
                     </p>
                   </div>
-                  {manages && (
-                    <ActionButton
-                      action={deletePayment}
-                      fields={{ id: payment.id }}
-                      label="Slet"
-                      variant="ghost"
-                      confirm="Slet betalingen?"
-                      confirmLabel="Slet betalingen"
-                    />
-                  )}
                 </li>
               ))}
             </ul>

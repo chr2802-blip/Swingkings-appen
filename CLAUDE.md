@@ -31,8 +31,13 @@ In a bare cloud container: `service postgresql start`, set the postgres password
   rejects `prisma.<teamModel>` in pages and components. Use `prisma` directly only where
   crossing teams is the point (cron, admin) — say so in a comment. Creates still pass
   `teamId: user.teamId` explicitly so the types are satisfied.
-- **Permissions are per team** (`src/lib/access.ts`): `canAdministerTeam` (ADMIN),
-  `canManageFines` (ADMIN or TREASURER). Never ask "the team on screen" alone.
+- **Permissions are per team** (`src/lib/access.ts`). Roles: PLAYER (everything day to
+  day: activities, tasks, giving fines, challenges, posts, polls), TREASURER =
+  bødekasseformand (`canManageFines`: the catalogue, deleting others' fines, settling
+  disputes), ADMIN (`canAdministerTeam`: team settings, members, roles, invitation links,
+  moderation), and one SUPER_ADMIN on the installation (a partial unique index allows only
+  one). A fine is deleted by its giver or `canManageFines` (`canDeleteFine`). Payments
+  cannot be recorded for now. Never ask "the team on screen" alone.
 - **Every action** that reads input takes `(prev, formData)` and returns `ActionResult`;
   records referenced by id are looked up through `teamDb`, so another team's id is "not found".
 - **Money**: a `Fine` copies `units` and `unitPriceKr` when given — never recompute from the
@@ -44,7 +49,7 @@ In a bare cloud container: `service postgresql start`, set the postgres password
   are never touched by the sync. New future MATCH rows get the team's `TaskTemplate`s,
   distributed by `src/lib/distribution.ts` (fewest jobs in the last year first).
 - **Invitations are links** (`src/lib/invite-links.ts`, `/join/<token>`): only the token's
-  hash is stored. A place is taken only by `redeemInviteLink`, whose guarded update
+  hash is stored, and a link carries no role — everybody joins as PLAYER. A place is taken only by `redeemInviteLink`, whose guarded update
   (`uses < maxUses`) makes the account in the same transaction. New accounts are also
   limited by `takeAttempt("signup")` (per address) and `takeAttempt("join-link")` (per link).
 - **Dates go through `src/lib/time.ts`** (Europe/Copenhagen). Tests run with `TZ=UTC`.

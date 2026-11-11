@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
-import { assertTeamAdmin } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { parseLocalDateTime } from "@/lib/time";
@@ -28,12 +27,14 @@ const matchSchema = z.object({
 });
 
 /**
+ * Activities, the calendar sync and standard tasks are for everybody on the team; only
+ * the calendar link itself is a team setting (`updateTeam`).
+ *
  * A match typed in by hand — for a cup game, a friendly, or a team whose KampKlar link
  * is not set up. Matches from the feed are added by the sync.
  */
 export async function saveMatch(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const form = readForm(matchSchema, formData);
   if (!form.ok) return fail(form.error);
   const startsAt = parseLocalDateTime(form.fields.startsAt);
@@ -65,7 +66,6 @@ export async function saveMatch(_prev: ActionResult, formData: FormData): Promis
 
 export async function deleteMatch(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const id = String(formData.get("id") ?? "");
   const db = teamDb(user.teamId);
   const match = await db.match.findFirst({ where: { id }, select: { source: true } });
@@ -78,7 +78,6 @@ export async function deleteMatch(_prev: ActionResult, formData: FormData): Prom
 
 export async function syncCalendar(): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const result = await syncTeamCalendar(user.teamId, user.id);
   if (!result.ok) return fail(result.error);
   refresh();
@@ -94,7 +93,6 @@ export async function syncCalendar(): Promise<ActionResult> {
 /** Adds the team's standard jobs to one match and hands them out. */
 export async function addStandardTasks(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const match = await teamDb(user.teamId).match.findFirst({
     where: { id: String(formData.get("matchId") ?? "") },
     select: { id: true, startsAt: true },
@@ -114,7 +112,6 @@ const templateSchema = z.object({
 
 export async function saveTaskTemplate(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const form = readForm(templateSchema, formData);
   if (!form.ok) return fail(form.error);
   const db = teamDb(user.teamId);
@@ -127,7 +124,6 @@ export async function saveTaskTemplate(_prev: ActionResult, formData: FormData):
 
 export async function deleteTaskTemplate(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   await teamDb(user.teamId).taskTemplate.deleteMany({ where: { id: String(formData.get("id") ?? "") } });
   revalidatePath("/opgaver", "layout");
   return ok();

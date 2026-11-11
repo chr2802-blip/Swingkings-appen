@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { Card, EmptyState, PageHeader, Tabs } from "@/components/ui";
 import { TemplateDialog } from "@/components/template-dialog";
@@ -9,7 +7,6 @@ import { deleteTaskTemplate } from "@/app/actions/matches";
 
 export default async function TemplatesPage() {
   const user = await requireTeamUser();
-  if (!canAdministerTeam(user, user.teamId)) redirect("/opgaver");
   const templates = await teamDb(user.teamId).taskTemplate.findMany({ orderBy: { createdAt: "asc" } });
 
   return (
