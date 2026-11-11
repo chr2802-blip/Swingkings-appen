@@ -31,6 +31,7 @@ enum MemberRole {
 
 /// The colour a team is dressed in. What each one looks like lives in globals.css.
 enum TeamTheme {
+  SWINGKINGS
   GREEN
   BLUE
   RED
@@ -73,7 +74,7 @@ model Team {
   id               String    @id @default(cuid())
   name             String
   photoId          String?
-  theme            TeamTheme @default(GREEN)
+  theme            TeamTheme @default(SWINGKINGS)
   /**
    * What one fine (én bøde) costs in kroner. A fine type costs a number of these, so
    * "for sent til træning" can be 2 bøder and "rødt kort" 10. Each Fine copies the

@@ -62,7 +62,16 @@ h1,
  * bar, the phone's own bars) is the same literal in every block, and equals `BAND` in
  * src/lib/theme.ts. White on --accent and --accent-text on white both read as words.
  */
+/* The club's crest: its royal blue, with the light-blue stripes as the line colour. */
 :root,
+[data-theme="SWINGKINGS"] {
+  --band: #f4f1ea;
+  --accent: #2661ad;
+  --accent-hover: #1d4f8f;
+  --accent-text: #1f5296;
+  --accent-line: #cbe5f7;
+}
+
 [data-theme="GREEN"] {
   --band: #f4f1ea;
   --accent: #166534;

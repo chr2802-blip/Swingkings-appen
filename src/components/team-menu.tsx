@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { MemberRole } from "@prisma/client";
@@ -10,8 +11,9 @@ import { LogoutButton } from "@/components/logout-button";
 type TeamChoice = { id: string; name: string; photoId: string | null; role: MemberRole };
 
 /**
- * The team's picture and name in the header, and the menu behind them: this team's
- * settings (for its admins), your profile, the other teams you are on, and logging out.
+ * The team's picture (else the Swingkings crest) and name in the header, and the menu
+ * behind them: this team's settings (for its admins), your profile, the other teams you
+ * are on, and logging out.
  */
 export function TeamMenu({
   teams,
@@ -51,7 +53,11 @@ export function TeamMenu({
         aria-expanded={open}
         className="press-button flex min-w-0 items-center gap-2 rounded-xl py-1 pr-2"
       >
-        <Avatar name={label} photoId={photoId} size="sm" />
+        {photoId ? (
+          <Avatar name={label} photoId={photoId} size="sm" />
+        ) : (
+          <Image src="/logo.png" alt="" width={512} height={512} priority className="h-9 w-9 shrink-0" />
+        )}
         <span className="font-display truncate text-lg">{label}</span>
         <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
