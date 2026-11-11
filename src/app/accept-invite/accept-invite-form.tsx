@@ -3,12 +3,14 @@
 import { useActionState } from "react";
 import { acceptInvite } from "@/app/actions/auth";
 import { Button, Card, Field, Input } from "@/components/ui";
+import { AfterLoginField } from "@/components/install-app";
 
 export function AcceptInviteForm({ email }: { email: string }) {
   const [state, formAction, pending] = useActionState(acceptInvite, undefined);
   return (
     <Card>
       <form action={formAction} className="space-y-4">
+        <AfterLoginField />
         <Field label="E-mail" htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" defaultValue={email} required />
         </Field>

@@ -10,6 +10,7 @@ import { kickoffLabel, readInZone, relativeDay, startOfDayInZone } from "@/lib/t
 import { Badge, Card, SectionTitle } from "@/components/ui";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { NotificationSetup } from "@/components/notification-setup";
+import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
 import { FineKing } from "@/components/crest";
 
@@ -63,6 +64,7 @@ export default async function OverviewPage() {
         />
       </div>
 
+      <InstallCard />
       <NotificationSetup compact />
 
       {pollsWaiting > 0 && (
