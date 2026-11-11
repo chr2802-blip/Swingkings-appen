@@ -19,6 +19,7 @@ export const config = {
   matcher: [
     "/oversigt/:path*",
     "/boder/:path*",
+    "/aktiviteter/:path*",
     "/kampe/:path*",
     "/opgaver/:path*",
     "/feed/:path*",
@@ -26,5 +27,6 @@ export const config = {
     "/hold/:path*",
     "/profil/:path*",
     "/admin/:path*",
+    "/hent-appen",
   ],
 };

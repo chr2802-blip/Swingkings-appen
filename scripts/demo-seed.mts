@@ -55,9 +55,10 @@ const types = await Promise.all(
 );
 await prisma.taskTemplate.createMany({
   data: [
-    { teamId: team.id, title: "Vask spilletøj", people: 1 },
+    { teamId: team.id, title: "Trøjevask", people: 1 },
     { teamId: team.id, title: "Medbring frugt", people: 1 },
     { teamId: team.id, title: "Kørsel", people: 2 },
+    { teamId: team.id, title: "Opkridtning", people: 2, autoAdd: false },
   ],
 });
 
@@ -103,10 +104,13 @@ await prisma.challenge.create({ data: { teamId: team.id, challengerId: emil.id, 
 const settled = await prisma.challenge.create({ data: { teamId: team.id, challengerId: frederik.id, opponentId: noah.id, description: "Straffesparkskonkurrence", units: 5, status: "ACCEPTED", matchId: lastMatch.id } });
 await settleChallenge(settled.id, frederik.id, jonas.id);
 
-await prisma.task.create({
-  data: { teamId: team.id, title: "Bestil holdfest-lokale", description: "Ring til klubhuset", dueAt: day(9, 23), createdById: mads.id, assignees: { create: [{ userId: mads.id }] } },
+const endOfSeason = await prisma.match.create({
+  data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: day(27, 19), location: "Klubhuset", source: "MANUAL" },
 });
-await prisma.task.create({ data: { teamId: team.id, title: "Køb nye bolde", dueAt: day(4, 23), createdById: jonas.id } });
+await prisma.task.create({
+  data: { teamId: team.id, title: "Bestil holdfest-lokale", description: "Ring til klubhuset", matchId: endOfSeason.id, dueAt: day(9, 23), createdById: mads.id, assignees: { create: [{ userId: mads.id }] } },
+});
+await prisma.task.create({ data: { teamId: team.id, title: "Køb ind til festen", matchId: endOfSeason.id, dueAt: day(26, 23), createdById: jonas.id } });
 
 const chat = [
   [mads, "Husk mødetid 13:45 på lørdag! 💪"],

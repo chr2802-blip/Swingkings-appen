@@ -433,21 +433,3 @@ h1,
     transition-duration: 1ms !important;
   }
 }
-
-/*
- * Opened from the home screen or not, known before any script runs: the login page swaps
- * "get the app" for the form on first paint inside the app (`LoginInstall`).
- */
-.app-only {
-  display: none;
-}
-
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  .app-only {
-    display: block;
-  }
-
-  .browser-only {
-    display: none !important;
-  }
-}
