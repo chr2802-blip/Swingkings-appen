@@ -38,31 +38,6 @@ export function Crown({ className = "h-6 w-6" }: { className?: string }) {
   );
 }
 
-/**
- * This month's bødekonge(r): the crown, their names and what it cost them. When nobody
- * has been fined yet this month the throne stands empty.
- */
-export function FineKing({ names, amount, month }: { names: string[]; amount: string; month: string }) {
-  return (
-    <div className="flex items-center gap-4 rounded-2xl border border-[var(--gold)] bg-[var(--gold-tint)] px-5 py-4 shadow-sm">
-      <Crown className="h-10 w-10" />
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold tracking-wider text-slate-600 uppercase">Månedens bødekonge</p>
-        {names.length > 0 ? (
-          <>
-            <p className="font-display truncate text-xl">{names.join(" & ")}</p>
-            <p className="text-sm text-slate-600">
-              {names.length > 1 ? `har hver ${amount} i bøder i ${month} og deler tronen` : `har ${amount} i bøder i ${month}`}
-            </p>
-          </>
-        ) : (
-          <p className="text-sm text-slate-600">Ingen bøder i {month} endnu. Tronen er ledig.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /** The crest's vertical stripes, as a band under the header. */
 export function StripeBand({ className = "h-1.5" }: { className?: string }) {
   return <div aria-hidden className={`stripes-fine ${className}`} />;

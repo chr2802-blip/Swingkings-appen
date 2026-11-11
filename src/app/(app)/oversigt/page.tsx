@@ -7,12 +7,12 @@ import { movesFor } from "@/lib/challenges";
 import { kr } from "@/lib/money";
 import { OPEN_TASK } from "@/lib/tasks";
 import { kickoffLabel, readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
-import { Badge, Card, SectionTitle } from "@/components/ui";
+import { Card, SectionTitle } from "@/components/ui";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
-import { FineKing } from "@/components/crest";
+import { Crown } from "@/components/crest";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
@@ -45,23 +45,51 @@ export default async function OverviewPage() {
   ]);
   const mine = board.balances.find((row) => row.userId === user.id);
   const waitingOnMe = openChallenges.filter((c) => movesFor(c, user.id, false).some((m) => m !== "cancel")).length;
-  const topOwers = board.balances.filter((row) => row.owesKr > 0).slice(0, 3);
+  const owes = Math.max(0, mine?.owesKr ?? 0);
+  const kingNames = kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?");
+  const month = readInZone(new Date(), "MMMM");
   const firstName = user.name.split(" ")[0];
 
   return (
     <div className="space-y-8">
-      <div className="stripes-wide relative overflow-hidden rounded-3xl border border-[var(--accent-line)] px-5 py-6 shadow-sm">
-        <div className="relative z-10 max-w-[70%]">
-          <h1 className="text-3xl">Hej {firstName} 👋</h1>
-          <p className="mt-1 text-sm font-medium text-slate-700">Her er det vigtigste på {user.teamName}.</p>
+      <div className="overflow-hidden rounded-3xl border border-[var(--accent-line)] bg-white shadow-sm">
+        <div className="stripes-wide flex items-center justify-between gap-3 px-5 py-4">
+          <h1 className="truncate text-2xl">Hej {firstName} 👋</h1>
+          <Image src="/logo.png" alt="" width={512} height={512} className="h-14 w-14 shrink-0 rotate-12 drop-shadow-md" />
         </div>
-        <Image
-          src="/logo.png"
-          alt=""
-          width={512}
-          height={512}
-          className="absolute top-1/2 -right-6 h-32 w-32 -translate-y-1/2 rotate-12 drop-shadow-md sm:right-6 sm:h-24 sm:w-24"
-        />
+        <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-[var(--accent-line)]">
+          <Link href="/boder" className="press-card min-w-0 px-3 py-3">
+            <p className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Bødekonto</p>
+            <p className={`text-xl font-semibold ${owes > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(owes)}</p>
+            <p className="truncate text-xs text-slate-500">{owes > 0 ? "skylder du" : "intet at betale"}</p>
+          </Link>
+          <Link href="/boder/udfordringer" className="press-card min-w-0 px-3 py-3">
+            <p className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Udfordringer</p>
+            <p className="text-xl font-semibold">{openChallenges.length}</p>
+            <p className={`truncate text-xs ${waitingOnMe > 0 ? "font-medium text-amber-700" : "text-slate-500"}`}>
+              {waitingOnMe > 0 ? `${waitingOnMe} venter på dig` : "åbne med dig"}
+            </p>
+          </Link>
+          <Link href="/boder" className="press-card min-w-0 bg-[var(--gold-tint)] px-3 py-3">
+            <p className="flex items-center gap-1 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+              <Crown className="h-3.5 w-3.5" />
+              Bødekonge
+            </p>
+            {kingNames.length > 0 ? (
+              <>
+                <p className="font-display truncate text-xl">{kingNames.join(" & ")}</p>
+                <p className="truncate text-xs text-slate-500">
+                  {kr(kings.kr)} i {month}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-display text-xl">Ledig</p>
+                <p className="truncate text-xs text-slate-500">ingen bøder i {month}</p>
+              </>
+            )}
+          </Link>
+        </div>
       </div>
 
       <InstallCard />
@@ -81,45 +109,6 @@ export default async function OverviewPage() {
           <span aria-hidden>→</span>
         </Link>
       )}
-
-      <Link href="/boder" className="press-card block rounded-2xl">
-        <FineKing
-          names={kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?")}
-          amount={kr(kings.kr)}
-          month={readInZone(new Date(), "MMMM")}
-        />
-      </Link>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link href="/boder" className="press-card block rounded-2xl">
-          <Card className="h-full">
-            <SectionTitle>Din bødekonto</SectionTitle>
-            <p className={`text-3xl font-semibold ${mine && mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>
-              {kr(Math.max(0, mine?.owesKr ?? 0))}
-            </p>
-            <p className="text-sm text-slate-500">{mine && mine.owesKr > 0 ? "skylder du til kassen" : "Du skylder ingenting"}</p>
-            {topOwers.length > 0 && (
-              <p className="mt-3 text-xs text-slate-500">
-                Største gæld:{" "}
-                {topOwers.map((row) => `${board.people.get(row.userId)?.name.split(" ")[0]} (${kr(row.owesKr)})`).join(", ")}
-              </p>
-            )}
-          </Card>
-        </Link>
-
-        <Link href="/boder/udfordringer" className="press-card block rounded-2xl">
-          <Card className="h-full">
-            <SectionTitle>Udfordringer</SectionTitle>
-            <p className="text-3xl font-semibold">{openChallenges.length}</p>
-            <p className="text-sm text-slate-500">åbne udfordringer med dig</p>
-            {waitingOnMe > 0 && (
-              <p className="mt-3">
-                <Badge tone="amber">{waitingOnMe} venter på dit svar</Badge>
-              </p>
-            )}
-          </Card>
-        </Link>
-      </div>
 
       <section>
         <SectionTitle action={<Link href="/kampe" className="text-sm text-[var(--accent-text)] underline">Alle kampe</Link>}>
