@@ -29,7 +29,7 @@ export default async function AdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{team.name}</p>
                   <p className="text-xs text-slate-500">
-                    {team._count.members} spillere · {team._count.matches} kampe · {team._count.fines} bøder
+                    {team._count.members} spillere · {team._count.matches} aktiviteter · {team._count.fines} bøder
                   </p>
                 </div>
                 <form action={visitTeam.bind(null, team.id)}>

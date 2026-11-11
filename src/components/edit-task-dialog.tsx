@@ -18,7 +18,7 @@ export function EditTaskDialog({
       <Field label="Opgave" htmlFor="title">
         <Input id="title" name="title" defaultValue={task.title} maxLength={200} required />
       </Field>
-      <Field label="Frist" htmlFor="dueOn" hint={task.hasMatch ? "Uden frist er fristen kampstart." : undefined}>
+      <Field label="Frist" htmlFor="dueOn" hint={task.hasMatch ? "Uden frist er fristen aktivitetens start." : undefined}>
         <Input id="dueOn" name="dueOn" type="date" defaultValue={task.dueOn} required={!task.hasMatch} />
       </Field>
       <Field label="Hvem?">

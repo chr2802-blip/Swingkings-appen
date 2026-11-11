@@ -37,25 +37,14 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    href: "/kampe",
-    label: "Kampe",
+    href: "/aktiviteter",
+    also: ["/opgaver", "/kampe"],
+    label: "Aktiviteter",
     icon: ({ className }) => (
       <svg viewBox="0 0 24 24" className={className} {...stroke}>
-        <circle cx="12" cy="12" r="9" />
-        <path d="m12 7 4 3-1.5 4.5h-5L8 10z" />
-        <path d="M12 3v4M21 10l-5 0M18 19l-3.5-4.5M6 19l3.5-4.5M3 10h5" />
-      </svg>
-    ),
-  },
-  {
-    href: "/opgaver",
-    label: "Opgaver",
-    icon: ({ className }) => (
-      <svg viewBox="0 0 24 24" className={className} {...stroke}>
-        <path d="m3 6 1.6 1.6L7.5 4.7" />
-        <path d="m3 13 1.6 1.6 2.9-2.9" />
-        <path d="m3 20 1.6 1.6 2.9-2.9" />
-        <path d="M11 6.5h10M11 13.5h10M11 20.5h10" />
+        <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+        <path d="M3.5 10h17M8 3v4M16 3v4" />
+        <path d="m9 15 2 2 4-4" />
       </svg>
     ),
   },

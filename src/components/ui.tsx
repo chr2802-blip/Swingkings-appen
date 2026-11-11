@@ -103,7 +103,7 @@ export function PageHeader({
 export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-xs font-semibold tracking-wider text-slate-500 uppercase">{children}</h2>
+      <h2 className="shrink-0 text-xs font-semibold tracking-wider text-slate-500 uppercase">{children}</h2>
       {action}
     </div>
   );
