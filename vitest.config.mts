@@ -12,6 +12,8 @@ const alias = { "@": path.resolve(import.meta.dirname, "src") };
 export default defineConfig({
   test: {
     env: { TZ: "UTC" },
+    // An `it.only` left in is a file reduced to one test, which reads as a pass.
+    allowOnly: !process.env.CI,
     projects: [
       { resolve: { alias }, test: { name: "unit", include: ["tests/unit/**/*.test.ts"], environment: "node" } },
       {

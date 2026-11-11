@@ -13,14 +13,43 @@ database or reuse another app's keys, and never import code from another reposit
 
 ```bash
 npm run dev            # dev server
-npm run verify         # lint + types + schema drift check + all tests
+npm run verify         # lint + types + schema drift check + all tests + browser tests
 npm test               # vitest: unit (no DB) + integration (real Postgres, <db>_test)
+npm run e2e            # Playwright: builds, serves on :3210 against <db>_e2e, drives Chromium
+npx playwright test e2e/x.spec.ts   # one spec, once `npm run e2e:build` has built
 npm run db:migrate     # new migration after a schema change
 npm run db:demo        # demo team for screenshots (mads@demo.swingkings.dk / demo-password)
 ```
 
 In a bare cloud container: `service postgresql start`, set the postgres password, and point
 `DATABASE_URL`/`DIRECT_URL` at it.
+
+## Tests gate everything — nothing new without one
+
+**Every change ships with its tests, in the same commit.** A new or changed action, lib
+module, API route or page is not done until a test shows it working and shows it refusing
+what it should refuse (wrong team, wrong role, bad input). `tests/unit/test-coverage.test.ts`
+enforces the floor: every file in `src/lib`, `src/app/actions` and `src/app/api` must be
+imported by a test, and every page must be opened by a spec in `e2e/` — a new file without
+one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes a reason.
+
+- **Unit** (`tests/unit`): pure code, no database. Runs in `npm run build`, so it gates deploys.
+- **Integration** (`tests/integration`): the real actions and routes against Postgres
+  (`<db>_test`, truncated before each test, refused unless the name ends in `_test`).
+  `tests/integration/setup.ts` mocks `cookies`, `headers`, `redirect`, `notFound`,
+  `revalidatePath`, React's `cache` and `after()` — `runAfter()` drains what `after()`
+  queued. Use `tests/helpers/factories.ts` (`makeSquad`, `signIn`, `formData`, …) and
+  `tests/helpers/expect.ts` (`expectDenied`, `expectRedirect`, …). Every action test covers
+  another team's id ("not found") and the role that may not do it (`expectDenied`).
+- **Browser** (`e2e/`, Playwright): a production build on port 3210 against `<db>_e2e`, one
+  worker, the database truncated before each test. `loginAs` puts a session cookie straight
+  in; `auth.spec.ts` drives the real login form. Query by role and label as a person would.
+  The confirmation drawer and the colour radios (`sr-only`) need the label or the dialog.
+- **A flaky test is worse than no test: fix the race, do not add a timeout.** CI refuses
+  `.only` in both suites.
+- **Never pipe a suite whose exit code you are asking about** (`| tail` reports `tail`'s).
+- CI (`.github/workflows/test.yml`) runs the checks and the browser suite side by side;
+  `Lint, types and tests` is green only when both are.
 
 ## Rules
 
