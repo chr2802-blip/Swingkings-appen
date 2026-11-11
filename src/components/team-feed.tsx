@@ -8,6 +8,7 @@ import { Avatar } from "@/components/photo";
 import { PhotoCarousel } from "@/components/photo-carousel";
 import { PollView } from "@/components/poll-view";
 import { PostDialog } from "@/components/post-dialog";
+import { FeedSeen } from "@/components/feed-seen";
 import { CommentForm } from "@/components/comment-form";
 import { ActionButton } from "@/components/action-button";
 import { deleteComment, deletePost, toggleLike } from "@/app/actions/social";
@@ -25,6 +26,7 @@ export async function TeamFeed({ user }: { user: TeamUser }) {
 
   return (
     <section id="feed" className="mx-auto max-w-xl scroll-mt-24">
+      <FeedSeen />
       <SectionTitle
         action={
           <div className="flex gap-2">

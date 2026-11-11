@@ -366,6 +366,65 @@ h1,
   animation: pop 320ms var(--ease-spring);
 }
 
+/*
+ * The front page's banner hangs from the header's stripe band, as wide as the screen, and
+ * rolls down out of it on arrival and back up into it on leaving (`HomeBanner`).
+ */
+.home-banner {
+  margin-top: -1.5rem;
+  margin-inline: calc(50% - 50vw);
+  animation: banner-down 460ms var(--ease-arrive) both;
+}
+.home-banner[data-leaving] {
+  animation: banner-up 220ms var(--ease-leave) both;
+}
+.home-banner > * {
+  animation: banner-content 520ms var(--ease-arrive) 80ms both;
+}
+.home-banner[data-leaving] > * {
+  animation: banner-content-out 160ms var(--ease-leave) both;
+}
+/* The rest of the front page fades as the banner rolls up, so no empty band is left. */
+:has(> .home-banner[data-leaving]) > :not(.home-banner) {
+  animation: banner-content-out 160ms var(--ease-leave) both;
+}
+/* The banner is the page's arrival; the page's own slide would lift it off the band. */
+.animate-page-in:has(> * > .home-banner, > .home-banner) {
+  animation: none;
+}
+@keyframes banner-down {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes banner-up {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 100% 0);
+  }
+}
+@keyframes banner-content {
+  from {
+    opacity: 0;
+    translate: 0 -14px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes banner-content-out {
+  to {
+    opacity: 0;
+    translate: 0 -10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
