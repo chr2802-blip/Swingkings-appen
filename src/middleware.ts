@@ -19,6 +19,7 @@ export const config = {
   matcher: [
     "/oversigt/:path*",
     "/boder/:path*",
+    "/aktiviteter/:path*",
     "/kampe/:path*",
     "/opgaver/:path*",
     "/feed/:path*",

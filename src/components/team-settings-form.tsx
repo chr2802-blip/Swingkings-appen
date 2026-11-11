@@ -40,7 +40,7 @@ export function TeamSettingsForm({
       <Field
         label="Kalenderlink fra DBU KampKlar"
         htmlFor="calendarUrl"
-        hint="I Fodbold-appen eller på Mit DBU: gå til holdet i KampKlar → Kalender → “Eksporter kalender”, og kopiér linket hertil. Kampene hentes hver morgen og når du trykker “Hent fra KampKlar”."
+        hint="I Fodbold-appen eller på Mit DBU: gå til holdet i KampKlar → Kalender → “Eksporter kalender”, og kopiér linket hertil. Aktiviteterne hentes hver morgen og når du trykker “Hent fra KampKlar”. Standardopgaverne sættes op under Aktiviteter → Standardopgaver."
       >
         <Input
           id="calendarUrl"

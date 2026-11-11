@@ -9,43 +9,27 @@ import { createTask } from "@/app/actions/tasks";
 type Member = { userId: string; name: string; photoId: string | null; shirtNumber: number | null };
 
 /**
- * A new job: tied to a match (deadline defaults to kick-off) or standing alone with a
- * deadline. Handed to the people ticked, fairly by the app, or left open to be taken.
+ * A new job on one activity (deadline defaults to its start). Handed to the people
+ * ticked, fairly by the app, or left open to be taken.
  */
 export function TaskDialog({
   members,
-  matches,
-  defaultMatchId,
+  activityId,
   triggerLabel = "Ny opgave",
 }: {
   members: Member[];
-  matches: { id: string; label: string }[];
-  defaultMatchId?: string;
+  activityId: string;
   triggerLabel?: string;
 }) {
-  const [matchId, setMatchId] = useState(defaultMatchId ?? "");
   const [assign, setAssign] = useState<"auto" | "pick" | "none">("auto");
   return (
     <FormDialog trigger={triggerLabel} title="Ny opgave" action={createTask} submitLabel="Opret opgave">
+      <input type="hidden" name="matchId" value={activityId} />
       <Field label="Opgave" htmlFor="title">
-        <Input id="title" name="title" placeholder="Fx vask spilletøj" maxLength={200} required />
+        <Input id="title" name="title" placeholder="Fx trøjevask" maxLength={200} required />
       </Field>
-      <Field label="Kamp" htmlFor="matchId">
-        <Select id="matchId" name="matchId" value={matchId} onChange={(e) => setMatchId(e.target.value)}>
-          <option value="">Ingen kamp — opgaven har sin egen frist</option>
-          {matches.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field
-        label={matchId ? "Frist (valgfri)" : "Frist"}
-        htmlFor="dueOn"
-        hint={matchId ? "Uden frist er fristen kampstart." : undefined}
-      >
-        <Input id="dueOn" name="dueOn" type="date" required={!matchId} />
+      <Field label="Frist (valgfri)" htmlFor="dueOn" hint="Uden frist er fristen aktivitetens start.">
+        <Input id="dueOn" name="dueOn" type="date" />
       </Field>
       <Field label="Hvem skal gøre det?" htmlFor="assign">
         <Select id="assign" name="assign" value={assign} onChange={(e) => setAssign(e.target.value as typeof assign)}>

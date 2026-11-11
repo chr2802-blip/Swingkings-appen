@@ -321,9 +321,11 @@ model Challenge {
 }
 
 /**
- * A match (or another activity) on the team's calendar. Either typed in, or read from
- * the team's DBU KampKlar calendar feed, in which case `externalUid` is the feed's own
- * UID and the sync updates the row in place rather than adding it twice.
+ * An activity (aktivitet) on the team's calendar: a match, a training, or anything else —
+ * "Afslutningsfest", "Klubdag". The model keeps its old name; the app calls it an activity.
+ * Either typed in, or read from the team's DBU KampKlar calendar feed, in which case
+ * `externalUid` is the feed's own UID and the sync updates the row in place rather than
+ * adding it twice. Every activity can have tasks.
  */
 model Match {
   id          String       @id @default(cuid())
@@ -355,9 +357,9 @@ model Match {
 }
 
 /**
- * A job somebody on the team has to do: wash the kit, bring fruit, drive. Belongs to a
- * match, or stands alone with a deadline of its own — `dueAt` is the deadline in both
- * cases (a match's task defaults to the match's kick-off).
+ * A job somebody on the team has to do: wash the kit, bring fruit, drive. Belongs to an
+ * activity; `dueAt` is the deadline and defaults to the activity's start. (Older tasks
+ * may stand alone with a deadline of their own — new ones are always made on an activity.)
  */
 model Task {
   id             String    @id @default(cuid())
@@ -400,8 +402,9 @@ model TaskAssignee {
 }
 
 /**
- * A job every match needs ("Tøjvask", "Frugt"). Added to a match on request, or
- * automatically to every match the KampKlar sync brings in, and handed out fairly.
+ * A standard job ("Trøjevask", "Opkridtning"), set up with the calendar sync. Chosen when
+ * an activity is made or later on its page, and — when `autoAdd` — added by the KampKlar
+ * sync to every new match it brings in. Always handed out fairly.
  */
 model TaskTemplate {
   id          String   @id @default(cuid())
@@ -410,6 +413,8 @@ model TaskTemplate {
   description String?
   /// How many people the job is handed to.
   people      Int      @default(1)
+  /// Whether the KampKlar sync adds it to every new match by itself.
+  autoAdd     Boolean  @default(true)
   createdAt   DateTime @default(now())
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)

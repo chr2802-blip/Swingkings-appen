@@ -39,10 +39,16 @@ In a bare cloud container: `service postgresql start`, set the postgres password
   current catalogue or price. Balance = fines − payments (`balances` in `src/lib/money.ts`).
 - **Challenges** move only through `canMove` (`src/lib/challenges.ts`); settling is
   `settleChallenge` (`src/lib/fines.ts`), guarded on status so a double press writes one fine.
+- **Activities** (aktiviteter, `/aktiviteter`) are `Match` rows — the model kept its name;
+  `kind` says match, training or other. Every task belongs to one (new tasks always do;
+  old rows may have `matchId` null). There is no tasks menu; `/kampe` and `/opgaver` redirect.
+  Standard jobs are added with `addTemplatesToActivity` (ticked ids, or `"auto"`), copied
+  from an earlier activity with `copyTasksFromActivity` (`src/lib/tasks.ts`).
 - **KampKlar** is read as the team's iCalendar export (`src/lib/ical.ts`,
-  `src/lib/kampklar.ts`), fetched with `safeFetch`. Rows are matched by UID; hand-made matches
-  are never touched by the sync. New future MATCH rows get the team's `TaskTemplate`s,
-  distributed by `src/lib/distribution.ts` (fewest jobs in the last year first).
+  `src/lib/kampklar.ts`), fetched with `safeFetch`. Rows are matched by UID; hand-made
+  activities are never touched by the sync. New future MATCH rows get the team's
+  `TaskTemplate`s with `autoAdd`, distributed by `src/lib/distribution.ts` (fewest jobs in
+  the last year first).
 - **Dates go through `src/lib/time.ts`** (Europe/Copenhagen). Tests run with `TZ=UTC`.
 - **Polls** live on a feed post. Rules are `src/lib/polls.ts`; writing a vote is `castVote`
   (`src/lib/voting.ts`); what reaches the browser is built by `pollView` (`src/lib/feed.ts`).

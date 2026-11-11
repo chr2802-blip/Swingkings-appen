@@ -5,6 +5,7 @@ import { teamDb } from "@/lib/team-db";
 import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
 import { deadlineLabel, formatInZone, kickoffLabel, readInZone } from "@/lib/time";
+import { activityName } from "@/lib/activity";
 import { Badge, Card, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { ActionButton } from "@/components/action-button";
@@ -18,7 +19,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     teamDb(user.teamId).task.findFirst({
       where: { id },
       include: {
-        match: { select: { id: true, title: true, opponent: true, startsAt: true } },
+        match: { select: { id: true, kind: true, title: true, opponent: true, startsAt: true } },
         createdBy: { select: { name: true } },
         doneBy: { select: { name: true } },
         assignees: { select: { user: { select: { id: true, name: true, photoId: true } } } },
@@ -62,8 +63,8 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
         {task.match && (
-          <Link href={`/kampe/${task.match.id}`} className="block text-sm font-medium text-[var(--accent-text)] underline">
-            ⚽ {task.match.opponent ?? task.match.title} · {kickoffLabel(task.match.startsAt)}
+          <Link href={`/aktiviteter/${task.match.id}`} className="block text-sm font-medium text-[var(--accent-text)] underline">
+            {task.match.kind === "MATCH" ? "⚽" : "📅"} {activityName(task.match)} · {kickoffLabel(task.match.startsAt)}
           </Link>
         )}
         {task.description && <p className="text-sm whitespace-pre-line text-slate-700">{task.description}</p>}
