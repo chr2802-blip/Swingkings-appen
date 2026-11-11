@@ -3,12 +3,13 @@
 import { useActionState } from "react";
 import { login } from "@/app/actions/auth";
 import { Button, Card, Field, Input } from "@/components/ui";
+import { markJustLoggedIn } from "@/components/install-app";
 
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(login, undefined);
   return (
     <Card>
-      <form action={formAction} className="space-y-4">
+      <form action={formAction} onSubmit={markJustLoggedIn} className="space-y-4">
         <Field label="E-mail" htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" required />
         </Field>

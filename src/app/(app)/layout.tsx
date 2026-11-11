@@ -6,6 +6,7 @@ import { TeamMenu } from "@/components/team-menu";
 import { Avatar } from "@/components/photo";
 import Link from "next/link";
 import { StripeBand } from "@/components/crest";
+import { InstallAfterLogin } from "@/components/install-app";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -37,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
 
       {user.teamId && <BottomNav />}
+      <InstallAfterLogin />
     </div>
   );
 }
