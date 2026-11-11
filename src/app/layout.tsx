@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/next";
 import { getCurrentUser } from "@/lib/auth";
-import { BAND, DEFAULT_THEME } from "@/lib/theme";
+import { BANDS, DEFAULT_THEME, darkBand } from "@/lib/theme";
 import "./globals.css";
 
 /**
@@ -16,38 +16,43 @@ const heading = localFont({
   display: "swap",
 });
 
-const display = localFont({
-  src: "./fonts/fraunces-variable.woff2",
-  weight: "500 700",
-  variable: "--font-display",
-  display: "swap",
-});
+async function currentTheme() {
+  return (await getCurrentUser())?.teamTheme ?? DEFAULT_THEME;
+}
 
-export const metadata: Metadata = {
-  title: "Swingkings",
-  description: "Bødekasse, opgaver, chat og feed for holdet.",
-  manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Swingkings", statusBarStyle: "default" },
-};
+/** On a dark frame the iPhone's clock and battery go white, over our own header. */
+export async function generateMetadata(): Promise<Metadata> {
+  const dark = darkBand(await currentTheme());
+  return {
+    title: "Swingkings",
+    description: "Bødekasse, opgaver, chat og feed for holdet.",
+    manifest: "/manifest.webmanifest",
+    appleWebApp: { capable: true, title: "Swingkings", statusBarStyle: dark ? "black-translucent" : "default" },
+  };
+}
 
-export const viewport: Viewport = {
-  themeColor: BAND,
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover",
-};
+export async function generateViewport(): Promise<Viewport> {
+  return {
+    themeColor: BANDS[await currentTheme()],
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: "cover",
+  };
+}
 
 /**
  * The team's colour goes on the document itself, because sheets are portalled into
  * <body> and would otherwise wear the previous team's colours.
  */
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
+  const theme = await currentTheme();
   return (
-    <html lang="da" data-theme={user?.teamTheme ?? DEFAULT_THEME} className={`${heading.variable} ${display.variable}`}>
+    <html lang="da" data-theme={theme} className={heading.variable}>
       <body className="min-h-screen text-slate-900 antialiased">
+        {/* Under the phone's clock on pages with no header, so white text there has its frame. */}
+        <div aria-hidden className="fixed inset-x-0 top-0 z-50 h-[env(safe-area-inset-top)] bg-[var(--band)]" />
         {children}
         <Analytics />
       </body>

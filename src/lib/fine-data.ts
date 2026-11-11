@@ -1,8 +1,8 @@
 import { prisma } from "./prisma";
 import { teamDb } from "./team-db";
-import { balances } from "./money";
+import { balances, fineKings } from "./money";
 import { teamRoster } from "./roster";
-import { kickoffLabel } from "./time";
+import { kickoffLabel, startOfMonthInZone } from "./time";
 
 /** What the fine pages all need: the price, the catalogue, the roster and everyone's account. */
 export async function fineBoard(teamId: string) {
@@ -41,4 +41,13 @@ export async function matchOptions(teamId: string) {
     select: { id: true, title: true, opponent: true, startsAt: true },
   });
   return matches.map((m) => ({ id: m.id, label: `${m.opponent ?? m.title} · ${kickoffLabel(m.startsAt)}` }));
+}
+
+/** This month's bødekonge(r), on the team's clock. */
+export async function monthKings(teamId: string) {
+  const fines = await teamDb(teamId).fine.findMany({
+    where: { createdAt: { gte: startOfMonthInZone() } },
+    select: { playerId: true, units: true, unitPriceKr: true },
+  });
+  return fineKings(fines);
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { readPushState, turnOnPush, type PushState } from "@/lib/push-client";
 import { sendTestPush } from "@/app/actions/push";
 import { Button } from "@/components/ui";
+import { Bolt } from "@/components/crest";
 
 /** Turning on notifications on this phone: fines, challenges, new jobs, chat. */
 export function NotificationSetup({ compact = false }: { compact?: boolean }) {
@@ -31,9 +32,7 @@ export function NotificationSetup({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
-      <span aria-hidden className="text-xl">
-        🔔
-      </span>
+      <Bolt className="h-6 w-6" />
       <p className="min-w-0 flex-1 text-slate-600">
         {state === "on" && "Notifikationer er slået til på denne enhed."}
         {state === "off" && "Få besked om bøder, udfordringer, opgaver og chat."}

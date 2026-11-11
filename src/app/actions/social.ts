@@ -160,15 +160,14 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
     members.map((m) => m.userId),
     user.id,
     poll
-      ? { title: `${user.name} har lavet en afstemning 🗳️`, body: poll.question, url: "/feed", tag: "feed" }
+      ? { title: `${user.name} har lavet en afstemning 🗳️`, body: poll.question, url: "/oversigt#feed", tag: "feed" }
       : {
           title: `${user.name} delte i feedet`,
           body: text.data?.slice(0, 140) ?? (photos.photoIds.length > 1 ? `📷 ${photos.photoIds.length} nye billeder` : "📷 Nyt billede"),
-          url: "/feed",
+          url: "/oversigt#feed",
           tag: "feed",
         },
   );
-  revalidatePath("/feed");
   revalidatePath("/oversigt");
   return ok();
 }
@@ -185,7 +184,6 @@ export async function deletePost(_prev: ActionResult, formData: FormData): Promi
   await db.post.deleteMany({ where: { id: post.id } });
   // The pictures belonged to this post and nothing else.
   await db.photo.deleteMany({ where: { id: { in: post.photos.map((p) => p.photoId) } } });
-  revalidatePath("/feed");
   revalidatePath("/oversigt");
   return ok();
 }
@@ -202,7 +200,6 @@ export async function vote(_prev: ActionResult, formData: FormData): Promise<Act
     formData.getAll("optionId").map(String),
   );
   if (!result.ok) return fail(result.error);
-  revalidatePath("/feed");
   revalidatePath("/oversigt");
   return ok();
 }
@@ -218,7 +215,6 @@ export async function closePoll(_prev: ActionResult, formData: FormData): Promis
   if (!poll) return fail("Afstemningen findes ikke.");
   if (poll.post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din afstemning.");
   if (!poll.closedAt) await db.poll.updateMany({ where: { id: poll.id }, data: { closedAt: new Date() } });
-  revalidatePath("/feed");
   revalidatePath("/oversigt");
   return ok();
 }
@@ -236,7 +232,7 @@ export async function toggleLike(_prev: ActionResult, formData: FormData): Promi
   const liked = await prisma.postLike.findUnique({ where: key });
   if (liked) await prisma.postLike.delete({ where: key });
   else await prisma.postLike.create({ data: { postId: post.id, userId: user.id } });
-  revalidatePath("/feed");
+  revalidatePath("/oversigt");
   return ok();
 }
 
@@ -250,9 +246,9 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   notifyLater([post.authorId], user.id, {
     title: `${user.name} kommenterede dit opslag`,
     body: text.data.slice(0, 140),
-    url: "/feed",
+    url: "/oversigt#feed",
   });
-  revalidatePath("/feed");
+  revalidatePath("/oversigt");
   return ok();
 }
 
@@ -264,6 +260,6 @@ export async function deleteComment(_prev: ActionResult, formData: FormData): Pr
   if (!comment) return ok();
   if (comment.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din kommentar.");
   await prisma.postComment.delete({ where: { id: comment.id } });
-  revalidatePath("/feed");
+  revalidatePath("/oversigt");
   return ok();
 }

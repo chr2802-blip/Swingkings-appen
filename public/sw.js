@@ -17,7 +17,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "Der er nyt på holdet.",
-      icon: "/icon.svg",
+      icon: "/icon-192.png",
       badge: "/badge.png",
       tag: data.tag,
       renotify: Boolean(data.tag),

@@ -76,6 +76,12 @@ export function startOfDayInZone(now: Date = new Date()): Date {
   return exact(z.getFullYear(), z.getMonth() + 1, z.getDate(), 0, 0)!;
 }
 
+/** The first instant of the month `now` falls in, on the team's clock. */
+export function startOfMonthInZone(now: Date = new Date()): Date {
+  const z = inZone(now);
+  return exact(z.getFullYear(), z.getMonth() + 1, 1, 0, 0)!;
+}
+
 /** Whole calendar days from `from` to `target`, counted on the team's clock. */
 export function calendarDaysBetween(target: Date, from: Date) {
   return differenceInCalendarDays(inZone(target), inZone(from));

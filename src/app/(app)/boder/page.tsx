@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
 import { canManageFines } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
-import { fineBoard, matchOptions } from "@/lib/fine-data";
+import { fineBoard, matchOptions, monthKings } from "@/lib/fine-data";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
 import { relativeDay } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
@@ -12,13 +12,15 @@ import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { PaymentDialog } from "@/components/payment-dialog";
 import { ActionButton } from "@/components/action-button";
 import { deleteFine } from "@/app/actions/fines";
+import { Crown, Star } from "@/components/crest";
 
 export default async function FinesPage() {
   const user = await requireTeamUser();
   const manages = canManageFines(user, user.teamId);
   const db = teamDb(user.teamId);
-  const [board, recent, matches] = await Promise.all([
+  const [board, kings, recent, matches] = await Promise.all([
     fineBoard(user.teamId),
+    monthKings(user.teamId),
     db.fine.findMany({
       orderBy: { createdAt: "desc" },
       take: 25,
@@ -98,17 +100,29 @@ export default async function FinesPage() {
             {board.balances.map((row, index) => {
               const person = board.people.get(row.userId);
               if (!person) return null;
+              const isMe = row.userId === user.id;
               return (
                 <li key={row.userId}>
                   <Link
                     href={`/boder/spiller/${row.userId}`}
-                    className="press-card flex items-center gap-3 px-4 py-3"
+                    aria-current={isMe ? "true" : undefined}
+                    className={`press-card flex items-center gap-3 px-4 py-3 ${
+                      isMe ? "border-l-4 border-[var(--gold)] bg-[var(--gold-tint)] pl-3" : ""
+                    }`}
                   >
                     <span className="w-5 text-right text-sm text-slate-400">{index + 1}</span>
                     <Avatar name={person.name} photoId={person.photoId} size="sm" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">
-                        {person.name} {!person.onTeam && <span className="text-xs text-slate-400">(ikke på holdet)</span>}
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <span className="truncate">{person.name}</span>
+                        {kings.userIds.includes(row.userId) && (
+                          <span title="Månedens bødekonge" className="flex items-center">
+                            <Crown className="h-4 w-4" />
+                            <span className="sr-only">(månedens bødekonge)</span>
+                          </span>
+                        )}
+                        {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
+                        {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
                       </span>
                       <span className="text-xs text-slate-500">
                         {row.fines === 1 ? "1 bøde" : `${row.fines} bøder`} · {kr(row.finedKr)} i alt
@@ -138,6 +152,7 @@ export default async function FinesPage() {
             <ul className="divide-y divide-slate-100">
               {recent.map((fine) => (
                 <li key={fine.id} className="flex items-center gap-3 px-4 py-3">
+                  <Star className="h-3.5 w-3.5" />
                   <Avatar name={fine.player.name} photoId={fine.player.photoId} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">

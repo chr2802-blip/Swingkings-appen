@@ -1,21 +1,24 @@
 import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
 import { teamDb } from "@/lib/team-db";
-import { fineBoard } from "@/lib/fine-data";
+import Image from "next/image";
+import { fineBoard, monthKings } from "@/lib/fine-data";
 import { movesFor } from "@/lib/challenges";
 import { kr } from "@/lib/money";
 import { OPEN_TASK } from "@/lib/tasks";
-import { kickoffLabel, relativeDay, startOfDayInZone } from "@/lib/time";
+import { kickoffLabel, readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, SectionTitle } from "@/components/ui";
-import { Photo } from "@/components/photo";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { NotificationSetup } from "@/components/notification-setup";
+import { TeamFeed } from "@/components/team-feed";
+import { FineKing } from "@/components/crest";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, nextMatch, myTasks, openChallenges, posts, pollsWaiting] = await Promise.all([
+  const [board, kings, nextMatch, myTasks, openChallenges, pollsWaiting] = await Promise.all([
     fineBoard(user.teamId),
+    monthKings(user.teamId),
     db.match.findFirst({
       where: { kind: "MATCH", cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
       orderBy: { startsAt: "asc" },
@@ -31,12 +34,6 @@ export default async function OverviewPage() {
       where: { status: { in: ["PENDING", "ACCEPTED"] }, OR: [{ challengerId: user.id }, { opponentId: user.id }] },
       select: { status: true, challengerId: true, opponentId: true, claimedById: true, claimedWinnerId: true },
     }),
-    db.post.findMany({
-      where: { photos: { some: {} } },
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      select: { id: true, photos: { orderBy: { position: "asc" }, take: 6, select: { photoId: true } } },
-    }),
     db.poll.count({
       where: {
         closedAt: null,
@@ -49,20 +46,28 @@ export default async function OverviewPage() {
   const waitingOnMe = openChallenges.filter((c) => movesFor(c, user.id, false).some((m) => m !== "cancel")).length;
   const topOwers = board.balances.filter((row) => row.owesKr > 0).slice(0, 3);
   const firstName = user.name.split(" ")[0];
-  const pictures = posts.flatMap((post) => post.photos.map((p) => p.photoId)).slice(0, 6);
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl">Hej {firstName} 👋</h1>
-        <p className="mt-1 text-sm text-slate-500">Her er det vigtigste på {user.teamName}.</p>
+      <div className="stripes-wide relative overflow-hidden rounded-3xl border border-[var(--accent-line)] px-5 py-6 shadow-sm">
+        <div className="relative z-10 max-w-[70%]">
+          <h1 className="text-3xl">Hej {firstName} 👋</h1>
+          <p className="mt-1 text-sm font-medium text-slate-700">Her er det vigtigste på {user.teamName}.</p>
+        </div>
+        <Image
+          src="/logo.png"
+          alt=""
+          width={512}
+          height={512}
+          className="absolute top-1/2 -right-6 h-32 w-32 -translate-y-1/2 rotate-12 drop-shadow-md sm:right-6 sm:h-24 sm:w-24"
+        />
       </div>
 
       <NotificationSetup compact />
 
       {pollsWaiting > 0 && (
         <Link
-          href="/feed"
+          href="#feed"
           className="press-card flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
         >
           <span aria-hidden className="text-xl">
@@ -74,6 +79,14 @@ export default async function OverviewPage() {
           <span aria-hidden>→</span>
         </Link>
       )}
+
+      <Link href="/boder" className="press-card block rounded-2xl">
+        <FineKing
+          names={kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?")}
+          amount={kr(kings.kr)}
+          month={readInZone(new Date(), "MMMM")}
+        />
+      </Link>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link href="/boder" className="press-card block rounded-2xl">
@@ -151,22 +164,7 @@ export default async function OverviewPage() {
         )}
       </section>
 
-      <section>
-        <SectionTitle action={<Link href="/feed" className="text-sm text-[var(--accent-text)] underline">Til feedet</Link>}>
-          Seneste billeder
-        </SectionTitle>
-        {pictures.length === 0 ? (
-          <Card className="text-sm text-slate-500">Ingen billeder endnu.</Card>
-        ) : (
-          <div className="grid grid-cols-3 gap-2">
-            {pictures.map((photoId) => (
-              <Link key={photoId} href="/feed" className="press-card block overflow-hidden rounded-xl">
-                <Photo photoId={photoId} alt="" size="thumb" className="aspect-square w-full object-cover" />
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+      <TeamFeed user={user} />
     </div>
   );
 }

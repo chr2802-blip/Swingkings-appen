@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { AcceptInviteForm } from "./accept-invite-form";
 
@@ -6,6 +7,7 @@ export default async function AcceptInvitePage({ searchParams }: { searchParams:
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4 py-10">
       <div className="mb-6 text-center">
+        <Image src="/logo.png" alt="" width={512} height={512} priority className="mx-auto mb-4 h-24 w-24 drop-shadow-md" />
         <h1 className="text-3xl">Kom med på holdet</h1>
         <p className="mt-1 text-sm text-slate-500">
           Skriv den e-mail, du blev inviteret med, og koden du har fået af træneren.

@@ -17,7 +17,7 @@ export function NavLinks({ showAdmin }: { showAdmin: boolean }) {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={`press-button rounded-lg px-3 py-1.5 ${
-              active ? "bg-[var(--accent)] text-white" : "text-slate-600 hover:bg-slate-100"
+              active ? "bg-[var(--band-active)] font-medium text-[var(--band-active-text)]" : "text-[var(--band-soft)] hover:bg-[var(--band-hover)]"
             }`}
           >
             {item.label}

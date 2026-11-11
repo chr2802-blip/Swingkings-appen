@@ -51,3 +51,15 @@ export function balances(
   for (const r of rows.values()) r.owesKr = r.finedKr - r.paidKr;
   return [...rows.values()].sort((a, b) => b.owesKr - a.owesKr || b.finedKr - a.finedKr);
 }
+
+/**
+ * Who has been fined most (in kroner) among `fines` — the month's "bødekonge". Ties
+ * share the crown, so it can be several people; nobody when there are no fines.
+ */
+export function fineKings(fines: { playerId: string; units: number; unitPriceKr: number }[]) {
+  const totals = new Map<string, number>();
+  for (const fine of fines) totals.set(fine.playerId, (totals.get(fine.playerId) ?? 0) + fineAmount(fine));
+  const top = Math.max(0, ...totals.values());
+  if (top === 0) return { userIds: [] as string[], kr: 0 };
+  return { userIds: [...totals].filter(([, sum]) => sum === top).map(([id]) => id).sort(), kr: top };
+}

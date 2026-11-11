@@ -60,17 +60,6 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    href: "/feed",
-    label: "Feed",
-    icon: ({ className }) => (
-      <svg viewBox="0 0 24 24" className={className} {...stroke}>
-        <rect x="3" y="4" width="18" height="16" rx="3" />
-        <circle cx="9" cy="10" r="2" />
-        <path d="m21 16-5-5-8 9" />
-      </svg>
-    ),
-  },
-  {
     href: "/chat",
     label: "Chat",
     icon: ({ className }) => (

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { calendarDaysBetween, deadlineLabel, deadlineOn, parseLocalDateTime } from "@/lib/time";
+import { calendarDaysBetween, deadlineLabel, deadlineOn, parseLocalDateTime, startOfMonthInZone } from "@/lib/time";
 
 describe("time", () => {
+  it("starts the month at midnight in Copenhagen, even when it is still last month in UTC", () => {
+    expect(startOfMonthInZone(new Date("2026-11-11T12:00:00Z")).toISOString()).toBe("2026-10-31T23:00:00.000Z");
+    expect(startOfMonthInZone(new Date("2026-10-31T23:30:00Z")).toISOString()).toBe("2026-10-31T23:00:00.000Z");
+    expect(startOfMonthInZone(new Date("2026-07-15T08:00:00Z")).toISOString()).toBe("2026-06-30T22:00:00.000Z");
+  });
+
   it("puts a deadline at the end of that day in Copenhagen", () => {
     expect(deadlineOn("2026-10-23")?.toISOString()).toBe("2026-10-23T21:59:59.999Z");
     expect(deadlineOn("2026-12-23")?.toISOString()).toBe("2026-12-23T22:59:59.999Z");
