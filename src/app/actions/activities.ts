@@ -14,6 +14,7 @@ import { addTemplatesToActivity, copyTasksFromActivity } from "@/lib/tasks";
 
 function refresh() {
   revalidatePath("/aktiviteter", "layout");
+  revalidatePath("/hold");
   revalidatePath("/opgaver", "layout");
   revalidatePath("/oversigt");
 }

@@ -32,7 +32,7 @@ under "Med træninger" (medmindre de har opgaver). Andre aktiviteter oprettes i 
 intet særskilt opgavemenupunkt; dine egne opgaver står på forsiden. En opgave gives til
 udvalgte personer, **fordeles retfærdigt** (dem med færrest opgaver det seneste år først),
 eller lades åben, så nogen kan tage den. **Standardopgaver** (trøjevask, opkridtning, frugt,
-kørsel…) sættes op under Aktiviteter → Kalendersync og standardopgaver. Man vælger dem, når en
+kørsel…) sættes op under Holdindstillinger, sammen med KampKlar-linket. Man vælger dem, når en
 aktivitet oprettes (eller senere på aktivitetens side), og dem markeret *automatisk* lægges
 selv på hver ny kamp fra KampKlar. Man kan også **kopiere opgaverne fra en tidligere
 aktivitet** — samme antal personer og frist i forhold til starten, fordelt på ny. Tildelte får

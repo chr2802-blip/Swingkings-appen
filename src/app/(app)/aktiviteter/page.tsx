@@ -66,25 +66,6 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
           )
         }
       />
-      {admin && (
-        <Link
-          href="/aktiviteter/standardopgaver"
-          className="press-card mb-4 flex items-center gap-3 rounded-2xl border border-[var(--accent-line)] bg-white px-4 py-3 text-sm"
-        >
-          <span aria-hidden className="text-xl">
-            🧺
-          </span>
-          <span className="flex-1">
-            <span className="block font-medium">Kalendersync og standardopgaver</span>
-            <span className="text-slate-500">
-              {templates.length === 0
-                ? "Opret faste opgaver som trøjevask og opkridtning"
-                : templates.map((t) => t.title).join(", ")}
-            </span>
-          </span>
-          <span aria-hidden>→</span>
-        </Link>
-      )}
       <Tabs
         current={`/aktiviteter${view === "kommende" ? "" : `?vis=${view}`}`}
         items={[

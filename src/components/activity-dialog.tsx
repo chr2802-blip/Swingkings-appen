@@ -88,6 +88,9 @@ export function ActivityDialog({
       <Field label="Note (valgfri)" htmlFor="note">
         <Textarea id="note" name="note" rows={2} defaultValue={activity?.note ?? ""} maxLength={2000} />
       </Field>
+      {!activity && templates.length === 0 && (
+        <p className="text-xs text-slate-500">Holdet har ingen standardopgaver endnu. De oprettes under Holdindstillinger.</p>
+      )}
       {!activity && templates.length > 0 && (
         <Field label="Standardopgaver" hint="De valgte opgaver fordeles retfærdigt — dem med færrest opgaver først.">
           <TemplatePicker templates={templates} />
