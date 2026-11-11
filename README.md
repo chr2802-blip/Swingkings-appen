@@ -48,9 +48,12 @@ heller ikke trænere eller admin — kan se hvem der stemte hvad. Derfor kan en 
 ikke ændres, og en afstemning kan ikke gøres anonym (eller ikke-anonym) bagefter.
 
 **Roller** (pr. hold): *Træner/holdleder* (alt), *Kasserer* (bøder og betalinger),
-*Spiller*. En super admin opretter hold under **Admin**. Invitationer laves under
-Holdindstillinger: man får en engangskode, som sendes til spilleren, der opretter sig på
-`/accept-invite`.
+*Spiller*. En super admin opretter hold under **Admin** (evt. med et engangslink til
+træneren). **Invitationer** laves under Holdindstillinger som et link (`/join/…`), der
+sendes i gruppechatten: den der åbner det, opretter sig selv eller logger ind med sin
+konto. Linket har en rolle, en udløbsdato og et maks. antal personer (1–50), og kan
+trækkes tilbage. Oprettelse er begrænset: højst 15 nye konti i timen fra samme adresse og
+30 i timen gennem samme link, ud over linkets eget maks.
 
 ## Kom i gang lokalt
 

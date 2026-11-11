@@ -3,7 +3,6 @@ import { cookies, headers } from "next/headers";
 import { INSTALL_LATER_COOKIE, guideFor, isPhone } from "@/lib/install";
 import { LoginInstall } from "@/components/install-app";
 import Image from "next/image";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { LoginForm } from "./login-form";
 
@@ -22,10 +21,7 @@ export default async function LoginPage() {
       <LoginInstall serverGuide={guide} startWithApp={startWithApp}>
         <LoginForm />
         <p className="mt-6 text-center text-sm text-slate-500">
-          Har du fået en invitation?{" "}
-          <Link href="/accept-invite" className="font-medium text-[var(--accent-text)] underline">
-            Opret dig her
-          </Link>
+          Ny på holdet? Bed træneren om et invitationslink — det er der, du opretter dig.
         </p>
       </LoginInstall>
     </main>

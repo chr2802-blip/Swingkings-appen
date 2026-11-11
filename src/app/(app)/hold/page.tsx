@@ -6,21 +6,23 @@ import { teamDb } from "@/lib/team-db";
 import { readInZone } from "@/lib/time";
 import { Card, PageHeader, SectionTitle } from "@/components/ui";
 import { TeamSettingsForm } from "@/components/team-settings-form";
-import { InviteForm } from "@/components/invite-form";
+import { InviteLinkForm } from "@/components/invite-link-form";
 import { ActionButton } from "@/components/action-button";
-import { revokeInvite } from "@/app/actions/teams";
+import { revokeInviteLink } from "@/app/actions/teams";
 
 export default async function TeamSettingsPage() {
   const user = await requireTeamUser();
   if (!canAdministerTeam(user, user.teamId)) redirect("/hold/spillere");
-  const [team, invites] = await Promise.all([
+  const now = new Date();
+  const [team, links] = await Promise.all([
     prisma.team.findUniqueOrThrow({
       where: { id: user.teamId },
       select: { name: true, theme: true, finePriceKr: true, calendarUrl: true, photoId: true },
     }),
-    teamDb(user.teamId).invite.findMany({
-      where: { acceptedAt: null, expiresAt: { gt: new Date() } },
+    teamDb(user.teamId).inviteLink.findMany({
+      where: { expiresAt: { gt: now } },
       orderBy: { createdAt: "desc" },
+      include: { createdBy: { select: { name: true } } },
     }),
   ]);
 
@@ -35,19 +37,25 @@ export default async function TeamSettingsPage() {
         <SectionTitle>Inviter til holdet</SectionTitle>
         <Card className="space-y-4">
           <p className="text-sm text-slate-500">
-            Du får en engangskode, som du sender til personen (SMS, Messenger…). De opretter sig på{" "}
-            <strong>/accept-invite</strong> med deres e-mail og koden. Koden gælder i 14 dage.
+            Lav et link og send det i holdets gruppechat, på SMS eller Messenger. Den der åbner det, opretter
+            sig selv — eller logger ind, hvis de allerede har en konto. Linket virker for det antal personer, du
+            vælger, og kun indtil det udløber.
           </p>
-          <InviteForm />
-          {invites.length > 0 && (
+          <InviteLinkForm teamName={team.name} />
+          {links.length > 0 && (
             <ul className="divide-y divide-slate-100 border-t border-slate-100 pt-2">
-              {invites.map((invite) => (
-                <li key={invite.id} className="flex items-center gap-3 py-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate">
-                    {invite.email} <span className="text-slate-500">· {ROLE_LABEL[invite.role]}</span>
-                  </span>
-                  <span className="text-xs text-slate-500">udløber {readInZone(invite.expiresAt, "d. MMM")}</span>
-                  <ActionButton action={revokeInvite} fields={{ inviteId: invite.id }} label="Træk tilbage" variant="ghost" />
+              {links.map((link) => (
+                <li key={link.id} className="flex items-center gap-3 py-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate">
+                      {ROLE_LABEL[link.role]} <span className="text-slate-500">· lavet af {link.createdBy.name}</span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {link.uses >= link.maxUses ? "Brugt op" : `${link.uses} af ${link.maxUses} brugt`} · udløber{" "}
+                      {readInZone(link.expiresAt, "d. MMM")}
+                    </p>
+                  </div>
+                  <ActionButton action={revokeInviteLink} fields={{ linkId: link.id }} label="Træk tilbage" variant="ghost" />
                 </li>
               ))}
             </ul>

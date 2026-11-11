@@ -43,6 +43,10 @@ In a bare cloud container: `service postgresql start`, set the postgres password
   `src/lib/kampklar.ts`), fetched with `safeFetch`. Rows are matched by UID; hand-made matches
   are never touched by the sync. New future MATCH rows get the team's `TaskTemplate`s,
   distributed by `src/lib/distribution.ts` (fewest jobs in the last year first).
+- **Invitations are links** (`src/lib/invite-links.ts`, `/join/<token>`): only the token's
+  hash is stored. A place is taken only by `redeemInviteLink`, whose guarded update
+  (`uses < maxUses`) makes the account in the same transaction. New accounts are also
+  limited by `takeAttempt("signup")` (per address) and `takeAttempt("join-link")` (per link).
 - **Dates go through `src/lib/time.ts`** (Europe/Copenhagen). Tests run with `TZ=UTC`.
 - **Polls** live on a feed post. Rules are `src/lib/polls.ts`; writing a vote is `castVote`
   (`src/lib/voting.ts`); what reaches the browser is built by `pollView` (`src/lib/feed.ts`).
