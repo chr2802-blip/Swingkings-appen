@@ -2,29 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Button } from "@/components/ui";
 import { Bolt } from "@/components/crest";
-import { INSTALL_LATER_COOKIE, isIosGuide, isPhone, type Guide } from "@/lib/install";
+import { isIosGuide, isPhone, type Guide } from "@/lib/install";
 import { useInstall, waitForPrompt } from "@/lib/install-client";
 
 /**
  * Getting Swingkings onto the home screen. One button everywhere ("Hent appen"): on Android
  * it opens Chrome's own install prompt, on an iPhone — which has none — it opens a drawer
- * that walks through the share sheet step by step. Shown first on the login page, and
- * again right after logging in until the app is on the phone.
+ * that walks through the share sheet step by step. The first thing after logging in on a
+ * phone without the app is the page `/hent-appen` (`InstallWelcome`); after that a card
+ * on the overview and a section on the profile.
  */
-
-const JUST_LOGGED_IN = "swingkings:just-logged-in";
-
-/** Called by the login and invite forms as they submit, so the app can offer itself after. */
-export function markJustLoggedIn() {
-  try {
-    sessionStorage.setItem(JUST_LOGGED_IN, "1");
-  } catch {
-    /* nothing to offer then */
-  }
-}
 
 // ——— Icons ————————————————————————————————————————————————————————————————
 
@@ -545,7 +537,7 @@ function Pitch() {
   );
 }
 
-function Installed({ onContinue }: { onContinue?: () => void }) {
+function Installed() {
   return (
     <div className="animate-pop space-y-3 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
@@ -553,92 +545,7 @@ function Installed({ onContinue }: { onContinue?: () => void }) {
       </div>
       <p className="font-display text-xl">Appen er på vej!</p>
       <p className="text-sm text-slate-600">Find Swingkings på din hjemmeskærm og log ind dér.</p>
-      {onContinue && (
-        <button type="button" onClick={onContinue} className="text-sm font-medium text-[var(--accent-text)] underline">
-          Eller log ind her i browseren
-        </button>
-      )}
     </div>
-  );
-}
-
-// ——— Before login ————————————————————————————————————————————————————————
-
-/**
- * The login page on a phone: the app first, the browser as the way round. Whether to
- * start with the app is settled on the server (user agent and the "later" cookie), so
- * the first paint is already right; opened from the home screen, CSS alone swaps it for
- * the form (`.browser-only` / `.app-only`) before any script runs.
- */
-export function LoginInstall({
-  serverGuide,
-  startWithApp,
-  children,
-}: {
-  serverGuide: Guide;
-  startWithApp: boolean;
-  children: React.ReactNode;
-}) {
-  const install = useInstall(serverGuide);
-  const [gate, setGate] = useState(startWithApp);
-  const [justInstalled, setJustInstalled] = useState(false);
-
-  const inApp = install.ready && install.standalone;
-  const showGate = gate && !inApp;
-  const offerSmall = !inApp && install.ready && !showGate && (isPhone(install.guide) || install.canPrompt);
-
-  function continueInBrowser() {
-    document.cookie = `${INSTALL_LATER_COOKIE}=1; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
-    setGate(false);
-  }
-
-  return (
-    <>
-      {showGate && (
-        <div className="browser-only animate-page-in space-y-5">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            {justInstalled ? (
-              <Installed onContinue={continueInBrowser} />
-            ) : (
-              <>
-                <div className="mb-4 flex items-center gap-3.5">
-                  <AppTile className="h-14 w-14" />
-                  <div className="min-w-0">
-                    <p className="font-display text-xl leading-tight">Hent Swingkings på din telefon</p>
-                    <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-slate-500">
-                      <Bolt className="h-3.5 w-3.5" /> Det tager under et minut
-                    </p>
-                  </div>
-                </div>
-                <Pitch />
-                <div className="mt-5">
-                  <InstallButton serverGuide={serverGuide} onInstalled={() => setJustInstalled(true)} />
-                </div>
-              </>
-            )}
-          </div>
-          {!justInstalled && (
-            <button
-              type="button"
-              onClick={continueInBrowser}
-              className="press-button mx-auto block rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-900"
-            >
-              Fortsæt i browseren i stedet →
-            </button>
-          )}
-        </div>
-      )}
-      <div className={showGate ? "app-only" : ""}>
-        {children}
-        {offerSmall && (
-          <div className="browser-only mt-4 flex items-center gap-3 rounded-2xl border border-dashed border-slate-300 p-3">
-            <AppTile className="h-9 w-9" />
-            <p className="min-w-0 flex-1 text-sm text-slate-600">Swingkings virker bedst som app.</p>
-            <InstallButton serverGuide={serverGuide} size="normal" variant="secondary" />
-          </div>
-        )}
-      </div>
-    </>
   );
 }
 
@@ -650,75 +557,63 @@ function wanted(install: ReturnType<typeof useInstall>) {
 }
 
 /**
- * Rises once, on the first page after logging in, on a phone without the app. Lives in
- * the app's layout so it greets whichever page the login lands on.
+ * In the login and invite forms: where to land once logged in. The browser knows whether
+ * the app is already on this phone (or this is the app); the server does not.
  */
-export function InstallAfterLogin() {
+export function AfterLoginField() {
   const install = useInstall();
-  const [open, setOpen] = useState(false);
+  const offer = install.ready && !install.installed && isPhone(install.guide);
+  return <input type="hidden" name="next" value={offer ? "/hent-appen" : "/oversigt"} />;
+}
+
+/** `/hent-appen`: the first thing after logging in on a phone without the app. */
+export function InstallWelcome({ firstName, serverGuide }: { firstName: string; serverGuide: Guide }) {
+  const install = useInstall(serverGuide);
+  const router = useRouter();
   const [done, setDone] = useState(false);
 
+  // Opened inside the app after all: nothing to offer here.
   useEffect(() => {
-    if (!install.ready) return;
-    let fresh = false;
-    try {
-      fresh = sessionStorage.getItem(JUST_LOGGED_IN) === "1";
-      sessionStorage.removeItem(JUST_LOGGED_IN);
-    } catch {
-      /* no offer then */
-    }
-    if (fresh && !install.installed && !install.later && (isPhone(install.guide) || install.canPrompt)) {
-      const timer = setTimeout(() => setOpen(true), 600);
-      return () => clearTimeout(timer);
-    }
-    // Only on arrival: later changes to `install` must not reopen it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [install.ready]);
+    if (install.ready && install.standalone) router.replace("/oversigt");
+  }, [install.ready, install.standalone, router]);
 
   return (
-    <Modal open={open} onClose={() => setOpen(false)} title={done ? "Sådan!" : "Få appen på telefonen"} size="drawer">
-      <ModalBody className="space-y-5">
+    <div className="animate-page-in space-y-5">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         {done ? (
           <Installed />
         ) : (
           <>
-            <div className="flex items-center gap-3.5">
+            <div className="mb-4 flex items-center gap-3.5">
               <AppTile className="h-14 w-14" />
-              <p className="text-sm text-slate-600">
-                Du er logget ind. Læg Swingkings på hjemmeskærmen, så har du holdet lige ved hånden.
-              </p>
+              <div className="min-w-0">
+                <p className="font-display text-xl leading-tight">Hent Swingkings på din telefon</p>
+                <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-slate-500">
+                  <Bolt className="h-3.5 w-3.5" /> Det tager under et minut
+                </p>
+              </div>
             </div>
             <Pitch />
+            <div className="mt-5">
+              <InstallButton serverGuide={serverGuide} onInstalled={() => setDone(true)} />
+            </div>
             {isIosGuide(install.guide) && (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 På iPhone skal du logge ind én gang til, når du åbner appen første gang.
               </p>
             )}
           </>
         )}
-      </ModalBody>
-      <ModalFooter>
-        {done ? (
-          <Button variant="secondary" className="w-full py-3" onClick={() => setOpen(false)}>
-            Luk
-          </Button>
-        ) : (
-          <div className="space-y-2">
-            <InstallButton onInstalled={() => setDone(true)} />
-            <button
-              type="button"
-              onClick={() => {
-                install.putOff();
-                setOpen(false);
-              }}
-              className="w-full rounded-xl py-2.5 text-sm font-medium text-slate-500 hover:text-slate-900"
-            >
-              Ikke nu
-            </button>
-          </div>
-        )}
-      </ModalFooter>
-    </Modal>
+      </div>
+      <Link
+        href="/oversigt"
+        // Passed over just now: the overview's card need not ask again straight away.
+        onClick={() => !done && install.putOff()}
+        className="press-button mx-auto block w-fit rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-900"
+      >
+        {done ? "Fortsæt i browseren →" : `Fortsæt til holdet, ${firstName} →`}
+      </Link>
+    </div>
   );
 }
 
