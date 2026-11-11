@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
-import { makeMember, makeTeam } from "./factory";
+import { makeMember, makeTeam } from "../helpers/factories";
 
 describe("teamDb", () => {
   it("never reads, changes or deletes another team's rows", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { castVote } from "@/lib/voting";
-import { makeMember, makeTeam } from "./factory";
+import { makeMember, makeTeam } from "../helpers/factories";
 
 async function pollFor(anonymous: boolean, multipleChoice = false) {
   const team = await makeTeam();

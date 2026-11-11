@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { settleChallenge } from "@/lib/fines";
-import { makeMember, makeTeam } from "./factory";
+import { makeMember, makeTeam } from "../helpers/factories";
 
 describe("settleChallenge", () => {
   async function accepted() {

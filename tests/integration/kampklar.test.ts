@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { applyCalendar } from "@/lib/kampklar";
 import type { CalendarEvent } from "@/lib/ical";
-import { makeMember, makeTeam } from "./factory";
+import { makeMember, makeTeam } from "../helpers/factories";
 
 const now = new Date("2026-10-11T10:00:00Z");
 
