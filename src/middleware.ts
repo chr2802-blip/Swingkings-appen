@@ -26,5 +26,6 @@ export const config = {
     "/hold/:path*",
     "/profil/:path*",
     "/admin/:path*",
+    "/hent-appen",
   ],
 };

@@ -1,7 +1,7 @@
 /**
  * Which "add Swingkings to the home screen" guide a phone needs, read from its user agent.
- * Pure, so the login page can decide on the server what to show first and the tests can
- * pin it down; the browser refines it with `maxTouchPoints`, since an iPad asks for the
+ * Pure, so the server can pick the guide for the first paint and the tests can pin it
+ * down; the browser refines it with `maxTouchPoints`, since an iPad asks for the
  * desktop site and calls itself a Mac.
  *
  * - `android-*`: Chrome and its cousins offer a real install prompt (`beforeinstallprompt`);
@@ -54,8 +54,6 @@ export function isIosGuide(guide: Guide) {
   return guide.startsWith("ios-");
 }
 
-/** Set when somebody chooses the browser over the app on the login page, read on the server. */
-export const INSTALL_LATER_COOKIE = "swingkings_install_later";
 
 /**
  * Run inline in the root layout, before React: Chrome's `beforeinstallprompt` is kept on
