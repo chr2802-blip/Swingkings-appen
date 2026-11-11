@@ -6,7 +6,7 @@ import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Button } from "@/components/ui";
 import { Bolt } from "@/components/crest";
 import { INSTALL_LATER_COOKIE, isIosGuide, isPhone, type Guide } from "@/lib/install";
-import { useInstall } from "@/lib/install-client";
+import { useInstall, waitForPrompt } from "@/lib/install-client";
 
 /**
  * Getting Swingkings onto the home screen. One button everywhere ("Hent appen"): on Android
@@ -366,19 +366,32 @@ export function InstallGuide({
   onClose,
   guide,
   onDone,
+  oneTap,
 }: {
   open: boolean;
   onClose: () => void;
   guide: Guide;
   /** "Jeg har gjort det": an iPhone never tells us, so we take their word for it. */
   onDone?: () => void;
+  /** Chrome's prompt arrived while the guide was open: install with one tap after all. */
+  oneTap?: () => void;
 }) {
   const { title, intro, steps } = GUIDES[guide];
   const showLink = guide === "in-app" || guide === "desktop";
   return (
     <Modal open={open} onClose={onClose} title={title} size="drawer">
       <ModalBody className="space-y-5">
-        {intro && <p className="text-sm text-slate-600">{intro}</p>}
+        {oneTap ? (
+          <div className="animate-pop space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+            <p className="text-sm font-medium text-emerald-900">Nu er din telefon klar. Det klares med ét tryk:</p>
+            <Button className="w-full rounded-2xl py-3.5 text-base font-semibold shadow-md" onClick={oneTap}>
+              <DownloadIcon />
+              Installér nu
+            </Button>
+          </div>
+        ) : (
+          intro && <p className="text-sm text-slate-600">{intro}</p>
+        )}
         {steps.length > 0 && (
           <ol className="space-y-2.5">
             {steps.map((step, index) => (
@@ -458,15 +471,26 @@ export function InstallButton({
   const [guideOpen, setGuideOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  async function start() {
-    if (install.canPrompt) {
-      setBusy(true);
-      try {
-        if ((await install.prompt()) === "accepted") onInstalled?.();
-      } finally {
-        setBusy(false);
+  async function prompt() {
+    setBusy(true);
+    try {
+      if ((await install.prompt()) === "accepted") {
+        setGuideOpen(false);
+        onInstalled?.();
       }
-      return;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function start() {
+    if (install.canPrompt) return prompt();
+    // On Android Chrome may not have offered its prompt yet: give it a moment.
+    if (install.guide.startsWith("android-") && install.guide !== "android-firefox") {
+      setBusy(true);
+      const ready = await waitForPrompt(2500);
+      setBusy(false);
+      if (ready) return prompt();
     }
     setGuideOpen(true);
   }
@@ -479,13 +503,18 @@ export function InstallButton({
         disabled={busy}
         className={`${size === "large" ? "w-full rounded-2xl py-3.5 text-base font-semibold shadow-md" : ""} ${className}`}
       >
-        <DownloadIcon className={size === "large" ? "h-5 w-5" : "h-4 w-4"} />
-        Hent appen
+        {busy ? (
+          <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        ) : (
+          <DownloadIcon className={size === "large" ? "h-5 w-5" : "h-4 w-4"} />
+        )}
+        {busy ? "Et øjeblik…" : "Hent appen"}
       </Button>
       <InstallGuide
         open={guideOpen}
         onClose={() => setGuideOpen(false)}
         guide={install.guide}
+        oneTap={install.canPrompt ? prompt : undefined}
         onDone={() => {
           install.markInstalled();
           onInstalled?.();
