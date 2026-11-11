@@ -25,5 +25,5 @@ test("changes the password, which then works at the login form", async ({ page, 
   await page.getByLabel("E-mail").fill(anna.email);
   await page.getByLabel("Adgangskode").fill("et-helt-nyt-kodeord");
   await page.getByRole("button", { name: "Log ind" }).click();
-  await expect(page).toHaveURL(/\/oversigt$/);
+  await expect(page).toHaveURL(/\/(hent-appen|oversigt)$/);
 });

@@ -31,6 +31,7 @@ const e2eText = read(sources("e2e").filter((f) => f.endsWith(".ts")));
 /** Files no test imports on purpose, and why. */
 const EXEMPT: Record<string, string> = {
   "src/lib/push-client.ts": "browser-only: service worker and PushManager, which neither suite has",
+  "src/lib/install-client.ts": "browser-only: React hooks over beforeinstallprompt, matchMedia and localStorage; e2e/install.spec.ts drives the page",
   "src/lib/prisma.ts": "the client itself; every integration test goes through it",
 };
 

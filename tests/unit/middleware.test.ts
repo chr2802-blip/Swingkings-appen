@@ -20,6 +20,6 @@ describe("middleware", () => {
   it("guards every signed-in section of the app, and uses this app's own cookie", () => {
     expect(SESSION_COOKIE).toBe("swingkings_session");
     const sections = ["oversigt", "boder", "kampe", "opgaver", "feed", "chat", "hold", "profil", "admin"];
-    expect(config.matcher).toEqual(sections.map((s) => `/${s}/:path*`));
+    expect(config.matcher).toEqual([...sections.map((s) => `/${s}/:path*`), "/hent-appen"]);
   });
 });

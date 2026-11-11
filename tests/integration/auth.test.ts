@@ -28,6 +28,15 @@ describe("login", () => {
     expect(hasSessionCookie()).toBe(false);
   });
 
+  it("lands a phone without the app on /hent-appen when the form says so, and nowhere else", async () => {
+    await makeUser({ email: "anna@test.dk" });
+    const withNext = (next: string) => login(undefined, formData({ email: "anna@test.dk", password: TEST_PASSWORD, next }));
+    await expectRedirect(() => withNext("/hent-appen"), "/hent-appen");
+    for (const next of ["https://evil.example/", "//evil.example", "/admin", "/oversigt"]) {
+      await expectRedirect(() => withNext(next), "/oversigt");
+    }
+  });
+
   it("rejects a malformed email before counting anything", async () => {
     expect(await attempt("ikke-en-mail", "x")).toEqual({ error: "Skriv din e-mail og din adgangskode." });
     expect(await prisma.loginAttempt.count()).toBe(0);
@@ -164,6 +173,13 @@ describe("acceptInvite", () => {
     const used = await makeInvite({ teamId: team.id, email: "brugt@test.dk", createdById: admin.id, acceptedAt: new Date() });
     expect(await accept({ email: "brugt@test.dk", code: used.code })).toEqual(none);
     expect(await prisma.user.count()).toBe(1);
+  });
+
+  it("sends a phone without the app to /hent-appen after joining, and only there", async () => {
+    const { code } = await invited();
+    await expectRedirect(() => accept({ email: "ny@test.dk", code, next: "/hent-appen" }), "/hent-appen");
+    const second = await invited("to@test.dk");
+    await expectRedirect(() => accept({ email: "to@test.dk", code: second.code, next: "https://evil.example" }), "/oversigt");
   });
 
   it("says which field is missing", async () => {

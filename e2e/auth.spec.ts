@@ -1,13 +1,29 @@
 import { test, expect } from "./helpers/fixtures";
 import { PASSWORD, db, squad } from "./helpers/database";
 
-test("logs in with the real form and lands on the overview", async ({ page }) => {
+test("logs in with the real form on a phone without the app, is offered the app, and can go on to the team", async ({ page }) => {
   const { anna } = await squad();
   await page.goto("/login");
-  await page.getByLabel("E-mail").fill(anna.email.toUpperCase());
+  await page.getByLabel("E-mail").fill(anna.email);
   await page.getByLabel("Adgangskode").fill(PASSWORD);
   await page.getByRole("button", { name: "Log ind" }).click();
+  await expect(page).toHaveURL(/\/hent-appen$/);
+  await expect(page.getByRole("heading", { name: "Velkommen, Anna!" })).toBeVisible();
+  await page.getByRole("link", { name: "Fortsæt til holdet, Anna →" }).click();
   await expect(page).toHaveURL(/\/oversigt$/);
+});
+
+test.describe("on a computer", () => {
+  test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false, userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" });
+
+  test("logs in with the real form and lands on the overview", async ({ page }) => {
+    const { anna } = await squad();
+    await page.goto("/login");
+    await page.getByLabel("E-mail").fill(anna.email.toUpperCase());
+    await page.getByLabel("Adgangskode").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log ind" }).click();
+    await expect(page).toHaveURL(/\/oversigt$/);
+  });
 });
 
 test("says so when the password is wrong, without saying which half was", async ({ page }) => {
@@ -21,7 +37,7 @@ test("says so when the password is wrong, without saying which half was", async 
 });
 
 test("sends a signed-out visitor from every section to the login page", async ({ page }) => {
-  for (const path of ["/oversigt", "/boder", "/kampe", "/opgaver", "/chat", "/hold", "/profil", "/admin"]) {
+  for (const path of ["/oversigt", "/boder", "/kampe", "/opgaver", "/chat", "/hold", "/profil", "/admin", "/hent-appen"]) {
     await page.goto(path);
     await expect(page, path).toHaveURL(/\/login$/);
   }
@@ -54,6 +70,7 @@ test("joins a team with an invitation code and is signed in", async ({ page, log
   await page.getByLabel("Dit navn").fill("Nye Nina");
   await page.getByLabel("Adgangskode").fill("et-langt-kodeord");
   await page.getByRole("button", { name: "Kom med på holdet" }).click();
-  await expect(page).toHaveURL(/\/oversigt$/);
+  // A phone without the app is offered it first.
+  await expect(page).toHaveURL(/\/hent-appen$/);
   expect(await db.user.count({ where: { email: "ny@e2e.dk", memberships: { some: {} } } })).toBe(1);
 });
