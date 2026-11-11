@@ -4,6 +4,7 @@ import { Bolt } from "@/components/crest";
 import { Card, PageHeader, SectionTitle } from "@/components/ui";
 import { ProfileForm, PasswordForm } from "@/components/profile-forms";
 import { NotificationSetup } from "@/components/notification-setup";
+import { InstallSection } from "@/components/install-app";
 import { LogoutButton } from "@/components/logout-button";
 
 export default async function ProfilePage() {
@@ -14,6 +15,10 @@ export default async function ProfilePage() {
       <Card>
         <ProfileForm name={user.name} photoId={user.photoId} canUpload={user.teamId !== null} />
       </Card>
+      <section>
+        <SectionTitle>App</SectionTitle>
+        <InstallSection />
+      </section>
       <section>
         <SectionTitle>Notifikationer</SectionTitle>
         <NotificationSetup />

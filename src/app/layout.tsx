@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/next";
 import { getCurrentUser } from "@/lib/auth";
 import { BANDS, DEFAULT_THEME, darkBand } from "@/lib/theme";
+import { CAPTURE_INSTALL_PROMPT } from "@/lib/install";
 import "./globals.css";
 
 /**
@@ -51,6 +52,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="da" data-theme={theme} className={heading.variable}>
       <body className="min-h-screen text-slate-900 antialiased">
+        {/* Before React: Chrome's install prompt can arrive before anything hydrates. */}
+        <script dangerouslySetInnerHTML={{ __html: CAPTURE_INSTALL_PROMPT }} />
         {/* Under the phone's clock on pages with no header, so white text there has its frame. */}
         <div aria-hidden className="fixed inset-x-0 top-0 z-50 h-[env(safe-area-inset-top)] bg-[var(--band)]" />
         {children}
