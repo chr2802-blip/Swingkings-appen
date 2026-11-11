@@ -44,12 +44,12 @@ h3 {
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Big words in the crest's round, heavy letters. */
 h1,
 .font-display {
-  font-family: var(--font-display), Georgia, serif;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  font-optical-sizing: auto;
+  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
 .accent-tint-bg {
@@ -57,23 +57,64 @@ h1,
 }
 
 /*
- * What a team is dressed in: five values per colour, set once as `data-theme` on
- * <html> so sheets portalled into <body> wear it too. `--band` (the frame: header, tab
- * bar, the phone's own bars) is the same literal in every block, and equals `BAND` in
- * src/lib/theme.ts. White on --accent and --accent-text on white both read as words.
+ * The crest, wherever a theme needs it: the crown's gold and its outline, the red star.
  */
-/* The club's crest: its royal blue, with the light-blue stripes as the line colour. */
+:root {
+  --gold: #f5c72a;
+  --gold-deep: #927e41;
+  --gold-tint: #fdf6db;
+  --star: #ae403c;
+}
+
+/*
+ * What a team is dressed in: set once as `data-theme` on <html> so sheets portalled into
+ * <body> wear it too. Each colour sets five accent values; white on --accent and
+ * --accent-text on white both read as words.
+ *
+ * The frame (`--band*`: header, tab bar, the phone's own bars) is light for every theme
+ * but the club's own, which wears the crest's blue. `--band` must equal `BANDS` in
+ * src/lib/theme.ts, which carries it to the meta tag CSS cannot reach.
+ */
 :root,
-[data-theme="SWINGKINGS"] {
+[data-theme] {
   --band: #f4f1ea;
+  --band-text: var(--color-slate-900);
+  --band-soft: var(--color-slate-600);
+  --band-muted: var(--color-slate-400);
+  --band-hover: var(--color-slate-100);
+  --band-line: var(--accent-line);
+  --band-active: var(--accent);
+  --band-active-text: var(--color-white);
+  --band-active-label: var(--accent-text);
+  --stripe-a: var(--accent-line);
+  --stripe-b: var(--color-white);
+}
+
+/*
+ * The club's crest: royal blue, gold for whatever is chosen, light-blue and white stripes.
+ * Not plain `:root`, which <html> always matches and would put every team in the blue frame.
+ */
+:root:not([data-theme]),
+[data-theme="SWINGKINGS"] {
   --accent: #2661ad;
   --accent-hover: #1d4f8f;
   --accent-text: #1f5296;
   --accent-line: #cbe5f7;
+
+  --band: #2661ad;
+  --band-text: var(--color-white);
+  --band-soft: #e3f0fb;
+  --band-muted: #cbe5f7;
+  --band-hover: rgb(255 255 255 / 0.12);
+  --band-line: #1d4f8f;
+  --band-active: var(--gold);
+  --band-active-text: var(--color-slate-900);
+  --band-active-label: var(--color-white);
+  --stripe-a: #a4d7f6;
+  --stripe-b: var(--color-white);
 }
 
 [data-theme="GREEN"] {
-  --band: #f4f1ea;
   --accent: #166534;
   --accent-hover: #14532d;
   --accent-text: #166534;
@@ -81,7 +122,6 @@ h1,
 }
 
 [data-theme="BLUE"] {
-  --band: #f4f1ea;
   --accent: #1d4ed8;
   --accent-hover: #1e40af;
   --accent-text: #1e40af;
@@ -89,7 +129,6 @@ h1,
 }
 
 [data-theme="RED"] {
-  --band: #f4f1ea;
   --accent: #b91c1c;
   --accent-hover: #991b1b;
   --accent-text: #991b1b;
@@ -97,7 +136,6 @@ h1,
 }
 
 [data-theme="BLACK"] {
-  --band: #f4f1ea;
   --accent: #1d1c16;
   --accent-hover: #403f34;
   --accent-text: #1d1c16;
@@ -105,7 +143,6 @@ h1,
 }
 
 [data-theme="ORANGE"] {
-  --band: #f4f1ea;
   --accent: #c2410c;
   --accent-hover: #9a3412;
   --accent-text: #9a3412;
@@ -113,7 +150,6 @@ h1,
 }
 
 [data-theme="PURPLE"] {
-  --band: #f4f1ea;
   --accent: #6d28d9;
   --accent-hover: #5b21b6;
   --accent-text: #5b21b6;
@@ -172,6 +208,15 @@ h1,
     scale: 0.98;
     background-color: var(--color-slate-100);
   }
+}
+
+/* The crest's vertical stripes: fine under the header, wide behind a greeting. */
+.stripes-fine {
+  background: repeating-linear-gradient(90deg, var(--stripe-a) 0 14px, var(--stripe-b) 14px 28px);
+}
+
+.stripes-wide {
+  background: repeating-linear-gradient(90deg, var(--stripe-a) 0 36px, var(--stripe-b) 36px 72px);
 }
 
 .scrollbar-hidden {

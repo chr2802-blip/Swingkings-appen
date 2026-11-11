@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balances, fineUnits, kr } from "@/lib/money";
+import { balances, fineKings, fineUnits, kr } from "@/lib/money";
 
 describe("money", () => {
   it("writes kroner the Danish way", () => {
@@ -32,5 +32,25 @@ describe("money", () => {
       { userId: "carl", finedKr: 0, paidKr: 0, owesKr: 0, fines: 0 },
       { userId: "bo", finedKr: 20, paidKr: 40, owesKr: -20, fines: 1 },
     ]);
+  });
+
+  it("crowns whoever was fined most, at the price each fine was given", () => {
+    expect(fineKings([])).toEqual({ userIds: [], kr: 0 });
+    expect(
+      fineKings([
+        { playerId: "anna", units: 1, unitPriceKr: 10 },
+        { playerId: "bo", units: 1, unitPriceKr: 25 },
+        { playerId: "anna", units: 1, unitPriceKr: 10 },
+      ]),
+    ).toEqual({ userIds: ["bo"], kr: 25 });
+  });
+
+  it("lets a tie share the crown", () => {
+    expect(
+      fineKings([
+        { playerId: "carl", units: 2, unitPriceKr: 10 },
+        { playerId: "anna", units: 4, unitPriceKr: 5 },
+      ]),
+    ).toEqual({ userIds: ["anna", "carl"], kr: 20 });
   });
 });
