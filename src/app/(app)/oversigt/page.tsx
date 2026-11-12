@@ -74,7 +74,12 @@ export default async function OverviewPage() {
     { kind: "next" as const },
     { kind: "king" as const },
   ].slice(0, 2);
-  const nextDay = nextMatch ? relativeDay(nextMatch.startsAt) : null;
+  /** Short enough for a third of a phone: "I dag", "I morgen", else the weekday and date. */
+  const nextDay = nextMatch
+    ? ["i dag", "i morgen"].includes(relativeDay(nextMatch.startsAt))
+      ? relativeDay(nextMatch.startsAt)
+      : readInZone(nextMatch.startsAt, "EEE d.")
+    : null;
   const tasksHref = firstTask?.matchId ? `/aktiviteter/${firstTask.matchId}` : "/aktiviteter";
   const firstName = user.name.split(" ")[0];
 
