@@ -263,3 +263,15 @@ export async function deleteComment(_prev: ActionResult, formData: FormData): Pr
   revalidatePath("/oversigt");
   return ok();
 }
+
+/* ── Feed seen ──────────────────────────────────────────────────────────────────── */
+
+/**
+ * The feed has been in view: posts until now are no longer "nye opslag" on the front
+ * page. Reads no input. Nothing is revalidated — the banner catches up on the next visit
+ * rather than jumping while the person reads.
+ */
+export async function markFeedSeen(): Promise<void> {
+  const user = await requireTeamUser();
+  await teamDb(user.teamId).teamMember.updateMany({ where: { userId: user.id }, data: { feedSeenAt: new Date() } });
+}

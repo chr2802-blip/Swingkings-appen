@@ -12,7 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const showAdmin = user.role === "SUPER_ADMIN";
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-clip">
       <header className="sticky top-0 z-30 bg-[var(--band)] pt-[env(safe-area-inset-top)] text-[var(--band-text)]">
         <div className="mx-auto flex max-w-5xl items-center gap-x-6 py-2.5 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
           <TeamMenu
