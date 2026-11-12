@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
-import { canDeleteFine } from "@/lib/access";
+import { canDeleteFine, canManageFines } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { fineBoard, matchOptions, monthKings } from "@/lib/fine-data";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
@@ -10,7 +10,7 @@ import { Avatar } from "@/components/photo";
 import { FinesTabs } from "@/components/fines-tabs";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { ActionButton } from "@/components/action-button";
-import { deleteFine } from "@/app/actions/fines";
+import { deleteFine, resetFines } from "@/app/actions/fines";
 import { Crown, Star } from "@/components/crest";
 
 export default async function FinesPage() {
@@ -29,6 +29,7 @@ export default async function FinesPage() {
         unitPriceKr: true,
         createdAt: true,
         challengeId: true,
+        clearedAt: true,
         issuedById: true,
         player: { select: { id: true, name: true, photoId: true } },
       },
@@ -37,14 +38,11 @@ export default async function FinesPage() {
   ]);
 
   const totals = board.balances.reduce(
-    (sum, row) => ({
-      fined: sum.fined + row.finedKr,
-      paid: sum.paid + row.paidKr,
-      owed: sum.owed + Math.max(0, row.owesKr),
-    }),
-    { fined: 0, paid: 0, owed: 0 },
+    (sum, row) => ({ fined: sum.fined + row.finedKr, owed: sum.owed + row.owesKr }),
+    { fined: 0, owed: 0 },
   );
   const mine = board.balances.find((row) => row.userId === user.id);
+  const manages = canManageFines(user, user.teamId);
 
   return (
     <div>
@@ -62,8 +60,7 @@ export default async function FinesPage() {
       />
       <FinesTabs current="/boder" />
 
-      <div className="mb-8 grid grid-cols-3 gap-3">
-        <Stat label="I kassen" value={kr(totals.paid)} />
+      <div className="mb-8 grid grid-cols-2 gap-3">
         <Stat label="Udestående" value={kr(totals.owed)} tone={totals.owed > 0 ? "red" : undefined} />
         <Stat label="Bøder i alt" value={kr(totals.fined)} />
       </div>
@@ -73,22 +70,43 @@ export default async function FinesPage() {
           <SectionTitle>Din konto</SectionTitle>
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>
-                {mine.owesKr > 0 ? kr(mine.owesKr) : mine.owesKr < 0 ? `+${kr(-mine.owesKr)}` : "0 kr"}
-              </p>
+              <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
               <p className="text-sm text-slate-500">
-                {mine.owesKr > 0 ? "skylder du til kassen" : mine.owesKr < 0 ? "til gode" : "Du skylder ingenting 🙌"}
+                {mine.units > 0 ? `${fineUnits(mine.units)} udestående` : "Ren tavle 🙌"}
               </p>
             </div>
-            <Link href={`/boder/spiller/${user.id}`} className="text-sm font-medium text-[var(--accent-text)] underline">
-              Se dine bøder
-            </Link>
+            <div className="flex flex-col items-end gap-1 text-sm font-medium text-[var(--accent-text)]">
+              <Link href={`/boder/spiller/${user.id}`} className="underline">
+                Se dine bøder
+              </Link>
+              {mine.units > 0 && (
+                <Link href="/boder/udfordringer" className="underline">
+                  Udfordr dig ud af dem
+                </Link>
+              )}
+            </div>
           </div>
         </Card>
       )}
 
       <section className="mb-8">
-        <SectionTitle>Bødetavlen</SectionTitle>
+        <SectionTitle
+          action={
+            manages &&
+            totals.owed > 0 && (
+              <ActionButton
+                action={resetFines}
+                fields={{ playerId: "alle" }}
+                label="Nulstil alle"
+                variant="ghost"
+                confirm="Nulstil hele holdets bøder? Historikken bliver, men ingen har udestående bagefter."
+                confirmLabel="Nulstil alle"
+              />
+            )
+          }
+        >
+          Bødetavlen
+        </SectionTitle>
         <Card padded={false}>
           <ol className="divide-y divide-slate-100">
             {board.balances.map((row, index) => {
@@ -119,16 +137,10 @@ export default async function FinesPage() {
                         {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
                       </span>
                       <span className="text-xs text-slate-500">
-                        {row.fines === 1 ? "1 bøde" : `${row.fines} bøder`} · {kr(row.finedKr)} i alt
+                        {fineUnits(row.units)} udestående · {kr(row.finedKr)} i alt
                       </span>
                     </span>
-                    {row.owesKr > 0 ? (
-                      <Badge tone="red">skylder {kr(row.owesKr)}</Badge>
-                    ) : row.finedKr > 0 ? (
-                      <Badge tone="green">betalt</Badge>
-                    ) : (
-                      <Badge>ren tavle</Badge>
-                    )}
+                    {row.owesKr > 0 ? <Badge tone="red">{kr(row.owesKr)}</Badge> : <Badge tone="green">ren tavle</Badge>}
                   </Link>
                 </li>
               );
@@ -155,6 +167,7 @@ export default async function FinesPage() {
                     <p className="text-xs text-slate-500">
                       {fineUnits(fine.units)} · {kr(fineAmount(fine))} · {relativeDay(fine.createdAt)}
                       {fine.challengeId && " · ⚔️ udfordring"}
+                      {fine.clearedAt && " · nulstillet"}
                     </p>
                   </div>
                   {canDeleteFine(user, user.teamId, fine) && (
@@ -163,7 +176,11 @@ export default async function FinesPage() {
                       fields={{ id: fine.id }}
                       label="Slet"
                       variant="ghost"
-                      confirm={`Slet bøden til ${fine.player.name}?`}
+                      confirm={
+                        fine.challengeId
+                          ? "Slet bøden? Hele udfordringen bliver trukket tilbage, også vinderens del."
+                          : `Slet bøden til ${fine.player.name}?`
+                      }
                       confirmLabel="Slet bøden"
                     />
                   )}

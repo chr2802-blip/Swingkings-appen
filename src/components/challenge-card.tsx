@@ -15,23 +15,28 @@ export type ChallengeView = {
   units: number;
   status: ChallengeStatus;
   createdAt: Date;
-  challengerId: string;
-  opponentId: string;
-  claimedById: string | null;
-  claimedWinnerId: string | null;
-  winnerId: string | null;
-  challenger: Person;
-  opponent: Person;
+  reportedById: string;
+  winner: Person;
+  loser: Person;
+  reportedBy: { name: string };
+  approvedBy: { name: string } | null;
   match: { opponent: string | null; title: string } | null;
 };
 
-const TONE: Record<ChallengeStatus, "amber" | "accent" | "neutral" | "green"> = {
+const TONE: Record<ChallengeStatus, "amber" | "neutral" | "green"> = {
   PENDING: "amber",
-  ACCEPTED: "accent",
-  DECLINED: "neutral",
-  CANCELLED: "neutral",
   SETTLED: "green",
+  CANCELLED: "neutral",
 };
+
+/** The `include` a page needs to draw a `ChallengeCard`. */
+export const challengeCardInclude = {
+  winner: { select: { id: true, name: true, photoId: true } },
+  loser: { select: { id: true, name: true, photoId: true } },
+  reportedBy: { select: { name: true } },
+  approvedBy: { select: { name: true } },
+  match: { select: { opponent: true, title: true } },
+} as const;
 
 /** One challenge, with exactly the buttons `movesFor` allows the viewer. */
 export function ChallengeCard({
@@ -46,8 +51,7 @@ export function ChallengeCard({
   finePriceKr: number;
 }) {
   const moves = movesFor(c, viewerId, managesFines);
-  const name = (id: string | null) => (id === c.challengerId ? c.challenger.name : id === c.opponentId ? c.opponent.name : "");
-  const fields = (move: string, winnerId?: string) => ({ id: c.id, move, ...(winnerId ? { winnerId } : {}) });
+  const fields = (move: string) => ({ id: c.id, move });
 
   return (
     <Card className="space-y-3">
@@ -55,52 +59,34 @@ export function ChallengeCard({
         <Badge tone={TONE[c.status]}>{CHALLENGE_STATUS_LABEL[c.status]}</Badge>
       </div>
       <div className="flex items-center gap-2">
-        <Side person={c.challenger} won={c.winnerId === c.challengerId} />
-        <span className="shrink-0 text-xs font-semibold text-slate-400">VS</span>
-        <Side person={c.opponent} won={c.winnerId === c.opponentId} />
+        <Side person={c.winner} won />
+        <span className="shrink-0 text-xs font-semibold text-slate-400">slog</span>
+        <Side person={c.loser} won={false} />
       </div>
       <p className="font-medium">“{c.description}”</p>
       <p className="text-xs text-slate-500">
-        Indsats {fineUnits(c.units)} ({kr(c.units * finePriceKr)}) · {relativeDay(c.createdAt)}
+        {fineUnits(c.units)} ({kr(c.units * finePriceKr)}) · meldt af {c.reportedBy.name} · {relativeDay(c.createdAt)}
         {c.match && ` · ${c.match.opponent ?? c.match.title}`}
       </p>
 
-      {c.status === "SETTLED" && c.winnerId && (
+      {c.status === "SETTLED" && (
         <p className="text-sm">
-          🏆 <strong>{name(c.winnerId)}</strong> vandt — {name(c.winnerId === c.challengerId ? c.opponentId : c.challengerId)} har
-          fået bøden.
+          {fineUnits(c.units)} flyttet fra {c.winner.name} til {c.loser.name}
+          {c.approvedBy && ` · godkendt af ${c.approvedBy.name}`}.
         </p>
       )}
-      {c.status === "ACCEPTED" && c.claimedById && (
+      {c.status === "PENDING" && (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {name(c.claimedById)} melder <strong>{name(c.claimedWinnerId)}</strong> som vinder.
-          {moves.includes("confirm") ? " Er du enig?" : " Venter på bekræftelse."}
+          {moves.includes("approve")
+            ? `Godkend, så flytter ${fineUnits(c.units)} fra ${c.winner.name} til ${c.loser.name}.`
+            : "Venter på at en anden på holdet godkender."}
         </p>
       )}
 
       {moves.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {moves.includes("accept") && <ActionButton action={moveChallenge} fields={fields("accept")} label="Accepter" variant="primary" />}
-          {moves.includes("decline") && <ActionButton action={moveChallenge} fields={fields("decline")} label="Afvis" />}
+          {moves.includes("approve") && <ActionButton action={moveChallenge} fields={fields("approve")} label="Godkend" variant="primary" />}
           {moves.includes("cancel") && <ActionButton action={moveChallenge} fields={fields("cancel")} label="Træk tilbage" variant="ghost" />}
-          {moves.includes("claim") && (
-            <>
-              <ActionButton action={moveChallenge} fields={fields("claim", viewerId)} label="Jeg vandt" variant="primary" />
-              <ActionButton
-                action={moveChallenge}
-                fields={fields("claim", viewerId === c.challengerId ? c.opponentId : c.challengerId)}
-                label={`${name(viewerId === c.challengerId ? c.opponentId : c.challengerId)} vandt`}
-              />
-            </>
-          )}
-          {moves.includes("confirm") && <ActionButton action={moveChallenge} fields={fields("confirm")} label="Bekræft" variant="primary" />}
-          {moves.includes("dispute") && <ActionButton action={moveChallenge} fields={fields("dispute")} label="Uenig" />}
-          {moves.includes("settle") && !moves.includes("claim") && (
-            <>
-              <ActionButton action={moveChallenge} fields={fields("settle", c.challengerId)} label={`Afgør: ${c.challenger.name} vandt`} variant="ghost" />
-              <ActionButton action={moveChallenge} fields={fields("settle", c.opponentId)} label={`Afgør: ${c.opponent.name} vandt`} variant="ghost" />
-            </>
-          )}
         </div>
       )}
     </Card>

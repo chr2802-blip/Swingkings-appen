@@ -1,72 +1,48 @@
 import type { ChallengeStatus } from "@prisma/client";
 
 /**
- * Who may move a challenge, and where to. Pure, so the rules are tested without a
- * database and every action asks the same function.
+ * Who may move a challenge. Pure, so the rules are tested without a database and every
+ * action asks the same function.
  *
- * The life of a challenge:
+ * A challenge is reported once it has been played, by the winner or the loser, with the
+ * stake. Then it waits for one approval:
  *
- *   PENDING ──accept──▶ ACCEPTED ──claim──▶ (claimed) ──confirm──▶ SETTLED
- *      │                   │                    │
- *      ├─decline─▶ DECLINED│                    └─dispute──▶ ACCEPTED (claim cleared)
- *      └─cancel──▶ CANCELLED                    
+ *   PENDING ──approve (anybody but the reporter)──▶ SETTLED   the stake moves
+ *      └────cancel (the reporter, or the treasurer)──▶ CANCELLED
  *
- * A winner is agreed by both players: one claims it, the other confirms. A treasurer or
- * admin can settle an accepted challenge directly, which is how a dispute ends. Settling
- * writes the loser an ordinary Fine for `units` fines (`settleChallenge`).
+ * Approving moves `units` fines from the winner to the loser (`settleChallenge`), so a
+ * player can challenge his or her way out of the fines.
  */
 export type ChallengeState = {
   status: ChallengeStatus;
-  challengerId: string;
-  opponentId: string;
-  claimedById: string | null;
-  claimedWinnerId: string | null;
+  reportedById: string;
 };
 
-export type ChallengeMove = "accept" | "decline" | "cancel" | "claim" | "confirm" | "dispute" | "settle";
-
-export function isParticipant(c: ChallengeState, userId: string) {
-  return c.challengerId === userId || c.opponentId === userId;
-}
+export type ChallengeMove = "approve" | "cancel";
 
 /** Whether `userId` may make `move` now. `managesFines` is treasurer/admin on the team. */
 export function canMove(c: ChallengeState, move: ChallengeMove, userId: string, managesFines: boolean): boolean {
   switch (move) {
-    case "accept":
-    case "decline":
-      return c.status === "PENDING" && c.opponentId === userId;
+    case "approve":
+      return c.status === "PENDING" && c.reportedById !== userId;
     case "cancel":
-      return c.status === "PENDING" && (c.challengerId === userId || managesFines);
-    case "claim":
-      return c.status === "ACCEPTED" && c.claimedById === null && isParticipant(c, userId);
-    case "confirm":
-    case "dispute":
-      // The other player answers a claim — never the one who made it.
-      return (
-        c.status === "ACCEPTED" && c.claimedById !== null && isParticipant(c, userId) && c.claimedById !== userId
-      );
-    case "settle":
-      return c.status === "ACCEPTED" && managesFines;
+      return c.status === "PENDING" && (c.reportedById === userId || managesFines);
   }
 }
 
 /** The moves open to `userId` now, in the order a screen offers them. */
 export function movesFor(c: ChallengeState, userId: string, managesFines: boolean): ChallengeMove[] {
-  const all: ChallengeMove[] = ["accept", "decline", "cancel", "claim", "confirm", "dispute", "settle"];
+  const all: ChallengeMove[] = ["approve", "cancel"];
   return all.filter((move) => canMove(c, move, userId, managesFines));
 }
 
-/** The loser, given the winner. Throws for a winner who is not one of the two. */
-export function loserOf(c: Pick<ChallengeState, "challengerId" | "opponentId">, winnerId: string) {
-  if (winnerId === c.challengerId) return c.opponentId;
-  if (winnerId === c.opponentId) return c.challengerId;
-  throw new Error("The winner must be one of the two players");
+/** Whether a challenge is waiting on `userId` to approve it. */
+export function waitsOn(c: ChallengeState, userId: string) {
+  return canMove(c, "approve", userId, false);
 }
 
 export const CHALLENGE_STATUS_LABEL: Record<ChallengeStatus, string> = {
-  PENDING: "Afventer svar",
-  ACCEPTED: "Accepteret",
-  DECLINED: "Afvist",
+  PENDING: "Venter på godkendelse",
+  SETTLED: "Godkendt",
   CANCELLED: "Trukket tilbage",
-  SETTLED: "Afgjort",
 };

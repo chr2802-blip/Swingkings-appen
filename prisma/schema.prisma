@@ -57,20 +57,17 @@ enum ActivityKind {
 }
 
 /**
- * Where a challenge is. A challenge is a bet between two players; the loser pays
- * `units` fines, written as an ordinary Fine when it is settled.
- * PENDING   sent, waiting for the opponent to accept or decline
- * ACCEPTED  on — waiting for a winner to be agreed
- * DECLINED  the opponent said no
- * CANCELLED the challenger withdrew it before it was accepted
- * SETTLED   a winner is agreed and the loser's fine has been written
+ * Where a challenge is. A challenge is reported once it has been played — who won, who
+ * lost, how many fines it was for — and goes through when somebody else approves it:
+ * the stake moves from the winner's fines to the loser's.
+ * PENDING   reported, waiting for anybody but the reporter to approve it
+ * SETTLED   approved; the fines have moved
+ * CANCELLED withdrawn by the reporter or the treasurer, or undone afterwards
  */
 enum ChallengeStatus {
   PENDING
-  ACCEPTED
-  DECLINED
-  CANCELLED
   SETTLED
+  CANCELLED
 }
 
 model Team {
@@ -94,22 +91,21 @@ model Team {
   calendarSyncedAt DateTime?
   createdAt        DateTime  @default(now())
 
-  members       TeamMember[]
-  activeFor     User[]         @relation("ActiveTeam")
-  inviteLinks   InviteLink[]
-  fineTypes     FineType[]
-  fines         Fine[]
-  payments      Payment[]
-  challenges    Challenge[]
-  matches       Match[]
-  tasks         Task[]
-  taskTemplates TaskTemplate[]
-  chatMessages  ChatMessage[]
-  posts         Post[]
-  polls         Poll[]
+  members         TeamMember[]
+  activeFor       User[]           @relation("ActiveTeam")
+  inviteLinks     InviteLink[]
+  fineTypes       FineType[]
+  fines           Fine[]
+  challenges      Challenge[]
+  matches         Match[]
+  tasks           Task[]
+  taskTemplates   TaskTemplate[]
+  chatMessages    ChatMessage[]
+  posts           Post[]
+  polls           Poll[]
   activitySignups ActivitySignup[]
-  photos        Photo[]        @relation("PhotoTeam")
-  photo         Photo?         @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  photos          Photo[]          @relation("PhotoTeam")
+  photo           Photo?           @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
 
   @@index([photoId])
 }
@@ -136,16 +132,13 @@ model User {
   pushSubscriptions  PushSubscription[]
   inviteLinksCreated InviteLink[]       @relation("InviteLinkCreatedBy")
 
-  finesReceived    Fine[]    @relation("FinePlayer")
-  finesIssued      Fine[]    @relation("FineIssuedBy")
-  payments         Payment[] @relation("PaymentPlayer")
-  paymentsRecorded Payment[] @relation("PaymentRecordedBy")
+  finesReceived Fine[] @relation("FinePlayer")
+  finesIssued   Fine[] @relation("FineIssuedBy")
 
-  challengesSent          Challenge[] @relation("ChallengeChallenger")
-  challengesReceived      Challenge[] @relation("ChallengeOpponent")
-  challengesWon           Challenge[] @relation("ChallengeWinner")
-  challengesClaimed       Challenge[] @relation("ChallengeClaimedBy")
-  challengesClaimedWinner Challenge[] @relation("ChallengeClaimedWinner")
+  challengesReported Challenge[] @relation("ChallengeReportedBy")
+  challengesWon      Challenge[] @relation("ChallengeWinner")
+  challengesLost     Challenge[] @relation("ChallengeLoser")
+  challengesApproved Challenge[] @relation("ChallengeApprovedBy")
 
   tasksCreated Task[]         @relation("TaskCreatedBy")
   tasksDone    Task[]         @relation("TaskDoneBy")
@@ -153,9 +146,9 @@ model User {
 
   chatMessages ChatMessage[]
   posts        Post[]
-  pollOptions  PollOption[]  @relation("PollOptionPlayer")
-  pollVotes    PollVote[]    @relation("PollVoter")
-  pollBallots  PollBallot[]  @relation("PollBallot")
+  pollOptions  PollOption[]     @relation("PollOptionPlayer")
+  pollVotes    PollVote[]       @relation("PollVoter")
+  pollBallots  PollBallot[]     @relation("PollBallot")
   signups      ActivitySignup[]
   postLikes    PostLike[]
   postComments PostComment[]
@@ -197,14 +190,14 @@ model TeamMember {
  * through a guarded update that compares it with `maxUses` (`redeemInviteLink`).
  */
 model InviteLink {
-  id          String     @id @default(cuid())
+  id          String   @id @default(cuid())
   teamId      String
-  tokenHash   String     @unique
+  tokenHash   String   @unique
   maxUses     Int
-  uses        Int        @default(0)
+  uses        Int      @default(0)
   expiresAt   DateTime
   createdById String
-  createdAt   DateTime   @default(now())
+  createdAt   DateTime @default(now())
 
   team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy User @relation("InviteLinkCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
@@ -237,9 +230,13 @@ model FineType {
  * A fine somebody has been given. It copies the type's name, the number of fines and
  * the price of one at the moment it was given: the catalogue and the price can change
  * afterwards without changing what this person owes.
+ * Nobody pays. A fine is outstanding until it is cleared (`clearedAt`), which the
+ * treasurer does when he or she nulstiller somebody, or until the player has challenged
+ * it away: winning a challenge writes the winner a fine with negative `units` and the
+ * loser one with positive, so the stake moves from one to the other.
  */
 model Fine {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   teamId      String
   playerId    String
   fineTypeId  String?
@@ -250,9 +247,11 @@ model Fine {
   unitPriceKr Int
   issuedById  String
   matchId     String?
-  /// The challenge this fine settled, for a fine that came from losing one.
-  challengeId String?  @unique
-  createdAt   DateTime @default(now())
+  /// The challenge this fine came from: the loser's (positive) and the winner's (negative).
+  challengeId String?
+  /// When the treasurer reset (nulstillede) it. A cleared fine is history, not owed.
+  clearedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   player    User       @relation("FinePlayer", fields: [playerId], references: [id], onDelete: Cascade)
@@ -266,71 +265,43 @@ model Fine {
   @@index([fineTypeId])
   @@index([issuedById])
   @@index([matchId])
+  @@index([challengeId])
+  @@index([playerId, clearedAt])
 }
 
 /**
- * Money paid into the fine box. Payments are a ledger rather than a "paid" tick on
- * each fine, because nobody pays fine by fine: somebody MobilePays 200 kr and it covers
- * whatever they owed. What a player owes is their fines minus their payments.
- */
-model Payment {
-  id           String   @id @default(cuid())
-  teamId       String
-  playerId     String
-  amountKr     Int
-  note         String?
-  recordedById String
-  createdAt    DateTime @default(now())
-
-  team       Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  player     User @relation("PaymentPlayer", fields: [playerId], references: [id], onDelete: Cascade)
-  recordedBy User @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: Cascade)
-
-  @@index([teamId])
-  @@index([playerId])
-  @@index([recordedById])
-}
-
-/**
- * Two players betting fines on something — "jeg scorer før dig på lørdag". See
- * ChallengeStatus for the life of one and `src/lib/challenges.ts` for who may move it.
+ * A challenge between two players, reported once it has been played. See ChallengeStatus
+ * for its life and `src/lib/challenges.ts` for who may move it.
  */
 model Challenge {
-  id              String          @id @default(cuid())
-  teamId          String
-  challengerId    String
-  opponentId      String
-  description     String
-  /// How many fines the loser pays.
-  units           Int
-  matchId         String?
-  status          ChallengeStatus @default(PENDING)
-  /**
-   * A winner one of the two has claimed and the other has not yet agreed to. Cleared
-   * when it is disputed; turned into `winnerId` when it is confirmed.
-   */
-  claimedWinnerId String?
-  claimedById     String?
-  winnerId        String?
-  respondedAt     DateTime?
-  settledAt       DateTime?
-  createdAt       DateTime        @default(now())
+  id           String          @id @default(cuid())
+  teamId       String
+  description  String
+  /// How many fines move from the winner to the loser.
+  units        Int
+  matchId      String?
+  status       ChallengeStatus @default(PENDING)
+  /// Who reported it — the winner or the loser. Anybody else may approve it.
+  reportedById String
+  winnerId     String
+  loserId      String
+  approvedById String?
+  settledAt    DateTime?
+  createdAt    DateTime        @default(now())
 
-  team          Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  challenger    User   @relation("ChallengeChallenger", fields: [challengerId], references: [id], onDelete: Cascade)
-  opponent      User   @relation("ChallengeOpponent", fields: [opponentId], references: [id], onDelete: Cascade)
-  winner        User?  @relation("ChallengeWinner", fields: [winnerId], references: [id], onDelete: SetNull)
-  claimedBy     User?  @relation("ChallengeClaimedBy", fields: [claimedById], references: [id], onDelete: SetNull)
-  claimedWinner User?  @relation("ChallengeClaimedWinner", fields: [claimedWinnerId], references: [id], onDelete: SetNull)
-  match         Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
-  fine          Fine?
+  team       Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  reportedBy User   @relation("ChallengeReportedBy", fields: [reportedById], references: [id], onDelete: Cascade)
+  winner     User   @relation("ChallengeWinner", fields: [winnerId], references: [id], onDelete: Cascade)
+  loser      User   @relation("ChallengeLoser", fields: [loserId], references: [id], onDelete: Cascade)
+  approvedBy User?  @relation("ChallengeApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  match      Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  fines      Fine[]
 
   @@index([teamId, createdAt])
-  @@index([challengerId])
-  @@index([opponentId])
+  @@index([reportedById])
   @@index([winnerId])
-  @@index([claimedById])
-  @@index([claimedWinnerId])
+  @@index([loserId])
+  @@index([approvedById])
   @@index([matchId])
 }
 
@@ -360,7 +331,7 @@ model Match {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  team       Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team       Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
   tasks      Task[]
   fines      Fine[]
   challenges Challenge[]

@@ -6,6 +6,10 @@ import { Field, Input, Select, Textarea } from "@/components/ui";
 import { createChallenge } from "@/app/actions/fines";
 import { fineUnits, kr } from "@/lib/money";
 
+/**
+ * Reporting a challenge that has been played. It goes through when somebody else on the
+ * team approves it, and the stake moves from the winner's fines to the loser's.
+ */
 export function ChallengeDialog({
   opponents,
   finePriceKr,
@@ -19,8 +23,8 @@ export function ChallengeDialog({
 }) {
   const [units, setUnits] = useState(1);
   return (
-    <FormDialog trigger="Udfordr" title="Ny udfordring" action={createChallenge} submitLabel="Send udfordring">
-      <Field label="Hvem udfordrer du?" htmlFor="opponentId">
+    <FormDialog trigger="Udfordring" title="Meld en udfordring" action={createChallenge} submitLabel="Send til godkendelse">
+      <Field label="Hvem spillede du mod?" htmlFor="opponentId">
         <Select id="opponentId" name="opponentId" defaultValue="" required>
           <option value="" disabled>
             Vælg spiller…
@@ -32,20 +36,26 @@ export function ChallengeDialog({
           ))}
         </Select>
       </Field>
-      <Field label="Hvad går udfordringen ud på?" htmlFor="description">
+      <Field label="Hvem vandt?" htmlFor="outcome">
+        <Select id="outcome" name="outcome" defaultValue="won" required>
+          <option value="won">Jeg vandt</option>
+          <option value="lost">Min modstander vandt</option>
+        </Select>
+      </Field>
+      <Field label="Hvad gik udfordringen ud på?" htmlFor="description">
         <Textarea
           id="description"
           name="description"
           rows={2}
           maxLength={200}
-          placeholder="Fx jeg scorer før dig på lørdag"
+          placeholder="Fx første til at ramme overliggeren"
           required
         />
       </Field>
       <Field
         label="Indsats (antal bøder)"
         htmlFor="units"
-        hint={`Taberen får ${fineUnits(units || 0)} = ${kr((units || 0) * finePriceKr)}.`}
+        hint={`Vinderen slipper for ${fineUnits(units || 0)} (${kr((units || 0) * finePriceKr)}), og taberen overtager dem.`}
       >
         <Input
           id="units"

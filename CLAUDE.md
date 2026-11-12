@@ -63,17 +63,23 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   `teamId: user.teamId` explicitly so the types are satisfied.
 - **Permissions are per team** (`src/lib/access.ts`). Roles: PLAYER (everything day to
   day: activities, tasks, giving fines, challenges, posts, polls), TREASURER =
-  bødekasseformand (`canManageFines`: the catalogue, deleting others' fines, settling
-  disputes), ADMIN (`canAdministerTeam`: team settings, members, roles, invitation links, standard jobs,
+  bødekasseformand (`canManageFines`: the catalogue, deleting others' fines, resetting
+  fines, withdrawing others' challenges), ADMIN (`canAdministerTeam`: team settings, members, roles, invitation links, standard jobs,
   moderation), and one SUPER_ADMIN on the installation (a partial unique index allows only
-  one). A fine is deleted by its giver or `canManageFines` (`canDeleteFine`). Payments
-  cannot be recorded for now. Never ask "the team on screen" alone.
+  one). A fine is deleted by its giver or `canManageFines` (`canDeleteFine`). Never ask
+  "the team on screen" alone.
 - **Every action** that reads input takes `(prev, formData)` and returns `ActionResult`;
   records referenced by id are looked up through `teamDb`, so another team's id is "not found".
 - **Money**: a `Fine` copies `units` and `unitPriceKr` when given — never recompute from the
-  current catalogue or price. Balance = fines − payments (`balances` in `src/lib/money.ts`).
-- **Challenges** move only through `canMove` (`src/lib/challenges.ts`); settling is
-  `settleChallenge` (`src/lib/fines.ts`), guarded on status so a double press writes one fine.
+  current catalogue or price. Nobody pays: there is no payment model. Outstanding = the
+  fines without `clearedAt` (`balances` in `src/lib/money.ts`), never below zero. The
+  treasurer resets (`resetFines`) by setting `clearedAt`; nothing is deleted.
+- **Challenges** are reported after they are played (winner, loser, stake) and go through
+  when anybody but the reporter approves — the only flow (`canMove` in
+  `src/lib/challenges.ts`). Approving is `settleChallenge` (`src/lib/fines.ts`): the
+  winner gets a fine with negative units, the loser one with positive, so the stake
+  moves; capped at what the winner owes, guarded on status so a double press moves it
+  once. Deleting either fine deletes both and withdraws the challenge.
 - **Activities** (aktiviteter, `/aktiviteter`) are `Match` rows — the model kept its name;
   `kind` says match, training or other. Every task belongs to one (new tasks always do;
   old rows may have `matchId` null). There is no tasks menu; `/kampe` and `/opgaver` redirect.
