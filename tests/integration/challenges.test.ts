@@ -64,4 +64,16 @@ describe("settleChallenge", () => {
     expect(await settleChallenge(challenge.id, carl.id)).toEqual({ ok: false, error: "Udfordringen er ikke åben længere." });
     expect(await prisma.fine.count({ where: { challengeId: challenge.id } })).toBe(0);
   });
+
+  it("cannot be made to spend the same fines twice by approving two challenges at once", async () => {
+    const { team, anna, bo, carl, challenge } = await reported(3, 3);
+    const second = await prisma.challenge.create({
+      data: { teamId: team.id, reportedById: anna.id, winnerId: anna.id, loserId: carl.id, description: "Andet mål", units: 3 },
+    });
+    const results = await Promise.all([settleChallenge(challenge.id, carl.id), settleChallenge(second.id, bo.id)]);
+    // Anna owes three fines in all: one challenge moves them, the other finds nothing left.
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    const open = await prisma.fine.aggregate({ where: { playerId: anna.id, clearedAt: null }, _sum: { units: true } });
+    expect(open._sum.units).toBe(0);
+  });
 });

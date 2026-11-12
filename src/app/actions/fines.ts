@@ -145,8 +145,10 @@ export async function deleteFine(_prev: ActionResult, formData: FormData): Promi
   if (!fine) return ok();
   if (!canDeleteFine(user, user.teamId, fine)) return fail("Kun den der gav bøden, bødekasseformanden eller en admin kan slette den.");
   if (fine.challengeId) {
-    await db.fine.deleteMany({ where: { challengeId: fine.challengeId } });
-    await db.challenge.updateMany({ where: { id: fine.challengeId }, data: { status: "CANCELLED" } });
+    await prisma.$transaction([
+      db.fine.deleteMany({ where: { challengeId: fine.challengeId } }),
+      db.challenge.updateMany({ where: { id: fine.challengeId }, data: { status: "CANCELLED" } }),
+    ]);
   } else {
     await db.fine.deleteMany({ where: { id } });
   }

@@ -162,9 +162,11 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
   if (member.role === "ADMIN" && (await db.teamMember.count({ where: { role: "ADMIN" } })) <= 1) {
     return fail("Holdet skal have mindst én admin.");
   }
-  await db.teamMember.deleteMany({ where: { userId } });
   // Their open jobs on this team go back to nobody, rather than waiting on somebody gone.
-  await prisma.taskAssignee.deleteMany({ where: { userId, task: { teamId: user.teamId, doneAt: null } } });
+  await prisma.$transaction([
+    db.teamMember.deleteMany({ where: { userId } }),
+    prisma.taskAssignee.deleteMany({ where: { userId, task: { teamId: user.teamId, doneAt: null } } }),
+  ]);
   revalidatePath("/hold", "layout");
   return ok();
 }
