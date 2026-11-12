@@ -6,7 +6,7 @@ import { settleChallenge } from "./fines";
 
 /**
  * A team worth looking at: "Swingkings Demo" with eight made-up players, a fine catalogue,
- * fines, payments, challenges in every state, a calendar read through the real KampKlar
+ * fines (one player reset), challenges waiting and approved, a calendar read through the real KampKlar
  * import, tasks, chat, feed and polls. Made (or remade) by `npm run db:demo` locally and by
  * the super admin's "Opret testhold" on /admin, and thrown away again by `removeDemoTeam`.
  *
@@ -117,19 +117,18 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   await give(emil, types[2]!, 3);
   await give(frederik, types[1]!, 5, lastMatch.id);
   await give(noah, types[6]!, 8);
-  await give(lucas, types[3]!, 10);
+  const lucasFine = await give(lucas, types[3]!, 10);
+  // The treasurer has reset Lucas: his fine is history, not owed.
+  await prisma.fine.update({ where: { id: lucasFine.id }, data: { clearedAt: new Date(now.getTime() - 2 * 86400000) } });
   await give(oliver, types[6]!, 12);
-  await prisma.payment.create({ data: { teamId: team.id, playerId: lucas.id, amountKr: 50, note: "MobilePay", recordedById: jonas.id } });
-  await prisma.payment.create({ data: { teamId: team.id, playerId: noah.id, amountKr: 10, recordedById: jonas.id } });
-
-  await prisma.challenge.create({ data: { teamId: team.id, challengerId: oliver.id, opponentId: mads.id, description: "Jeg scorer før dig på lørdag", units: 3 } });
-  await prisma.challenge.create({
-    data: { teamId: team.id, challengerId: emil.id, opponentId: victor.id, description: "Flest kropsfinter til træning", units: 2, status: "ACCEPTED", claimedById: emil.id, claimedWinnerId: emil.id },
-  });
-  const settled = await prisma.challenge.create({
-    data: { teamId: team.id, challengerId: frederik.id, opponentId: noah.id, description: "Straffesparkskonkurrence", units: 5, status: "ACCEPTED", matchId: lastMatch.id },
-  });
-  await settleChallenge(settled.id, frederik.id, jonas.id, now);
+  const report = (reporter: typeof mads, winner: typeof mads, loser: typeof mads, description: string, units: number, matchId?: string) =>
+    prisma.challenge.create({
+      data: { teamId: team.id, reportedById: reporter.id, winnerId: winner.id, loserId: loser.id, description, units, matchId },
+    });
+  await report(oliver, oliver, mads, "Første til at ramme overliggeren", 3);
+  await report(victor, emil, victor, "Flest kropsfinter til træning", 2);
+  const settled = await report(frederik, frederik, noah, "Straffesparkskonkurrence", 3, lastMatch.id);
+  await settleChallenge(settled.id, jonas.id, now);
 
   const endOfSeason = await prisma.match.create({
     data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: day(27, 19), location: "Klubhuset", source: "MANUAL" },

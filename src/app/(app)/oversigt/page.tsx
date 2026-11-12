@@ -3,7 +3,7 @@ import { requireTeamUser } from "@/lib/auth";
 import { teamDb } from "@/lib/team-db";
 import Image from "next/image";
 import { fineBoard, monthKings } from "@/lib/fine-data";
-import { movesFor } from "@/lib/challenges";
+import { waitsOn } from "@/lib/challenges";
 import { kr } from "@/lib/money";
 import { OPEN_TASK } from "@/lib/tasks";
 import { LISTED_ACTIVITY } from "@/lib/activity-data";
@@ -32,10 +32,7 @@ export default async function OverviewPage() {
       select: { matchId: true },
     }),
     db.task.count({ where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } } }),
-    db.challenge.findMany({
-      where: { status: { in: ["PENDING", "ACCEPTED"] }, OR: [{ challengerId: user.id }, { opponentId: user.id }] },
-      select: { status: true, challengerId: true, opponentId: true, claimedById: true, claimedWinnerId: true },
-    }),
+    db.challenge.findMany({ where: { status: "PENDING" }, select: { status: true, reportedById: true } }),
     db.poll.count({
       where: {
         closedAt: null,
@@ -50,7 +47,7 @@ export default async function OverviewPage() {
     ),
   ]);
   const mine = board.balances.find((row) => row.userId === user.id);
-  const waitingOnMe = openChallenges.filter((c) => movesFor(c, user.id, false).some((m) => m !== "cancel")).length;
+  const waitingOnMe = openChallenges.filter((c) => waitsOn(c, user.id)).length;
   const owes = Math.max(0, mine?.owesKr ?? 0);
   const kingNames = kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?");
   const month = readInZone(new Date(), "MMMM");
@@ -94,7 +91,7 @@ export default async function OverviewPage() {
             <Link href="/boder" className="press-card min-w-0 bg-white px-3 py-3">
               <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Bødekonto</p>
               <p className={`text-2xl leading-tight font-semibold ${owes > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(owes)}</p>
-              <p className="truncate text-xs text-slate-500">{owes > 0 ? "skylder du" : "intet at betale"}</p>
+              <p className="truncate text-xs text-slate-500">{owes > 0 ? "udestående" : "ren tavle"}</p>
             </Link>
             {tiles.map((tile) =>
               tile.kind === "next" ? (

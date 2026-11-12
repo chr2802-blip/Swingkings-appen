@@ -13,14 +13,12 @@ import { TaskDialog } from "@/components/task-dialog";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { CopyTasksDialog, StandardTasksDialog } from "@/components/activity-task-dialogs";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
-import { ChallengeCard } from "@/components/challenge-card";
+import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
 import { ActionMenu } from "@/components/action-menu";
 import { ActionButton } from "@/components/action-button";
 import { deleteActivity, setSignup } from "@/app/actions/activities";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
 import { activityName, KIND_LABEL, signupSummary } from "@/lib/activity";
-
-const person = { select: { id: true, name: true, photoId: true } } as const;
 
 export default async function ActivityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,7 +37,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         },
         challenges: {
           orderBy: { createdAt: "desc" },
-          include: { challenger: person, opponent: person, match: { select: { opponent: true, title: true } } },
+          include: challengeCardInclude,
         },
         signups: { select: { userId: true, going: true } },
       },

@@ -8,7 +8,7 @@ import { requireTeamUser } from "@/lib/auth";
 import { assertFineManager, canDeleteFine, canManageFines } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
-import { canMove, type ChallengeMove } from "@/lib/challenges";
+import { canMove } from "@/lib/challenges";
 import { settleChallenge } from "@/lib/fines";
 import { fineUnits, kr } from "@/lib/money";
 import { notifyLater } from "@/lib/notify";
@@ -132,6 +132,11 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
   return ok(playerIds.length > 1 ? `${playerIds.length} bøder er givet.` : "Bøden er givet.");
 }
 
+/**
+ * Takes a fine back. A fine from a challenge takes the whole challenge with it — the
+ * loser's fine and the winner's, so no fines appear or vanish — and the challenge is
+ * marked withdrawn.
+ */
 export async function deleteFine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const id = String(formData.get("id") ?? "");
@@ -139,137 +144,121 @@ export async function deleteFine(_prev: ActionResult, formData: FormData): Promi
   const fine = await db.fine.findFirst({ where: { id }, select: { challengeId: true, issuedById: true } });
   if (!fine) return ok();
   if (!canDeleteFine(user, user.teamId, fine)) return fail("Kun den der gav bøden, bødekasseformanden eller en admin kan slette den.");
-  await db.fine.deleteMany({ where: { id } });
-  // A fine that settled a challenge takes the settlement with it, so the challenge is
-  // open again to be settled properly rather than marked won by nobody.
   if (fine.challengeId) {
-    await db.challenge.updateMany({
-      where: { id: fine.challengeId },
-      data: { status: "ACCEPTED", winnerId: null, settledAt: null },
-    });
+    await db.fine.deleteMany({ where: { challengeId: fine.challengeId } });
+    await db.challenge.updateMany({ where: { id: fine.challengeId }, data: { status: "CANCELLED" } });
+  } else {
+    await db.fine.deleteMany({ where: { id } });
   }
   refresh();
   return ok();
 }
 
+/* ── Nulstilling ────────────────────────────────────────────────────────────────── */
+
+/**
+ * The bødekasseformand resets (nulstiller) somebody — or, with `playerId` "alle", the
+ * whole team: every outstanding fine is marked cleared. Nothing is deleted, so the
+ * history still shows what was given.
+ */
+export async function resetFines(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  assertFineManager(user, user.teamId);
+  const playerId = String(formData.get("playerId") ?? "");
+  if (!playerId) return fail("Vælg hvem der skal nulstilles.");
+  const db = teamDb(user.teamId);
+  const everybody = playerId === "alle";
+  const cleared = await db.fine.updateMany({
+    where: { clearedAt: null, ...(everybody ? {} : { playerId }) },
+    data: { clearedAt: new Date() },
+  });
+  if (cleared.count === 0) return fail(everybody ? "Ingen har udestående bøder." : "Der er intet at nulstille.");
+  if (!everybody) {
+    notifyLater([playerId], user.id, { title: "Din bødekonto er nulstillet 🧽", body: `${user.name} har nulstillet dine bøder.`, url: "/boder", tag: "fine" });
+  }
+  refresh();
+  return ok(everybody ? "Hele holdet er nulstillet." : "Bøderne er nulstillet.");
+}
+
 /* ── Challenges ─────────────────────────────────────────────────────────────────── */
 
 const challengeSchema = z.object({
-  opponentId: z.string().min(1, "Vælg hvem du udfordrer."),
-  description: requiredText("Skriv hvad udfordringen går ud på."),
+  opponentId: z.string().min(1, "Vælg hvem du spillede mod."),
+  outcome: z.enum(["won", "lost"], { error: "Vælg hvem der vandt." }),
+  description: requiredText("Skriv hvad udfordringen gik ud på."),
   units: wholeNumber("Indsatsen skal være mellem 1 og 50 bøder.", 1, 50),
   matchId: optionalId,
 });
 
+/**
+ * Reports a challenge that has been played: against whom, who won, and how many fines
+ * it was for. It goes through when anybody else on the team approves it. The winner
+ * must owe at least the stake — a challenge moves fines, it does not make credit.
+ */
 export async function createChallenge(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const form = readForm(challengeSchema, formData);
   if (!form.ok) return fail(form.error);
-  if (form.fields.opponentId === user.id) return fail("Du kan ikke udfordre dig selv.");
+  const { opponentId, outcome, description, units, matchId } = form.fields;
+  if (opponentId === user.id) return fail("Du kan ikke udfordre dig selv.");
   const db = teamDb(user.teamId);
-  if (!(await db.teamMember.count({ where: { userId: form.fields.opponentId } }))) {
-    return fail("Spilleren er ikke på holdet.");
-  }
-  if (form.fields.matchId && !(await db.match.count({ where: { id: form.fields.matchId } }))) {
-    return fail("Kampen findes ikke.");
-  }
-  await db.challenge.create({ data: { ...form.fields, teamId: user.teamId, challengerId: user.id } });
-  notifyLater([form.fields.opponentId], user.id, {
-    title: `${user.name} udfordrer dig ⚔️`,
-    body: `${form.fields.description} — om ${fineUnits(form.fields.units)}`,
+  const opponent = await db.teamMember.findFirst({ where: { userId: opponentId }, select: { user: { select: { name: true } } } });
+  if (!opponent) return fail("Spilleren er ikke på holdet.");
+  if (matchId && !(await db.match.count({ where: { id: matchId } }))) return fail("Kampen findes ikke.");
+
+  const winnerId = outcome === "won" ? user.id : opponentId;
+  const loserId = outcome === "won" ? opponentId : user.id;
+  const open = await db.fine.aggregate({ where: { playerId: winnerId, clearedAt: null }, _sum: { units: true } });
+  const owed = Math.max(0, open._sum.units ?? 0);
+  const winnerName = outcome === "won" ? "Du" : opponent.user.name;
+  if (owed === 0) return fail(`${winnerName} har ingen bøder at udfordre sig ud af.`);
+  if (units > owed) return fail(`${winnerName} har kun ${fineUnits(owed)} — indsatsen kan højst være det.`);
+
+  await db.challenge.create({
+    data: { teamId: user.teamId, reportedById: user.id, winnerId, loserId, description, units, matchId },
+  });
+  notifyLater([opponentId], user.id, {
+    title: "Godkend udfordringen ⚔️",
+    body: `${user.name} melder ${outcome === "won" ? `sig selv` : "dig"} som vinder: ${description} — ${fineUnits(units)}`,
     url: "/boder/udfordringer",
     tag: "challenge",
   });
   refresh();
-  return ok("Udfordringen er sendt.");
+  return ok("Udfordringen venter på godkendelse.");
 }
 
-const MOVES = ["accept", "decline", "cancel", "claim", "confirm", "dispute", "settle"] as const;
-
 /**
- * Every move on a challenge goes through here and through `canMove`, so the rules in
- * `src/lib/challenges.ts` are the only rules. Each write is guarded on the status it
- * expects, so two presses at once cannot both win.
+ * Approving or withdrawing a challenge goes through here and through `canMove`, so the
+ * rules in `src/lib/challenges.ts` are the only rules. Each write is guarded on the
+ * status, so two presses at once cannot both win.
  */
 export async function moveChallenge(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const parsed = z
-    .object({ id: z.string().min(1), move: z.enum(MOVES), winnerId: z.string().optional() })
+    .object({ id: z.string().min(1), move: z.enum(["approve", "cancel"]) })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return fail("Prøv igen.");
-  const { id, move, winnerId } = parsed.data;
+  const { id, move } = parsed.data;
   const db = teamDb(user.teamId);
   const challenge = await db.challenge.findFirst({
     where: { id },
-    include: { challenger: { select: { name: true } }, opponent: { select: { name: true } } },
+    include: { winner: { select: { name: true } }, loser: { select: { name: true } } },
   });
   if (!challenge) return fail("Udfordringen findes ikke.");
-  const managesFines = canManageFines(user, user.teamId);
-  if (!canMove(challenge, move as ChallengeMove, user.id, managesFines)) {
+  if (!canMove(challenge, move, user.id, canManageFines(user, user.teamId))) {
     return fail("Det kan du ikke gøre med udfordringen nu.");
   }
-  const other = user.id === challenge.challengerId ? challenge.opponentId : challenge.challengerId;
-  const now = new Date();
-  const guarded = (status: "PENDING" | "ACCEPTED", data: object) =>
-    db.challenge.updateMany({ where: { id, status }, data });
 
-  switch (move) {
-    case "accept":
-      await guarded("PENDING", { status: "ACCEPTED", respondedAt: now });
-      notifyLater([challenge.challengerId], user.id, {
-        title: `${user.name} tog imod udfordringen`,
-        body: challenge.description,
-        url: "/boder/udfordringer",
-      });
-      break;
-    case "decline":
-      await guarded("PENDING", { status: "DECLINED", respondedAt: now });
-      notifyLater([challenge.challengerId], user.id, {
-        title: `${user.name} afviste udfordringen`,
-        body: challenge.description,
-        url: "/boder/udfordringer",
-      });
-      break;
-    case "cancel":
-      await guarded("PENDING", { status: "CANCELLED" });
-      break;
-    case "claim": {
-      if (winnerId !== challenge.challengerId && winnerId !== challenge.opponentId) {
-        return fail("Vælg hvem der vandt.");
-      }
-      const updated = await db.challenge.updateMany({
-        where: { id, status: "ACCEPTED", claimedById: null },
-        data: { claimedById: user.id, claimedWinnerId: winnerId },
-      });
-      if (updated.count === 0) return fail("Der er allerede meldt en vinder.");
-      notifyLater([other], user.id, {
-        title: "Bekræft udfordringen",
-        body: `${user.name} melder ${winnerId === challenge.challengerId ? challenge.challenger.name : challenge.opponent.name} som vinder: ${challenge.description}`,
-        url: "/boder/udfordringer",
-      });
-      break;
-    }
-    case "dispute":
-      await guarded("ACCEPTED", { claimedById: null, claimedWinnerId: null });
-      notifyLater([other], user.id, {
-        title: `${user.name} er uenig om vinderen`,
-        body: challenge.description,
-        url: "/boder/udfordringer",
-      });
-      break;
-    case "confirm":
-    case "settle": {
-      const winner = move === "confirm" ? challenge.claimedWinnerId : winnerId;
-      if (!winner) return fail("Vælg hvem der vandt.");
-      const result = await settleChallenge(id, winner, user.id, now);
-      if (!result.ok) return fail(result.error);
-      notifyLater([challenge.challengerId, challenge.opponentId], user.id, {
-        title: "Udfordringen er afgjort 🏆",
-        body: `${winner === challenge.challengerId ? challenge.challenger.name : challenge.opponent.name} vandt: ${challenge.description}`,
-        url: "/boder/udfordringer",
-      });
-      break;
-    }
+  if (move === "cancel") {
+    await db.challenge.updateMany({ where: { id, status: "PENDING" }, data: { status: "CANCELLED" } });
+  } else {
+    const result = await settleChallenge(id, user.id);
+    if (!result.ok) return fail(result.error);
+    notifyLater([challenge.winnerId, challenge.loserId, challenge.reportedById], user.id, {
+      title: "Udfordringen er godkendt 🏆",
+      body: `${challenge.winner.name} sendte ${fineUnits(result.units)} videre til ${challenge.loser.name}: ${challenge.description}`,
+      url: "/boder/udfordringer",
+    });
   }
   refresh();
   return ok();

@@ -1,49 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { canMove, loserOf, movesFor, type ChallengeState } from "@/lib/challenges";
+import { canMove, movesFor, waitsOn, type ChallengeState } from "@/lib/challenges";
 
-const base: ChallengeState = {
-  status: "PENDING",
-  challengerId: "anna",
-  opponentId: "bo",
-  claimedById: null,
-  claimedWinnerId: null,
-};
+const reported: ChallengeState = { status: "PENDING", reportedById: "anna" };
 
 describe("challenge moves", () => {
-  it("lets only the opponent accept or decline a pending challenge", () => {
-    expect(movesFor(base, "bo", false)).toEqual(["accept", "decline"]);
-    expect(movesFor(base, "anna", false)).toEqual(["cancel"]);
-    expect(movesFor(base, "carl", false)).toEqual([]);
+  it("lets anybody but the reporter approve", () => {
+    expect(movesFor(reported, "bo", false)).toEqual(["approve"]);
+    expect(movesFor(reported, "carl", false)).toEqual(["approve"]);
+    expect(canMove(reported, "approve", "anna", true)).toBe(false);
   });
 
-  it("lets a treasurer cancel a pending challenge, but not accept it", () => {
-    expect(movesFor(base, "carl", true)).toEqual(["cancel"]);
+  it("lets the reporter withdraw, and a treasurer too", () => {
+    expect(movesFor(reported, "anna", false)).toEqual(["cancel"]);
+    expect(movesFor(reported, "carl", true)).toEqual(["approve", "cancel"]);
+    expect(canMove(reported, "cancel", "bo", false)).toBe(false);
   });
 
-  it("lets either player claim a winner once accepted, and a treasurer settle", () => {
-    const accepted = { ...base, status: "ACCEPTED" as const };
-    expect(movesFor(accepted, "anna", false)).toEqual(["claim"]);
-    expect(movesFor(accepted, "bo", false)).toEqual(["claim"]);
-    expect(movesFor(accepted, "carl", true)).toEqual(["settle"]);
-  });
-
-  it("lets only the other player confirm or dispute a claim", () => {
-    const claimed = { ...base, status: "ACCEPTED" as const, claimedById: "anna", claimedWinnerId: "anna" };
-    expect(movesFor(claimed, "anna", false)).toEqual([]);
-    expect(movesFor(claimed, "bo", false)).toEqual(["confirm", "dispute"]);
-    expect(canMove(claimed, "claim", "bo", false)).toBe(false);
+  it("waits on everybody but the reporter", () => {
+    expect(waitsOn(reported, "bo")).toBe(true);
+    expect(waitsOn(reported, "anna")).toBe(false);
   });
 
   it("allows nothing on a finished challenge", () => {
-    for (const status of ["SETTLED", "DECLINED", "CANCELLED"] as const) {
-      expect(movesFor({ ...base, status }, "anna", true)).toEqual([]);
-      expect(movesFor({ ...base, status }, "bo", true)).toEqual([]);
+    for (const status of ["SETTLED", "CANCELLED"] as const) {
+      expect(movesFor({ ...reported, status }, "anna", true)).toEqual([]);
+      expect(movesFor({ ...reported, status }, "bo", true)).toEqual([]);
+      expect(waitsOn({ ...reported, status }, "bo")).toBe(false);
     }
-  });
-
-  it("names the loser", () => {
-    expect(loserOf(base, "anna")).toBe("bo");
-    expect(loserOf(base, "bo")).toBe("anna");
-    expect(() => loserOf(base, "carl")).toThrow();
   });
 });

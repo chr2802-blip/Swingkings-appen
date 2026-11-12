@@ -14,9 +14,9 @@ describe("createDemoTeam", () => {
     expect(await prisma.teamMember.count({ where: { teamId: team.id } })).toBe(8);
     expect(await prisma.teamMember.count({ where: { teamId: team.id, role: "ADMIN" } })).toBe(1);
     expect(await prisma.teamMember.count({ where: { teamId: team.id, role: "TREASURER" } })).toBe(1);
-    // Seven fines given, and one more from the settled challenge.
-    expect(await prisma.fine.count({ where: { teamId: team.id } })).toBe(8);
-    expect(await prisma.challenge.groupBy({ by: ["status"], where: { teamId: team.id } })).toHaveLength(3);
+    // Seven fines given, and two more from the approved challenge (the winner's and the loser's).
+    expect(await prisma.fine.count({ where: { teamId: team.id } })).toBe(9);
+    expect(await prisma.challenge.groupBy({ by: ["status"], where: { teamId: team.id } })).toHaveLength(2);
     expect(await prisma.match.count({ where: { teamId: team.id } })).toBe(6);
     expect(await prisma.task.count({ where: { teamId: team.id } })).toBeGreaterThan(2);
     expect(await prisma.chatMessage.count({ where: { teamId: team.id } })).toBe(5);
@@ -52,15 +52,17 @@ describe("createDemoTeam", () => {
     expect(await prisma.user.count({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } })).toBe(0);
   });
 
-  it("has accounts that add up: Lucas has paid his, Oliver owes 80 kr", async () => {
+  it("has accounts that add up: Lucas is reset, Frederik challenged 3 fines over to Noah", async () => {
     const team = await createDemoTeam();
     const players = await prisma.user.findMany({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } });
     const fines = await prisma.fine.findMany({ where: { teamId: team.id } });
-    const payments = await prisma.payment.findMany({ where: { teamId: team.id } });
     const owes = (first: string) =>
-      balances(players.map((p) => p.id), fines, payments).find((b) => b.userId === players.find((p) => p.name.startsWith(first))!.id)!.owesKr;
+      balances(players.map((p) => p.id), fines).find((b) => b.userId === players.find((p) => p.name.startsWith(first))!.id)!.owesKr;
     expect(owes("Lucas")).toBe(0);
     expect(owes("Oliver")).toBe(80);
+    expect(owes("Frederik")).toBe(20);
+    expect(owes("Noah")).toBe(40);
+    expect(await prisma.challenge.count({ where: { teamId: team.id, status: "PENDING" } })).toBe(2);
   });
 });
 

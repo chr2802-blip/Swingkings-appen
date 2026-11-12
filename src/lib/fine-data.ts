@@ -4,20 +4,18 @@ import { balances, fineKings } from "./money";
 import { teamRoster } from "./roster";
 import { kickoffLabel, startOfMonthInZone } from "./time";
 
-/** What the fine pages all need: the price, the catalogue, the roster and everyone's account. */
+/** What the fine pages all need: the price, the catalogue, the roster and what everyone owes. */
 export async function fineBoard(teamId: string) {
   const db = teamDb(teamId);
-  const [team, roster, fineTypes, fines, payments] = await Promise.all([
+  const [team, roster, fineTypes, fines] = await Promise.all([
     prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { finePriceKr: true } }),
     teamRoster(teamId),
     db.fineType.findMany({ where: { archivedAt: null }, orderBy: [{ units: "asc" }, { name: "asc" }] }),
-    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true } }),
-    db.payment.findMany({ select: { playerId: true, amountKr: true } }),
+    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true, clearedAt: true } }),
   ]);
   const board = balances(
     roster.map((m) => m.userId),
     fines,
-    payments,
   );
   // Somebody who has left the team still owes what they owe, and still needs a name.
   const people = new Map(roster.map((m) => [m.userId, { name: m.name, photoId: m.photoId, onTeam: true }]));
