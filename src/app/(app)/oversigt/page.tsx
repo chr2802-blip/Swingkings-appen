@@ -9,9 +9,7 @@ import { kr } from "@/lib/money";
 import { OPEN_TASK } from "@/lib/tasks";
 import { LISTED_ACTIVITY } from "@/lib/activity-data";
 import { activityName } from "@/lib/activity";
-import { kickoffLabel, readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
-import { Card, SectionTitle } from "@/components/ui";
-import { TaskRow, TASK_SELECT } from "@/components/task-row";
+import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
@@ -22,28 +20,18 @@ import { FeedSkeleton } from "@/components/skeleton";
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, kings, nextMatch, myTasks, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
+  const [board, kings, nextMatch, firstTask, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
       where: { ...LISTED_ACTIVITY, cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
       orderBy: { startsAt: "asc" },
-      select: {
-        id: true,
-        kind: true,
-        title: true,
-        opponent: true,
-        startsAt: true,
-        location: true,
-        isHome: true,
-        tasks: { select: TASK_SELECT },
-      },
+      select: { id: true, kind: true, title: true, opponent: true, startsAt: true, isHome: true },
     }),
-    db.task.findMany({
+    db.task.findFirst({
       where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } },
       orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }],
-      take: 5,
-      select: TASK_SELECT,
+      select: { matchId: true },
     }),
     db.task.count({ where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } } }),
     db.challenge.findMany({
@@ -69,18 +57,19 @@ export default async function OverviewPage() {
   const kingNames = kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?");
   const month = readInZone(new Date(), "MMMM");
   /**
-   * The banner holds three tiles side by side: the balance always, then the two most
-   * pressing things waiting on this person (in this order, skipping those at zero), and
-   * the month's bødekonge filling a free place.
+   * The banner holds two rows of three tiles. The first is fixed: the balance, the next
+   * activity and this person's open tasks. The second holds the things waiting on them
+   * (in this order, skipping those at zero), with the month's bødekonge filling a free place.
    */
   const waiting = [
     { kind: "count" as const, count: pollsWaiting, href: "#feed", title: pollsWaiting === 1 ? "Afstemning" : "Afstemninger", note: "mangler dit svar" },
     { kind: "count" as const, count: newPosts, href: "#feed", title: newPosts === 1 ? "Nyt opslag" : "Nye opslag", note: "i feedet" },
     { kind: "count" as const, count: waitingOnMe, href: "/boder/udfordringer", title: waitingOnMe === 1 ? "Udfordring" : "Udfordringer", note: "venter på dig" },
-    { kind: "count" as const, count: myTaskCount, href: "/opgaver", title: myTaskCount === 1 ? "Opgave" : "Opgaver", note: "til dig" },
   ].filter((tile) => tile.count > 0);
   const tiles: (typeof waiting[number] | { kind: "king" })[] = waiting.slice(0, 2);
-  if (tiles.length < 2) tiles.push({ kind: "king" });
+  tiles.push(waiting.length > 2 ? waiting[2] : { kind: "king" });
+  const nextDay = nextMatch ? relativeDay(nextMatch.startsAt) : null;
+  const tasksHref = firstTask?.matchId ? `/aktiviteter/${firstTask.matchId}` : "/aktiviteter";
   const firstName = user.name.split(" ")[0];
 
   return (
@@ -92,15 +81,35 @@ export default async function OverviewPage() {
             <Image src="/logo.png" alt="" width={512} height={512} className="h-12 w-12 shrink-0 rotate-12 drop-shadow-md" />
           </div>
 
-          <div
-            className={`mt-3 grid divide-x divide-slate-100 overflow-hidden rounded-2xl border border-[var(--accent-line)] bg-white shadow-sm sm:max-w-xl ${
-              tiles.length === 2 ? "grid-cols-3" : "grid-cols-2"
-            }`}
-          >
-            <Link href="/boder" className="press-card min-w-0 px-3 py-3">
+          <div className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-[var(--accent-line)] bg-slate-100 shadow-sm sm:max-w-xl">
+            <Link href="/boder" className="press-card min-w-0 bg-white px-3 py-3">
               <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Bødekonto</p>
               <p className={`text-2xl leading-tight font-semibold ${owes > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(owes)}</p>
               <p className="truncate text-xs text-slate-500">{owes > 0 ? "skylder du" : "intet at betale"}</p>
+            </Link>
+            <Link href={nextMatch ? `/aktiviteter/${nextMatch.id}` : "/aktiviteter"} className="press-card min-w-0 bg-white px-3 py-3">
+              <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                {nextMatch?.kind === "MATCH" ? "Næste kamp" : "Næste aktivitet"}
+              </p>
+              <p className="truncate text-2xl leading-tight font-semibold text-[var(--accent-text)]">
+                {nextDay ? nextDay.charAt(0).toUpperCase() + nextDay.slice(1) : "Ingen"}
+              </p>
+              <p className="truncate text-xs text-slate-500">
+                {nextMatch
+                  ? `${readInZone(nextMatch.startsAt, "HH:mm")} · ${
+                      nextMatch.kind === "MATCH" && nextMatch.opponent
+                        ? `${nextMatch.isHome === false ? "ude mod" : nextMatch.isHome ? "hjemme mod" : "mod"} ${nextMatch.opponent}`
+                        : activityName(nextMatch)
+                    }`
+                  : "i kalenderen"}
+              </p>
+            </Link>
+            <Link href={tasksHref} className="press-card min-w-0 bg-white px-3 py-3">
+              <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                {myTaskCount === 1 ? "Opgave" : "Opgaver"}
+              </p>
+              <p className={`text-2xl leading-tight font-semibold ${myTaskCount > 0 ? "text-amber-600" : "text-emerald-700"}`}>{myTaskCount}</p>
+              <p className="truncate text-xs text-slate-500">{myTaskCount > 0 ? "til dig" : "ingen lige nu"}</p>
             </Link>
             {tiles.map((tile) =>
               tile.kind === "king" ? (
@@ -113,7 +122,7 @@ export default async function OverviewPage() {
                   <p className="truncate text-xs text-slate-500">{kingNames.length > 0 ? `${kr(kings.kr)} i ${month}` : `ingen bøder i ${month}`}</p>
                 </Link>
               ) : (
-                <Link key={tile.title} href={tile.href} className="press-card min-w-0 px-3 py-3">
+                <Link key={tile.title} href={tile.href} className="press-card min-w-0 bg-white px-3 py-3">
                   <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">{tile.title}</p>
                   <p className="text-2xl leading-tight font-semibold text-amber-600">{tile.count}</p>
                   <p className="truncate text-xs text-slate-500">{tile.note}</p>
@@ -126,57 +135,6 @@ export default async function OverviewPage() {
 
       <InstallCard />
       <NotificationSetup compact />
-
-      <section>
-        <SectionTitle
-          action={
-            <Link href="/aktiviteter" className="text-sm text-[var(--accent-text)] underline">
-              Alle aktiviteter
-            </Link>
-          }
-        >
-          Næste aktivitet
-        </SectionTitle>
-        {nextMatch ? (
-          <Card padded={false}>
-            <Link href={`/aktiviteter/${nextMatch.id}`} className="press-card block px-5 py-4">
-              <p className="font-display text-xl">
-                {nextMatch.kind === "MATCH" && nextMatch.opponent
-                  ? `${nextMatch.isHome === false ? "Ude mod" : nextMatch.isHome ? "Hjemme mod" : "Mod"} ${nextMatch.opponent}`
-                  : activityName(nextMatch)}
-              </p>
-              <p className="text-sm text-slate-500">
-                {kickoffLabel(nextMatch.startsAt)} · {relativeDay(nextMatch.startsAt)}
-                {nextMatch.location && ` · ${nextMatch.location}`}
-              </p>
-            </Link>
-            {nextMatch.tasks.length > 0 && (
-              <ul className="divide-y divide-slate-100 border-t border-slate-100">
-                {nextMatch.tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} viewerId={user.id} showMatch={false} />
-                ))}
-              </ul>
-            )}
-          </Card>
-        ) : (
-          <Card className="text-sm text-slate-500">Ingen kommende aktiviteter i kalenderen.</Card>
-        )}
-      </section>
-
-      <section>
-        <SectionTitle>Dine opgaver</SectionTitle>
-        {myTasks.length === 0 ? (
-          <Card className="text-sm text-slate-500">Du har ingen opgaver lige nu 🎉</Card>
-        ) : (
-          <Card padded={false}>
-            <ul className="divide-y divide-slate-100">
-              {myTasks.map((task) => (
-                <TaskRow key={task.id} task={task} viewerId={user.id} />
-              ))}
-            </ul>
-          </Card>
-        )}
-      </section>
 
       {/* The feed is the heaviest read on the page: stream it in after the rest. */}
       <Suspense fallback={<FeedSkeleton />}>
