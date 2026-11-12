@@ -43,18 +43,30 @@ describe("createDemoTeam", () => {
     const { team: real, anna } = await makeSquad();
     await createDemoTeam();
     const second = await createDemoTeam();
-    expect(await prisma.team.findMany({ where: { name: DEMO_TEAM_NAME }, select: { id: true } })).toEqual([{ id: second.id }]);
-    expect(await prisma.user.count({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } })).toBe(8);
+    expect(await prisma.team.findMany({ where: { isDemo: true }, select: { id: true } })).toEqual([{ id: second.id }]);
+    expect(await prisma.user.count({ where: { isDemo: true } })).toBe(8);
 
     expect(await removeDemoTeam()).toEqual({ teams: 1, users: 8 });
     expect(await prisma.team.findUnique({ where: { id: real.id } })).not.toBeNull();
     expect(await prisma.user.findUnique({ where: { id: anna.id } })).not.toBeNull();
-    expect(await prisma.user.count({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } })).toBe(0);
+    expect(await prisma.user.count({ where: { isDemo: true } })).toBe(0);
+  });
+
+  it("removes only what it made: a real team with its name, and a real player with its domain, survive", async () => {
+    const lookalike = await prisma.team.create({ data: { name: DEMO_TEAM_NAME } });
+    const real = await makeUser({ name: "Rigtig", email: `rigtig${DEMO_EMAIL_DOMAIN}` });
+    await createDemoTeam();
+    expect(await removeDemoTeam()).toEqual({ teams: 1, users: 8 });
+    expect(await prisma.team.findUnique({ where: { id: lookalike.id } })).not.toBeNull();
+    expect(await prisma.user.findUnique({ where: { id: real.id } })).not.toBeNull();
+    // And pressing the button again leaves the lookalike alone as well.
+    await createDemoTeam();
+    expect(await prisma.team.findUnique({ where: { id: lookalike.id } })).not.toBeNull();
   });
 
   it("has accounts that add up: Lucas is reset, Frederik challenged 3 fines over to Noah", async () => {
     const team = await createDemoTeam();
-    const players = await prisma.user.findMany({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } });
+    const players = await prisma.user.findMany({ where: { isDemo: true } });
     const fines = await prisma.fine.findMany({ where: { teamId: team.id } });
     const owes = (first: string) =>
       balances(players.map((p) => p.id), fines).find((b) => b.userId === players.find((p) => p.name.startsWith(first))!.id)!.owesKr;
