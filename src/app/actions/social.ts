@@ -8,7 +8,7 @@ import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { MAX_MESSAGE, optionalId, readForm } from "@/lib/form";
-import { readPhotoChoice, readPhotoChoices, discardPhoto } from "@/lib/photos";
+import { readPhotoChoice, readPhotoChoices, discardPhoto, discardPhotos } from "@/lib/photos";
 import { teamRoster } from "@/lib/roster";
 import { castVote } from "@/lib/voting";
 import { cleanOptions, MAX_POLL_OPTIONS, MAX_POST_PHOTOS } from "@/lib/polls";
@@ -191,7 +191,7 @@ export async function deletePost(_prev: ActionResult, formData: FormData): Promi
   if (post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke dit opslag.");
   await db.post.deleteMany({ where: { id: post.id } });
   // The pictures belonged to this post and nothing else.
-  await db.photo.deleteMany({ where: { id: { in: post.photos.map((p) => p.photoId) } } });
+  await discardPhotos(user.teamId, post.photos.map((p) => p.photoId));
   revalidatePath("/oversigt");
   return ok();
 }

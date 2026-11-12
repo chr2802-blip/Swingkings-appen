@@ -23,7 +23,7 @@ enum PlatformRole {
  * What somebody may do on one team. Answered per team, on TeamMember, because the
  * treasurer of the first team can be an ordinary player on the second.
  * ADMIN     træner/holdleder: everything, including members, matches and settings.
- * TREASURER kasserer/bødeformand: fine types, fines and payments.
+ * TREASURER bødekasseformand: the fine catalogue, others' fines, resetting and withdrawing.
  * PLAYER    everybody else: challenges, tasks, chat and the feed.
  */
 enum MemberRole {
@@ -89,6 +89,8 @@ model Team {
   calendarUrl      String?
   /// When the calendar was last read successfully.
   calendarSyncedAt DateTime?
+  /// Made by "Opret testhold" (`src/lib/demo-team.ts`); the only team "Slet testhold" removes.
+  isDemo           Boolean   @default(false)
   createdAt        DateTime  @default(now())
 
   members         TeamMember[]
@@ -124,6 +126,8 @@ model User {
   role         PlatformRole @default(USER)
   activeTeamId String?
   photoId      String?
+  /// One of the demo team's made-up players; removed together with it, and nobody else is.
+  isDemo       Boolean      @default(false)
   createdAt    DateTime     @default(now())
 
   activeTeam         Team?              @relation("ActiveTeam", fields: [activeTeamId], references: [id], onDelete: SetNull)

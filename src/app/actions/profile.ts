@@ -18,7 +18,7 @@ export async function updateProfile(_prev: ActionResult, formData: FormData): Pr
   // somewhere — and `/api/photos` serves it to anybody who shares a team with them.
   let photoId: string | null | undefined;
   if (user.teamId && formData.has(PHOTO_FIELD)) {
-    const photo = await readPhotoChoice(formData, user.teamId);
+    const photo = await readPhotoChoice(formData, user.teamId, user.photoId);
     if (!photo.ok) return fail(photo.error);
     photoId = photo.photoId;
   }

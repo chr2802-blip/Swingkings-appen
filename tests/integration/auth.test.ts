@@ -52,6 +52,15 @@ describe("login", () => {
     await expectRedirect(() => attempt("anna@test.dk", TEST_PASSWORD), "/oversigt");
   });
 
+  it("counts a burst of guesses made at once, so they cannot all slip in under the limit", async () => {
+    await makeUser({ email: "anna@test.dk" });
+    const answers = await Promise.all(Array.from({ length: 20 }, () => attempt("anna@test.dk", "forkert")));
+    // Each request counts itself before it asks, so a burst sees itself: at most eight
+    // passwords get checked, and the rest are turned away without being looked at.
+    expect(answers.filter((a) => a?.error === "Forkert e-mail eller adgangskode.").length).toBeLessThanOrEqual(8);
+    expect(answers.filter((a) => a?.error?.startsWith("For mange forsøg")).length).toBeGreaterThanOrEqual(12);
+  });
+
   it("forgets the failures once somebody gets in", async () => {
     await makeUser({ email: "anna@test.dk" });
     for (let i = 0; i < 3; i++) await attempt("anna@test.dk", "forkert");

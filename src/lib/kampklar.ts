@@ -11,6 +11,25 @@ export type SyncResult =
   | { ok: true; created: number; updated: number; cancelled: number; tasksAdded: number }
   | { ok: false; error: string };
 
+/** The body as text, or null once it passes `max` bytes — without reading the rest. */
+async function readCapped(response: Response, max: number): Promise<string | null> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 /** Fetches the feed, refusing an address that leads somewhere private and an oversized body. */
 export async function fetchCalendar(rawUrl: string): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   const url = normalizeCalendarUrl(rawUrl);
@@ -27,8 +46,8 @@ export async function fetchCalendar(rawUrl: string): Promise<{ ok: true; text: s
   if (!response.ok) return { ok: false, error: `KampKlar svarede ${response.status}. Tjek linket.` };
   const declared = Number(response.headers.get("content-length") ?? 0);
   if (declared > MAX_FEED_BYTES) return { ok: false, error: "Kalenderen er for stor." };
-  const text = await response.text();
-  if (text.length > MAX_FEED_BYTES) return { ok: false, error: "Kalenderen er for stor." };
+  const text = await readCapped(response, MAX_FEED_BYTES);
+  if (text === null) return { ok: false, error: "Kalenderen er for stor." };
   if (!/BEGIN:VCALENDAR/i.test(text)) return { ok: false, error: "Linket gav ikke en kalender. Brug linket fra “Eksporter kalender” i KampKlar." };
   return { ok: true, text };
 }

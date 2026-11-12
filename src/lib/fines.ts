@@ -35,6 +35,10 @@ export async function settleChallenge(
     if (!challenge || challenge.status !== "PENDING") return { ok: false, error: "Udfordringen er ikke åben længere." };
     if (challenge.reportedById === approvedById) return { ok: false, error: "En anden end dig skal godkende den." };
 
+    // Two challenges for one winner approved at once would each see the same open fines and
+    // each move them. The winner's row is the lock: the second waits for the first to
+    // commit and then counts what is left.
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${challenge.winnerId} FOR UPDATE`;
     const open = await tx.fine.aggregate({
       where: { teamId: challenge.teamId, playerId: challenge.winnerId, clearedAt: null },
       _sum: { units: true },

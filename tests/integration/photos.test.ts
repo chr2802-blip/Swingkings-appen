@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { discardReplaced, readPhotoChoice, readPhotoChoices, storePhoto, sweepUnclaimedPhotos } from "@/lib/photos";
+import { discardPhoto, discardPhotos, discardReplaced, readPhotoChoice, readPhotoChoices, storePhoto, sweepUnclaimedPhotos } from "@/lib/photos";
+import { createPost, deleteChatMessage, sendChatMessage } from "@/app/actions/social";
 import { POST as upload } from "@/app/api/photos/route";
 import { GET as serve } from "@/app/api/photos/[id]/route";
 import { PHOTO_FIELD, formData, joinTeam, makeMember, makePhoto, makeSquad, makeTeam, makeUser, signIn } from "../helpers/factories";
@@ -143,5 +144,46 @@ describe("GET /api/photos/<id>", () => {
 
     await signIn(await makeUser());
     expect((await fetchPhoto(avatar.id)).status).toBe(404);
+  });
+});
+
+describe("pictures already in use", () => {
+  it("cannot be attached to a message or a post, so a player cannot delete them by deleting that", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const logo = await makePhoto(team.id);
+    const inPost = await makePhoto(team.id);
+    const avatar = await makePhoto(team.id);
+    await prisma.team.update({ where: { id: team.id }, data: { photoId: logo.id } });
+    await prisma.post.create({ data: { teamId: team.id, authorId: bo.id, photos: { create: { photoId: inPost.id, position: 0 } } } });
+    await prisma.user.update({ where: { id: bo.id }, data: { photoId: avatar.id } });
+
+    for (const id of [logo.id, inPost.id, avatar.id]) {
+      expect((await readPhotoChoice(formData({ [PHOTO_FIELD]: id }), team.id)).ok).toBe(false);
+      expect((await readPhotoChoices(formData({ [PHOTO_FIELD]: id }), team.id, 10)).ok).toBe(false);
+    }
+    expect((await readPhotoChoice(formData({ [PHOTO_FIELD]: logo.id }), team.id, logo.id)).ok).toBe(true);
+
+    await signIn(anna);
+    expect((await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: logo.id })))?.ok).toBe(false);
+    expect((await createPost(undefined, formData({ [PHOTO_FIELD]: inPost.id })))?.ok).toBe(false);
+    expect(await prisma.photo.count()).toBe(3);
+  });
+
+  it("are never deleted by a discard, whoever asks", async () => {
+    const { team, anna } = await makeSquad();
+    const logo = await makePhoto(team.id);
+    await prisma.team.update({ where: { id: team.id }, data: { photoId: logo.id } });
+    await discardPhoto(team.id, logo.id);
+    await discardPhotos(team.id, [logo.id, null, undefined]);
+    expect(await prisma.photo.count({ where: { id: logo.id } })).toBe(1);
+
+    // The ordinary route still works: a message's own picture goes with the message.
+    const own = await makePhoto(team.id);
+    await signIn(anna);
+    await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: own.id }));
+    const message = await prisma.chatMessage.findFirstOrThrow({ where: { authorId: anna.id } });
+    expect(await deleteChatMessage(undefined, formData({ id: message.id }))).toEqual({ ok: true });
+    expect(await prisma.photo.count({ where: { id: own.id } })).toBe(0);
+    expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ photoId: logo.id });
   });
 });

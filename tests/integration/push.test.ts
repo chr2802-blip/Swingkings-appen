@@ -59,6 +59,20 @@ describe("saveSubscription", () => {
     expect(await prisma.pushSubscription.findMany({ select: { userId: true } })).toEqual([{ userId: bo.id }]);
   });
 
+  it("keeps ten devices per person: past that the oldest make room", async () => {
+    const anna = await makeUser({ name: "Anna" });
+    await signIn(anna);
+    for (let n = 1; n <= 12; n++) {
+      expect(await saveSubscription({ endpoint: endpoint(n), keys })).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    const kept = (await prisma.pushSubscription.findMany({ select: { endpoint: true } })).map((row) => row.endpoint).sort();
+    expect(kept).toEqual(Array.from({ length: 10 }, (_, i) => endpoint(i + 3)).sort());
+    // Saving a device already held takes no second place.
+    expect(await saveSubscription({ endpoint: endpoint(5), keys })).toBe(true);
+    expect(await prisma.pushSubscription.count()).toBe(10);
+  });
+
   it("refuses an endpoint that is not https on the public internet, and keys a browser would not send", async () => {
     await signIn(await makeUser());
     for (const bad of ["http://8.8.8.8/push", "https://127.0.0.1/push", "https://[::1]/push", "https://localhost/push", "https://10.0.0.5/push", "ikke-en-url"]) {

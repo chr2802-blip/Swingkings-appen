@@ -43,6 +43,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
+      # Critical only: what is left at "high" is fixed only by a major upgrade (Next 16,
+      # Prisma 7) and is decided on its own, not by a red build on an unrelated change.
+      - name: No known critical vulnerabilities in what is installed
+        run: npm audit --audit-level=critical
       - name: Check migrations match the schema
         run: npm run db:check
       - run: npm run lint

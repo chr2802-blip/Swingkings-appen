@@ -10,16 +10,16 @@ import { settleChallenge } from "./fines";
  * import, tasks, chat, feed and polls. Made (or remade) by `npm run db:demo` locally and by
  * the super admin's "Opret testhold" on /admin, and thrown away again by `removeDemoTeam`.
  *
- * Everything it makes is found again by the team's name and the players' addresses, so
- * removing it touches nothing else. Crosses teams on purpose, so `prisma` directly.
+ * Everything it makes is marked `isDemo`, and removing it deletes what is marked and
+ * nothing else — whatever a real team is called, and whatever address somebody signs up with. Crosses teams on purpose, so `prisma` directly.
  */
 export const DEMO_TEAM_NAME = "Swingkings Demo";
 export const DEMO_EMAIL_DOMAIN = "@demo.swingkings.dk";
 
 /** Deletes every demo team and demo player; the counts say what went. */
 export async function removeDemoTeam() {
-  const teams = await prisma.team.deleteMany({ where: { name: DEMO_TEAM_NAME } });
-  const users = await prisma.user.deleteMany({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } });
+  const teams = await prisma.team.deleteMany({ where: { isDemo: true } });
+  const users = await prisma.user.deleteMany({ where: { isDemo: true } });
   return { teams: teams.count, users: users.count };
 }
 
@@ -32,7 +32,7 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   const now = options.now ?? new Date();
   await removeDemoTeam();
 
-  const team = await prisma.team.create({ data: { name: DEMO_TEAM_NAME, finePriceKr: 10 } });
+  const team = await prisma.team.create({ data: { name: DEMO_TEAM_NAME, finePriceKr: 10, isDemo: true } });
   const passwordHash = await bcrypt.hash(options.password ?? randomBytes(32).toString("base64url"), 10);
   const names = ["Mads Holm", "Jonas Berg", "Frederik Lund", "Oliver Krog", "Emil Dahl", "Lucas Friis", "Victor Bach", "Noah Skov"];
   const users = [];
@@ -43,6 +43,7 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
           email: `${name.split(" ")[0]!.toLowerCase()}${DEMO_EMAIL_DOMAIN}`,
           name,
           passwordHash,
+          isDemo: true,
           activeTeamId: team.id,
           memberships: {
             create: { teamId: team.id, role: index === 0 ? "ADMIN" : index === 1 ? "TREASURER" : "PLAYER", shirtNumber: [1, 4, 7, 9, 10, 11, 14, 23][index] },

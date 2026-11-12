@@ -21,6 +21,9 @@ import { sendPushToUsers } from "@/lib/push";
  * browser hands out. Anything else is not saved: a URL pointing back into the server's
  * own network would otherwise have the reminder job knocking on it daily.
  */
+/** Phones, tablets and laptops somebody may be notified on. */
+const MAX_SUBSCRIPTIONS_PER_USER = 10;
+
 const subscriptionSchema = z.object({
   endpoint: z.string().max(2048).url(),
   keys: z.object({
@@ -50,6 +53,16 @@ export async function saveSubscription(raw: {
   const parsed = subscriptionSchema.safeParse(raw);
   if (!parsed.success || !(await publicEndpoint(parsed.data.endpoint))) return false;
   const subscription = parsed.data;
+
+  // A device or two per person is what there is; past that, the oldest make room, so one
+  // account cannot have the server posting to thousands of addresses on every message.
+  const mine = await prisma.pushSubscription.findMany({
+    where: { userId: user.id, endpoint: { not: subscription.endpoint } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+    skip: MAX_SUBSCRIPTIONS_PER_USER - 1,
+  });
+  if (mine.length > 0) await prisma.pushSubscription.deleteMany({ where: { id: { in: mine.map((row) => row.id) } } });
 
   await prisma.pushSubscription.upsert({
     where: { endpoint: subscription.endpoint },
