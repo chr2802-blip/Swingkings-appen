@@ -48,10 +48,10 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
     calendarUrl = url.toString();
   }
 
-  const photo = await readPhotoChoice(formData, user.teamId);
+  const before = await prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { photoId: true } });
+  const photo = await readPhotoChoice(formData, user.teamId, before.photoId);
   if (!photo.ok) return fail(photo.error);
 
-  const before = await prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { photoId: true } });
   await prisma.team.update({
     where: { id: user.teamId },
     data: {
