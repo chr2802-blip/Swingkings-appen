@@ -57,17 +57,23 @@ export default async function OverviewPage() {
   const kingNames = kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?");
   const month = readInZone(new Date(), "MMMM");
   /**
-   * The banner holds two rows of three tiles. The first is fixed: the balance, the next
-   * activity and this person's open tasks. The second holds the things waiting on them
-   * (in this order, skipping those at zero), with the month's bødekonge filling a free place.
+   * The banner is one row of three tiles. The balance is always first; the other two are
+   * the first of these that are waiting on this person (skipping zeros): polls without
+   * their vote, new posts, challenges waiting on them, their open tasks. Free places go to
+   * the next activity, then the month's bødekonge.
    */
   const waiting = [
     { kind: "count" as const, count: pollsWaiting, href: "#feed", title: pollsWaiting === 1 ? "Afstemning" : "Afstemninger", note: "mangler dit svar" },
     { kind: "count" as const, count: newPosts, href: "#feed", title: newPosts === 1 ? "Nyt opslag" : "Nye opslag", note: "i feedet" },
     { kind: "count" as const, count: waitingOnMe, href: "/boder/udfordringer", title: waitingOnMe === 1 ? "Udfordring" : "Udfordringer", note: "venter på dig" },
   ].filter((tile) => tile.count > 0);
-  const tiles: (typeof waiting[number] | { kind: "king" })[] = waiting.slice(0, 2);
-  tiles.push(waiting.length > 2 ? waiting[2] : { kind: "king" });
+  type Tile = (typeof waiting)[number] | { kind: "tasks" } | { kind: "next" } | { kind: "king" };
+  const tiles: Tile[] = [
+    ...waiting,
+    ...(myTaskCount > 0 ? [{ kind: "tasks" as const }] : []),
+    { kind: "next" as const },
+    { kind: "king" as const },
+  ].slice(0, 2);
   const nextDay = nextMatch ? relativeDay(nextMatch.startsAt) : null;
   const tasksHref = firstTask?.matchId ? `/aktiviteter/${firstTask.matchId}` : "/aktiviteter";
   const firstName = user.name.split(" ")[0];
@@ -87,32 +93,34 @@ export default async function OverviewPage() {
               <p className={`text-2xl leading-tight font-semibold ${owes > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(owes)}</p>
               <p className="truncate text-xs text-slate-500">{owes > 0 ? "skylder du" : "intet at betale"}</p>
             </Link>
-            <Link href={nextMatch ? `/aktiviteter/${nextMatch.id}` : "/aktiviteter"} className="press-card min-w-0 bg-white px-3 py-3">
-              <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-                {nextMatch?.kind === "MATCH" ? "Næste kamp" : "Næste aktivitet"}
-              </p>
-              <p className="truncate text-2xl leading-tight font-semibold text-[var(--accent-text)]">
-                {nextDay ? nextDay.charAt(0).toUpperCase() + nextDay.slice(1) : "Ingen"}
-              </p>
-              <p className="truncate text-xs text-slate-500">
-                {nextMatch
-                  ? `${readInZone(nextMatch.startsAt, "HH:mm")} · ${
-                      nextMatch.kind === "MATCH" && nextMatch.opponent
-                        ? `${nextMatch.isHome === false ? "ude mod" : nextMatch.isHome ? "hjemme mod" : "mod"} ${nextMatch.opponent}`
-                        : activityName(nextMatch)
-                    }`
-                  : "i kalenderen"}
-              </p>
-            </Link>
-            <Link href={tasksHref} className="press-card min-w-0 bg-white px-3 py-3">
-              <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
-                {myTaskCount === 1 ? "Opgave" : "Opgaver"}
-              </p>
-              <p className={`text-2xl leading-tight font-semibold ${myTaskCount > 0 ? "text-amber-600" : "text-emerald-700"}`}>{myTaskCount}</p>
-              <p className="truncate text-xs text-slate-500">{myTaskCount > 0 ? "til dig" : "ingen lige nu"}</p>
-            </Link>
             {tiles.map((tile) =>
-              tile.kind === "king" ? (
+              tile.kind === "next" ? (
+                <Link key="next" href={nextMatch ? `/aktiviteter/${nextMatch.id}` : "/aktiviteter"} className="press-card min-w-0 bg-white px-3 py-3">
+                  <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                    {nextMatch?.kind === "MATCH" ? "Næste kamp" : "Næste aktivitet"}
+                  </p>
+                  <p className="truncate text-2xl leading-tight font-semibold text-[var(--accent-text)]">
+                    {nextDay ? nextDay.charAt(0).toUpperCase() + nextDay.slice(1) : "Ingen"}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {nextMatch
+                      ? `${readInZone(nextMatch.startsAt, "HH:mm")} · ${
+                          nextMatch.kind === "MATCH" && nextMatch.opponent
+                            ? `${nextMatch.isHome === false ? "ude mod" : nextMatch.isHome ? "hjemme mod" : "mod"} ${nextMatch.opponent}`
+                            : activityName(nextMatch)
+                        }`
+                      : "i kalenderen"}
+                  </p>
+                </Link>
+              ) : tile.kind === "tasks" ? (
+                <Link key="tasks" href={tasksHref} className="press-card min-w-0 bg-white px-3 py-3">
+                  <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                    {myTaskCount === 1 ? "Opgave" : "Opgaver"}
+                  </p>
+                  <p className={`text-2xl leading-tight font-semibold ${myTaskCount > 0 ? "text-amber-600" : "text-emerald-700"}`}>{myTaskCount}</p>
+                  <p className="truncate text-xs text-slate-500">{myTaskCount > 0 ? "til dig" : "ingen lige nu"}</p>
+                </Link>
+              ) : tile.kind === "king" ? (
                 <Link key="king" href="/boder" className="press-card min-w-0 bg-[var(--gold-tint)] px-3 py-3">
                   <p className="flex items-center gap-1 truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                     <Crown className="h-3.5 w-3.5" />
