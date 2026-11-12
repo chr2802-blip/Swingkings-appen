@@ -28,6 +28,8 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
           </div>
           <PostMenu postId={post.id} canDelete={post.author.id === viewerId || admin} poll={post.poll} />
         </div>
+        {/* What the author wrote comes first, above pictures, poll, likes and comments. */}
+        {post.body && <p className="px-4 pb-3 text-sm whitespace-pre-line">{post.body}</p>}
         {post.photoIds.length > 0 && (
           <PhotoCarousel photoIds={post.photoIds} alt={post.body ?? `Billede fra ${post.author.name}`} />
         )}
@@ -69,7 +71,6 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
               </p>
             )}
           </div>
-          {post.body && <p className="text-sm whitespace-pre-line">{post.body}</p>}
         </div>
       </Card>
     </PostState>

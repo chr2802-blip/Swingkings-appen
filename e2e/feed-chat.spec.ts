@@ -88,6 +88,10 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   await loginAs(bo);
   await page.goto("/oversigt");
   await expect(page.getByRole("radio", { name: "Frederik" }).locator("xpath=ancestor::ul[1]")).toHaveClass(/grid-cols-2/);
+  // The post's text sits above the poll.
+  const bodyBox = await page.getByText("Kampens spiller").boundingBox();
+  const questionBox = await page.getByText("Hvem var bedst?").boundingBox();
+  expect(bodyBox!.y).toBeLessThan(questionBox!.y);
   // Bo has not voted, so the menu offers nothing about the poll — and Bo did not write the post.
   await expect(page.getByRole("button", { name: "Handlinger" })).toHaveCount(0);
 

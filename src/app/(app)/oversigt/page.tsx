@@ -129,7 +129,9 @@ export default async function OverviewPage() {
                     <Crown className="h-3.5 w-3.5" />
                     Bødekonge
                   </p>
-                  <p className="font-display truncate text-2xl leading-tight">{kingNames.length > 0 ? kingNames.join(" & ") : "Ledig"}</p>
+                  {/* Smaller than the other tiles' figures, so a name fits a third of a phone; the
+                      line height keeps the tile as tall as its neighbours. */}
+                  <p className="font-display truncate text-lg leading-[1.875rem]">{kingNames.length > 0 ? kingNames.join(" & ") : "Ledig"}</p>
                   <p className="truncate text-xs text-slate-500">{kingNames.length > 0 ? `${kr(kings.kr)} i ${month}` : `ingen bøder i ${month}`}</p>
                 </Link>
               ) : (
