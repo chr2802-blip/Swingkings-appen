@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { MAX_PHOTO_BYTES, MAX_THUMB_BYTES } from "@/lib/photo-file";
 import { storePhoto, sweepUnclaimedPhotos } from "@/lib/photos";
-import { checkRateLimit, recordFailedAttempt } from "@/lib/rate-limit";
+import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
   const limit = await checkRateLimit("photo", user.id);
   if (!limit.allowed) return refuse(`For mange billeder. Prøv igen om ${limit.retryAfterMinutes} min.`, 429);
-  await recordFailedAttempt("photo", user.id);
+  await recordAttempt("photo", user.id);
 
   let form: FormData;
   try {

@@ -9,7 +9,8 @@ import { requireSuperAdmin, requireTeamUser, requireUser } from "@/lib/auth";
 import { assertTeamAdmin, canAccessTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { readForm, requiredText, wholeNumber } from "@/lib/form";
-import { generateInviteCode, hashInviteCode } from "@/lib/invite-code";
+import { generateLinkToken, hashLinkToken, joinPath } from "@/lib/invite-links";
+import { LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import { discardReplaced, readPhotoChoice } from "@/lib/photos";
 import { normalizeCalendarUrl } from "@/lib/ical";
 import { THEMES } from "@/lib/theme";
@@ -65,46 +66,46 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
   return ok();
 }
 
-const inviteSchema = z.object({
-  email: z.string().trim().toLowerCase().email("Skriv en gyldig e-mail."),
-  role: z.enum(ROLES),
+const inviteLinkSchema = z.object({
+  days: z.coerce.number().refine((d) => (LINK_DAYS as readonly number[]).includes(d), "Vælg hvor længe linket gælder."),
+  maxUses: z.coerce
+    .number()
+    .refine((n) => (LINK_MAX_USES as readonly number[]).includes(n), "Vælg hvor mange der kan bruge linket."),
 });
 
-/**
- * There is no mail server: the admin gets a one-time code to pass on however they like
- * (SMS, Messenger, i omklædningsrummet). The code is stored hashed and shown once.
- */
-export async function createInvite(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
-  const form = readForm(inviteSchema, formData);
-  if (!form.ok) return fail(form.error);
-
-  const member = await teamDb(user.teamId).teamMember.findFirst({
-    where: { user: { email: form.fields.email } },
-    select: { userId: true },
-  });
-  if (member) return fail("Den e-mail er allerede på holdet.");
-
-  const code = generateInviteCode();
-  await teamDb(user.teamId).invite.create({
+async function makeInviteLink(teamId: string, createdById: string, days: number, maxUses: number) {
+  const token = generateLinkToken();
+  await teamDb(teamId).inviteLink.create({
     data: {
-      teamId: user.teamId,
-      email: form.fields.email,
-      role: form.fields.role,
-      codeHash: hashInviteCode(code),
-      expiresAt: new Date(Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000),
-      createdById: user.id,
+      teamId,
+      tokenHash: hashLinkToken(token),
+      maxUses,
+      expiresAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+      createdById,
     },
   });
-  revalidatePath("/hold");
-  return ok(`Koden er ${code}. Send den til ${form.fields.email} sammen med linket /accept-invite — den vises kun nu.`);
+  return joinPath(token);
 }
 
-export async function revokeInvite(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+/**
+ * There is no mail server: the admin gets a link to post wherever the team talks (SMS,
+ * Messenger…). Only its hash is stored, so the note carrying the path is the one time it
+ * is shown; the browser puts its own origin in front of it.
+ */
+export async function createInviteLink(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   assertTeamAdmin(user, user.teamId);
-  await teamDb(user.teamId).invite.deleteMany({ where: { id: String(formData.get("inviteId") ?? "") } });
+  const form = readForm(inviteLinkSchema, formData);
+  if (!form.ok) return fail(form.error);
+  const path = await makeInviteLink(user.teamId, user.id, form.fields.days, form.fields.maxUses);
+  revalidatePath("/hold");
+  return ok(path);
+}
+
+export async function revokeInviteLink(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  assertTeamAdmin(user, user.teamId);
+  await teamDb(user.teamId).inviteLink.deleteMany({ where: { id: String(formData.get("linkId") ?? "") } });
   revalidatePath("/hold");
   return ok();
 }
@@ -134,7 +135,7 @@ export async function updateMember(_prev: ActionResult, formData: FormData): Pro
 
   if (member.role === "ADMIN" && form.fields.role !== "ADMIN") {
     const admins = await db.teamMember.count({ where: { role: "ADMIN" } });
-    if (admins <= 1) return fail("Holdet skal have mindst én træner/holdleder.");
+    if (admins <= 1) return fail("Holdet skal have mindst én admin.");
   }
 
   await db.teamMember.updateMany({
@@ -158,7 +159,7 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
   const member = await db.teamMember.findFirst({ where: { userId } });
   if (!member) return ok();
   if (member.role === "ADMIN" && (await db.teamMember.count({ where: { role: "ADMIN" } })) <= 1) {
-    return fail("Holdet skal have mindst én træner/holdleder.");
+    return fail("Holdet skal have mindst én admin.");
   }
   await db.teamMember.deleteMany({ where: { userId } });
   // Their open jobs on this team go back to nobody, rather than waiting on somebody gone.
@@ -169,12 +170,12 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
 
 const createTeamSchema = z.object({
   name: requiredText("Giv holdet et navn."),
-  adminEmail: z.string().trim().toLowerCase().email("Skriv trænerens e-mail.").optional().or(z.literal("")),
+  adminLink: z.enum(["on"]).optional(),
 });
 
 /**
- * The super admin creates a team and, optionally, invites its first admin. They join it
- * themselves only if no admin email is given — somebody has to be able to run it.
+ * The super admin creates a team and, optionally, a one-use link for its first coach.
+ * They join it themselves only if no link is asked for — somebody has to be able to run it.
  */
 export async function createTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireSuperAdmin();
@@ -182,26 +183,17 @@ export async function createTeam(_prev: ActionResult, formData: FormData): Promi
   if (!form.ok) return fail(form.error);
 
   const team = await prisma.team.create({ data: { name: form.fields.name } });
-  let note = `${team.name} er oprettet.`;
-  if (form.fields.adminEmail) {
-    const code = generateInviteCode();
-    await prisma.invite.create({
-      data: {
-        teamId: team.id,
-        email: form.fields.adminEmail,
-        role: "ADMIN",
-        codeHash: hashInviteCode(code),
-        expiresAt: new Date(Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000),
-        createdById: user.id,
-      },
-    });
-    note += ` Træneren (${form.fields.adminEmail}) kan oprette sig med koden ${code}.`;
-  } else {
-    await prisma.teamMember.create({ data: { teamId: team.id, userId: user.id, role: "ADMIN" } });
-    await prisma.user.update({ where: { id: user.id }, data: { activeTeamId: team.id } });
+  if (form.fields.adminLink) {
+    // One place: the coach joins as a player, and is made admin under Holdindstillinger
+    // (the super admin can open any team's).
+    const path = await makeInviteLink(team.id, user.id, INVITE_DAYS, 1);
+    revalidatePath("/", "layout");
+    return ok(path);
   }
+  await prisma.teamMember.create({ data: { teamId: team.id, userId: user.id, role: "ADMIN" } });
+  await prisma.user.update({ where: { id: user.id }, data: { activeTeamId: team.id } });
   revalidatePath("/", "layout");
-  return ok(note);
+  return ok(`${team.name} er oprettet, og du er træner på det.`);
 }
 
 export async function deleteTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {

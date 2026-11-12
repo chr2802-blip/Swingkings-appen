@@ -36,13 +36,16 @@ const activitySchema = z.object({
 });
 
 /**
+ * Activities, the calendar sync and putting jobs on an activity are for everybody on the
+ * team. The standard jobs themselves (the templates) and the calendar link are team
+ * settings, for admins.
+ *
  * An activity typed in by hand: a cup game or a friendly, an extra training, the
  * afslutningsfest. Activities from the feed are added by the sync. A new one can be
  * given standard jobs (the ticked templates) and the jobs of an earlier activity.
  */
 export async function saveActivity(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const form = readForm(activitySchema, formData);
   if (!form.ok) return fail(form.error);
   const { kind, opponent } = form.fields;
@@ -98,7 +101,6 @@ export async function saveActivity(_prev: ActionResult, formData: FormData): Pro
 
 export async function deleteActivity(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const id = String(formData.get("id") ?? "");
   const db = teamDb(user.teamId);
   const activity = await db.match.findFirst({ where: { id }, select: { source: true } });
@@ -113,7 +115,6 @@ export async function deleteActivity(_prev: ActionResult, formData: FormData): P
 
 export async function syncCalendar(): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const result = await syncTeamCalendar(user.teamId, user.id);
   if (!result.ok) return fail(result.error);
   refresh();
@@ -136,7 +137,6 @@ async function activityFrom(teamId: string, formData: FormData) {
 /** Adds the ticked standard jobs to one activity and hands them out. */
 export async function addStandardTasks(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const activity = await activityFrom(user.teamId, formData);
   if (!activity) return fail("Aktiviteten findes ikke.");
   const picked = pickedTemplates(formData);
@@ -150,7 +150,6 @@ export async function addStandardTasks(_prev: ActionResult, formData: FormData):
 /** Copies the jobs of an earlier activity onto this one and hands them out afresh. */
 export async function copyTasks(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertTeamAdmin(user, user.teamId);
   const activity = await activityFrom(user.teamId, formData);
   if (!activity) return fail("Aktiviteten findes ikke.");
   const fromId = String(formData.get("copyFromId") ?? "");

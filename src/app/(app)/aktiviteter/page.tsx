@@ -42,8 +42,8 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
         tasks: { where: { doneAt: null }, select: { id: true } },
       },
     }),
-    admin ? templateOptions(user.teamId) : [],
-    admin ? copyableActivities(user.teamId) : [],
+    templateOptions(user.teamId),
+    copyableActivities(user.teamId),
   ]);
 
   return (
@@ -58,12 +58,10 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
               : undefined
         }
         action={
-          admin && (
-            <>
-              {team.calendarUrl && <SyncButton />}
-              <ActivityDialog templates={templates} copyable={copyable} />
-            </>
-          )
+          <>
+            {team.calendarUrl && <SyncButton />}
+            <ActivityDialog templates={templates} copyable={copyable} />
+          </>
         }
       />
       <Tabs

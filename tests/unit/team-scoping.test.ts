@@ -10,7 +10,7 @@ describe("teamDb", () => {
 
   it("scopes everything carrying a team and refuses what only reads like it does", () => {
     const verdict = Object.fromEntries(classifyModels().map((m) => [m.model, m.verdict]));
-    for (const model of ["Fine", "Payment", "Challenge", "Match", "Task", "ChatMessage", "Post", "Poll", "Photo", "TeamMember"]) {
+    for (const model of ["Fine", "Payment", "Challenge", "Match", "Task", "ChatMessage", "Post", "Poll", "Photo", "TeamMember", "InviteLink"]) {
       expect(verdict[model]).toBe("scope");
     }
     for (const model of ["User", "TaskAssignee", "PostLike", "PostComment", "PostPhoto", "PollOption", "PollVote", "PollBallot"]) {

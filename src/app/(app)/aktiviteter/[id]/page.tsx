@@ -1,5 +1,5 @@
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam, canManageFines } from "@/lib/access";
+import { canManageFines } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { prisma } from "@/lib/prisma";
 import { foundOr404 } from "@/lib/scoped";
@@ -24,7 +24,6 @@ const person = { select: { id: true, name: true, photoId: true } } as const;
 export default async function ActivityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireTeamUser();
-  const admin = canAdministerTeam(user, user.teamId);
   const manages = canManageFines(user, user.teamId);
   const db = teamDb(user.teamId);
 
@@ -46,10 +45,10 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
   );
   const [roster, board, team, templates, copyable] = await Promise.all([
     teamRoster(user.teamId),
-    manages ? fineBoard(user.teamId) : null,
+    fineBoard(user.teamId),
     prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true } }),
-    admin ? templateOptions(user.teamId) : [],
-    admin ? copyableActivities(user.teamId, match.id) : [],
+    templateOptions(user.teamId),
+    copyableActivities(user.teamId, match.id),
   ]);
   const label = activityName(match);
   const option = [{ id: match.id, label: `${label} · ${kickoffLabel(match.startsAt)}` }];
@@ -59,7 +58,6 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
       <PageHeader
         title={match.kind === "MATCH" && match.opponent ? `${match.isHome === false ? "Ude mod" : match.isHome ? "Hjemme mod" : "Mod"} ${match.opponent}` : match.title}
         action={
-          admin &&
           match.source === "MANUAL" && (
             <ActivityDialog
               activity={{
@@ -93,7 +91,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
 
       <section className="mb-8">
         <SectionTitle action={<TaskDialog members={roster} activityId={match.id} />}>Opgaver</SectionTitle>
-        {admin && (templates.length > 0 || copyable.length > 0) && (
+        {(templates.length > 0 || copyable.length > 0) && (
           <div className="mb-3 flex flex-wrap gap-2">
             {templates.length > 0 && <StandardTasksDialog activityId={match.id} templates={templates} />}
             {copyable.length > 0 && <CopyTasksDialog activityId={match.id} copyable={copyable} />}
@@ -112,43 +110,39 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         )}
       </section>
 
-      {(match.fines.length > 0 || manages) && (
-        <section className="mb-8">
-          <SectionTitle
-            action={
-              board && (
-                <GiveFineDialog
-                  members={board.roster}
-                  fineTypes={board.fineTypes}
-                  finePriceKr={board.finePriceKr}
-                  matches={option}
-                  defaultMatchId={match.id}
-                />
-              )
-            }
-          >
-            {match.kind === "MATCH" ? "Bøder fra kampen" : "Bøder"}
-          </SectionTitle>
-          {match.fines.length === 0 ? (
-            <EmptyState>Ingen bøder endnu.</EmptyState>
-          ) : (
-            <Card padded={false}>
-              <ul className="divide-y divide-slate-100">
-                {match.fines.map((fine) => (
-                  <li key={fine.id} className="flex justify-between gap-3 px-4 py-3 text-sm">
-                    <span>
-                      <strong>{fine.player.name}</strong> · {fine.reason}
-                    </span>
-                    <span className="shrink-0 text-slate-500">
-                      {fineUnits(fine.units)} · {kr(fineAmount(fine))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </section>
-      )}
+      <section className="mb-8">
+        <SectionTitle
+          action={
+            <GiveFineDialog
+              members={board.roster}
+              fineTypes={board.fineTypes}
+              finePriceKr={board.finePriceKr}
+              matches={option}
+              defaultMatchId={match.id}
+            />
+          }
+        >
+          {match.kind === "MATCH" ? "Bøder fra kampen" : "Bøder"}
+        </SectionTitle>
+        {match.fines.length === 0 ? (
+          <EmptyState>Ingen bøder endnu.</EmptyState>
+        ) : (
+          <Card padded={false}>
+            <ul className="divide-y divide-slate-100">
+              {match.fines.map((fine) => (
+                <li key={fine.id} className="flex justify-between gap-3 px-4 py-3 text-sm">
+                  <span>
+                    <strong>{fine.player.name}</strong> · {fine.reason}
+                  </span>
+                  <span className="shrink-0 text-slate-500">
+                    {fineUnits(fine.units)} · {kr(fineAmount(fine))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+      </section>
 
       {match.challenges.length > 0 && (
         <section className="mb-8">
@@ -167,7 +161,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         </section>
       )}
 
-      {admin && match.source === "MANUAL" && (
+      {match.source === "MANUAL" && (
         <ActionButton
           action={deleteActivity}
           fields={{ id: match.id }}
