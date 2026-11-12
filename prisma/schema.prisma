@@ -1,5 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // One SQL statement per read, nested relations included, instead of one per level:
+  // every round trip to the database is paid in latency on each page.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -171,6 +174,8 @@ model TeamMember {
    * never washes the kit can be on the team without being picked for it.
    */
   takesTasks  Boolean    @default(true)
+  /// When this person last had the feed in view; posts after it are "nye opslag".
+  feedSeenAt  DateTime?
   createdAt   DateTime   @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -1,9 +1,35 @@
 import { teamDb } from "./team-db";
+import { FEED_PAGE } from "./feed-page";
 import { isOpen, tally } from "./polls";
 import { kickoffLabel, readInZone } from "./time";
 import type { PollViewData } from "@/components/poll-view";
 
+export { FEED_PAGE };
+
 const person = { select: { id: true, name: true, photoId: true } } as const;
+
+/**
+ * Where a page of the feed ends: the last post shown, by its place in the order. Read by
+ * value, not as a row, so a post deleted in the meantime does not lose the place.
+ */
+export type FeedCursor = { createdAt: Date; id: string };
+
+export function encodeFeedCursor(post: FeedCursor): string {
+  return `${post.createdAt.toISOString()}_${post.id}`;
+}
+
+export function decodeFeedCursor(value: string): FeedCursor | null {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)_([A-Za-z0-9_-]{1,64})$/.exec(value);
+  if (!match) return null;
+  const createdAt = new Date(match[1]!);
+  return Number.isNaN(createdAt.getTime()) ? null : { createdAt, id: match[2]! };
+}
+
+/** The cursor after a page, or null when the page was the last one. */
+export function nextFeedCursor(posts: FeedCursor[], take: number): string | null {
+  const last = posts.at(-1);
+  return last && posts.length === take ? encodeFeedCursor(last) : null;
+}
 
 /**
  * The feed's posts, with each poll already turned into what the viewer may see.
@@ -14,9 +40,16 @@ const person = { select: { id: true, name: true, photoId: true } } as const;
  * browser before the viewer has voted or the poll has closed, so it cannot be read out
  * of the page either.
  */
-export async function feedPosts(teamId: string, viewer: { id: string; canAdminister: boolean }, take = 30, now = new Date()) {
+export async function feedPosts(
+  teamId: string,
+  viewer: { id: string; canAdminister: boolean },
+  { take = FEED_PAGE, after = null, now = new Date() }: { take?: number; after?: FeedCursor | null; now?: Date } = {},
+) {
   const posts = await teamDb(teamId).post.findMany({
-    orderBy: { createdAt: "desc" },
+    where: after
+      ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] }
+      : undefined,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take,
     select: {
       id: true,

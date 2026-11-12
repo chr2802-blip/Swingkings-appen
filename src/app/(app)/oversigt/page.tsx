@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireTeamUser } from "@/lib/auth";
 import { teamDb } from "@/lib/team-db";
 import Image from "next/image";
@@ -9,17 +10,19 @@ import { OPEN_TASK } from "@/lib/tasks";
 import { LISTED_ACTIVITY } from "@/lib/activity-data";
 import { activityName } from "@/lib/activity";
 import { kickoffLabel, readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
-import { Badge, Card, SectionTitle } from "@/components/ui";
+import { Card, SectionTitle } from "@/components/ui";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
-import { FineKing } from "@/components/crest";
+import { Crown } from "@/components/crest";
+import { HomeBanner } from "@/components/home-banner";
+import { FeedSkeleton } from "@/components/skeleton";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, kings, nextMatch, myTasks, openChallenges, pollsWaiting] = await Promise.all([
+  const [board, kings, nextMatch, myTasks, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
@@ -42,6 +45,7 @@ export default async function OverviewPage() {
       take: 5,
       select: TASK_SELECT,
     }),
+    db.task.count({ where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } } }),
     db.challenge.findMany({
       where: { status: { in: ["PENDING", "ACCEPTED"] }, OR: [{ challengerId: user.id }, { opponentId: user.id }] },
       select: { status: true, challengerId: true, opponentId: true, claimedById: true, claimedWinnerId: true },
@@ -53,84 +57,75 @@ export default async function OverviewPage() {
         ballots: { none: { userId: user.id } },
       },
     }),
+    db.teamMember.findFirst({ where: { userId: user.id }, select: { feedSeenAt: true, createdAt: true } }).then((member) =>
+      db.post.count({
+        where: { authorId: { not: user.id }, createdAt: { gt: member?.feedSeenAt ?? member?.createdAt ?? new Date() } },
+      }),
+    ),
   ]);
   const mine = board.balances.find((row) => row.userId === user.id);
   const waitingOnMe = openChallenges.filter((c) => movesFor(c, user.id, false).some((m) => m !== "cancel")).length;
-  const topOwers = board.balances.filter((row) => row.owesKr > 0).slice(0, 3);
+  const owes = Math.max(0, mine?.owesKr ?? 0);
+  const kingNames = kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?");
+  const month = readInZone(new Date(), "MMMM");
+  /**
+   * The banner holds three tiles side by side: the balance always, then the two most
+   * pressing things waiting on this person (in this order, skipping those at zero), and
+   * the month's bødekonge filling a free place.
+   */
+  const waiting = [
+    { kind: "count" as const, count: pollsWaiting, href: "#feed", title: pollsWaiting === 1 ? "Afstemning" : "Afstemninger", note: "mangler dit svar" },
+    { kind: "count" as const, count: newPosts, href: "#feed", title: newPosts === 1 ? "Nyt opslag" : "Nye opslag", note: "i feedet" },
+    { kind: "count" as const, count: waitingOnMe, href: "/boder/udfordringer", title: waitingOnMe === 1 ? "Udfordring" : "Udfordringer", note: "venter på dig" },
+    { kind: "count" as const, count: myTaskCount, href: "/opgaver", title: myTaskCount === 1 ? "Opgave" : "Opgaver", note: "til dig" },
+  ].filter((tile) => tile.count > 0);
+  const tiles: (typeof waiting[number] | { kind: "king" })[] = waiting.slice(0, 2);
+  if (tiles.length < 2) tiles.push({ kind: "king" });
   const firstName = user.name.split(" ")[0];
 
   return (
     <div className="space-y-8">
-      <div className="stripes-wide relative overflow-hidden rounded-3xl border border-[var(--accent-line)] px-5 py-6 shadow-sm">
-        <div className="relative z-10 max-w-[70%]">
-          <h1 className="text-3xl">Hej {firstName} 👋</h1>
-          <p className="mt-1 text-sm font-medium text-slate-700">Her er det vigtigste på {user.teamName}.</p>
+      <HomeBanner>
+        <div className="mx-auto max-w-5xl pt-5 pr-[max(1rem,env(safe-area-inset-right))] pb-6 pl-[max(1rem,env(safe-area-inset-left))]">
+          <div className="flex items-center justify-between gap-3 sm:max-w-xl">
+            <h1 className="truncate text-2xl">Hej {firstName} 👋</h1>
+            <Image src="/logo.png" alt="" width={512} height={512} className="h-12 w-12 shrink-0 rotate-12 drop-shadow-md" />
+          </div>
+
+          <div
+            className={`mt-3 grid divide-x divide-slate-100 overflow-hidden rounded-2xl border border-[var(--accent-line)] bg-white shadow-sm sm:max-w-xl ${
+              tiles.length === 2 ? "grid-cols-3" : "grid-cols-2"
+            }`}
+          >
+            <Link href="/boder" className="press-card min-w-0 px-3 py-3">
+              <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Bødekonto</p>
+              <p className={`text-2xl leading-tight font-semibold ${owes > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(owes)}</p>
+              <p className="truncate text-xs text-slate-500">{owes > 0 ? "skylder du" : "intet at betale"}</p>
+            </Link>
+            {tiles.map((tile) =>
+              tile.kind === "king" ? (
+                <Link key="king" href="/boder" className="press-card min-w-0 bg-[var(--gold-tint)] px-3 py-3">
+                  <p className="flex items-center gap-1 truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                    <Crown className="h-3.5 w-3.5" />
+                    Bødekonge
+                  </p>
+                  <p className="font-display truncate text-2xl leading-tight">{kingNames.length > 0 ? kingNames.join(" & ") : "Ledig"}</p>
+                  <p className="truncate text-xs text-slate-500">{kingNames.length > 0 ? `${kr(kings.kr)} i ${month}` : `ingen bøder i ${month}`}</p>
+                </Link>
+              ) : (
+                <Link key={tile.title} href={tile.href} className="press-card min-w-0 px-3 py-3">
+                  <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">{tile.title}</p>
+                  <p className="text-2xl leading-tight font-semibold text-amber-600">{tile.count}</p>
+                  <p className="truncate text-xs text-slate-500">{tile.note}</p>
+                </Link>
+              ),
+            )}
+          </div>
         </div>
-        <Image
-          src="/logo.png"
-          alt=""
-          width={512}
-          height={512}
-          className="absolute top-1/2 -right-6 h-32 w-32 -translate-y-1/2 rotate-12 drop-shadow-md sm:right-6 sm:h-24 sm:w-24"
-        />
-      </div>
+      </HomeBanner>
 
       <InstallCard />
       <NotificationSetup compact />
-
-      {pollsWaiting > 0 && (
-        <Link
-          href="#feed"
-          className="press-card flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-          <span aria-hidden className="text-xl">
-            🗳️
-          </span>
-          <span className="flex-1">
-            {pollsWaiting === 1 ? "1 afstemning venter på din stemme" : `${pollsWaiting} afstemninger venter på din stemme`}
-          </span>
-          <span aria-hidden>→</span>
-        </Link>
-      )}
-
-      <Link href="/boder" className="press-card block rounded-2xl">
-        <FineKing
-          names={kings.userIds.map((id) => board.people.get(id)?.name.split(" ")[0] ?? "?")}
-          amount={kr(kings.kr)}
-          month={readInZone(new Date(), "MMMM")}
-        />
-      </Link>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link href="/boder" className="press-card block rounded-2xl">
-          <Card className="h-full">
-            <SectionTitle>Din bødekonto</SectionTitle>
-            <p className={`text-3xl font-semibold ${mine && mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>
-              {kr(Math.max(0, mine?.owesKr ?? 0))}
-            </p>
-            <p className="text-sm text-slate-500">{mine && mine.owesKr > 0 ? "skylder du til kassen" : "Du skylder ingenting"}</p>
-            {topOwers.length > 0 && (
-              <p className="mt-3 text-xs text-slate-500">
-                Største gæld:{" "}
-                {topOwers.map((row) => `${board.people.get(row.userId)?.name.split(" ")[0]} (${kr(row.owesKr)})`).join(", ")}
-              </p>
-            )}
-          </Card>
-        </Link>
-
-        <Link href="/boder/udfordringer" className="press-card block rounded-2xl">
-          <Card className="h-full">
-            <SectionTitle>Udfordringer</SectionTitle>
-            <p className="text-3xl font-semibold">{openChallenges.length}</p>
-            <p className="text-sm text-slate-500">åbne udfordringer med dig</p>
-            {waitingOnMe > 0 && (
-              <p className="mt-3">
-                <Badge tone="amber">{waitingOnMe} venter på dit svar</Badge>
-              </p>
-            )}
-          </Card>
-        </Link>
-      </div>
 
       <section>
         <SectionTitle
@@ -183,7 +178,10 @@ export default async function OverviewPage() {
         )}
       </section>
 
-      <TeamFeed user={user} />
+      {/* The feed is the heaviest read on the page: stream it in after the rest. */}
+      <Suspense fallback={<FeedSkeleton />}>
+        <TeamFeed user={user} />
+      </Suspense>
     </div>
   );
 }

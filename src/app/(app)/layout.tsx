@@ -6,14 +6,15 @@ import { TeamMenu } from "@/components/team-menu";
 import { Avatar } from "@/components/photo";
 import Link from "next/link";
 import { StripeBand } from "@/components/crest";
+import { ScrollBars } from "@/components/scroll-bars";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const showAdmin = user.role === "SUPER_ADMIN";
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-30 bg-[var(--band)] pt-[env(safe-area-inset-top)] text-[var(--band-text)]">
+    <div className="min-h-screen overflow-x-clip">
+      <header className="app-topbar sticky top-0 z-30 bg-[var(--band)] pt-[env(safe-area-inset-top)] text-[var(--band-text)]">
         <div className="mx-auto flex max-w-5xl items-center gap-x-6 py-2.5 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
           <TeamMenu
             teams={user.teams}
@@ -36,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="animate-page-in">{children}</div>
       </main>
 
+      <ScrollBars />
       {user.teamId && <BottomNav />}
     </div>
   );
