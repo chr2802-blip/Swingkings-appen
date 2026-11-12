@@ -137,6 +137,14 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   await prisma.task.create({
     data: { teamId: team.id, title: "Bestil holdfest-lokale", description: "Ring til klubhuset", matchId: endOfSeason.id, dueAt: day(9, 23), createdById: mads.id, assignees: { create: [{ userId: mads.id }] } },
   });
+  await prisma.activitySignup.createMany({
+    data: [
+      { teamId: team.id, matchId: endOfSeason.id, userId: mads.id, going: true },
+      { teamId: team.id, matchId: endOfSeason.id, userId: jonas.id, going: true },
+      { teamId: team.id, matchId: endOfSeason.id, userId: emil.id, going: true },
+      { teamId: team.id, matchId: endOfSeason.id, userId: noah.id, going: false },
+    ],
+  });
   await prisma.task.create({ data: { teamId: team.id, title: "Køb ind til festen", matchId: endOfSeason.id, dueAt: day(26, 23), createdById: jonas.id } });
 
   const chat = [
