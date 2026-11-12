@@ -125,21 +125,34 @@ export function pollView(
     hasVoted,
     myChoices: poll.anonymous ? [] : poll.votes.filter((v) => v.voterId === viewer.id).map((v) => v.optionId),
     canClose: authorId === viewer.id || viewer.canAdminister,
-    options: poll.options.map((option, index) => {
-      const count = counts[index]!;
-      return {
-        id: option.id,
-        text: option.text,
-        isPlayer: option.playerId !== null,
-        playerPhotoId: option.player?.photoId ?? null,
-        votes: reveal ? count.votes : 0,
-        share: reveal ? count.share : 0,
-        leading: reveal && count.leading,
-        voters:
-          reveal && !poll.anonymous
-            ? poll.votes.filter((v) => v.optionId === option.id && v.voter).map((v) => v.voter!)
-            : [],
-      };
-    }),
+    options: sortByVotes(
+      poll.options.map((option, index) => {
+        const count = counts[index]!;
+        return {
+          id: option.id,
+          text: option.text,
+          isPlayer: option.playerId !== null,
+          playerPhotoId: option.player?.photoId ?? null,
+          votes: reveal ? count.votes : 0,
+          share: reveal ? count.share : 0,
+          leading: reveal && count.leading,
+          voters:
+            reveal && !poll.anonymous
+              ? poll.votes.filter((v) => v.optionId === option.id && v.voter).map((v) => v.voter!)
+              : [],
+        };
+      }),
+    ),
   };
+}
+
+/**
+ * Most votes first once the result is shown; ties keep the order the answers were
+ * written in. Before that every count is 0, so the written order stands.
+ */
+export function sortByVotes<T extends { votes: number }>(options: T[]): T[] {
+  return options
+    .map((option, index) => ({ option, index }))
+    .sort((a, b) => b.option.votes - a.option.votes || a.index - b.index)
+    .map(({ option }) => option);
 }
