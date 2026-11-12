@@ -14,6 +14,7 @@ import { LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import { discardReplaced, readPhotoChoice } from "@/lib/photos";
 import { normalizeCalendarUrl } from "@/lib/ical";
 import { THEMES } from "@/lib/theme";
+import { createDemoTeam, removeDemoTeam } from "@/lib/demo-team";
 
 const ROLES = ["ADMIN", "TREASURER", "PLAYER"] as const;
 const INVITE_DAYS = 14;
@@ -201,6 +202,26 @@ export async function deleteTeam(_prev: ActionResult, formData: FormData): Promi
   await prisma.team.deleteMany({ where: { id: String(formData.get("teamId") ?? "") } });
   revalidatePath("/", "layout");
   return ok();
+}
+
+/**
+ * Test data in production: the made-up team "Swingkings Demo" (`src/lib/demo-team.ts`),
+ * with the super admin as its admin. Pressed again, it is made afresh. Its players are
+ * made up and cannot log in.
+ */
+export async function createDemoTeamAction(): Promise<ActionResult> {
+  const user = await requireSuperAdmin();
+  await createDemoTeam({ joinUserId: user.id });
+  revalidatePath("/", "layout");
+  return ok("Testholdet er oprettet, og du er admin på det.");
+}
+
+/** Takes the test team and its made-up players away again; nothing else is touched. */
+export async function removeDemoTeamAction(): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const gone = await removeDemoTeam();
+  revalidatePath("/", "layout");
+  return ok(gone.teams ? "Testholdet og dets spillere er slettet." : "Der var intet testhold.");
 }
 
 /** A super admin looks into any team without joining it. */

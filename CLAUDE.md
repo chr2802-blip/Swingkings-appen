@@ -18,7 +18,8 @@ npm test               # vitest: unit (no DB) + integration (real Postgres, <db>
 npm run e2e            # Playwright: builds, serves on :3210 against <db>_e2e, drives Chromium
 npx playwright test e2e/x.spec.ts   # one spec, once `npm run e2e:build` has built
 npm run db:migrate     # new migration after a schema change
-npm run db:demo        # demo team for screenshots (mads@demo.swingkings.dk / demo-password)
+npm run db:demo        # demo team for screenshots (mads@demo.swingkings.dk / demo-password); -- --remove deletes it
+                       # in production: "Opret testhold" / "Slet testhold" on /admin (super admin)
 ```
 
 In a bare cloud container: `service postgresql start`, set the postgres password, and point
