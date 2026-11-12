@@ -13,7 +13,7 @@ import { teamRoster } from "@/lib/roster";
 import { castVote } from "@/lib/voting";
 import { cleanOptions, MAX_POLL_OPTIONS, MAX_POST_PHOTOS } from "@/lib/polls";
 import { parseLocalDateTime } from "@/lib/time";
-import { checkRateLimit, recordFailedAttempt } from "@/lib/rate-limit";
+import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { notifyLater } from "@/lib/notify";
@@ -32,7 +32,7 @@ export async function sendChatMessage(_prev: ActionResult, formData: FormData): 
 
   const limit = await checkRateLimit("chat", user.id);
   if (!limit.allowed) return fail("Du sender meget hurtigt. Vent lidt.");
-  await recordFailedAttempt("chat", user.id);
+  await recordAttempt("chat", user.id);
 
   await teamDb(user.teamId).chatMessage.create({
     data: { teamId: user.teamId, authorId: user.id, body: text.data ?? "", photoId: photo.photoId ?? null },

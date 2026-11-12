@@ -3,10 +3,8 @@ import { prisma } from "@/lib/prisma";
 import {
   createChallenge,
   deleteFine,
-  deletePayment,
   giveFine,
   moveChallenge,
-  recordPayment,
   removeFineType,
   saveFineType,
 } from "@/app/actions/fines";
@@ -119,10 +117,11 @@ describe("giveFine", () => {
     expect(await prisma.fine.count()).toBe(0);
   });
 
-  it("is refused to a player", async () => {
+  it("is for everybody on the team, a player included", async () => {
     const { anna, bo } = await makeSquad();
     await signIn(anna);
-    await expectDenied(() => giveFine(undefined, formData({ playerId: bo.id, reason: "Hævn" })));
+    expect(await giveFine(undefined, formData({ playerId: bo.id, reason: "Kom for sent" }))).toEqual({ ok: true, note: "Bøden er givet." });
+    expect(await prisma.fine.findFirstOrThrow()).toMatchObject({ playerId: bo.id, issuedById: anna.id });
   });
 });
 
@@ -145,6 +144,21 @@ describe("deleteFine", () => {
     });
   });
 
+  it("lets whoever gave a fine take it back, and nobody else but the fine managers", async () => {
+    const { team, anna, bo, treasurer } = await makeSquad();
+    const byAnna = await prisma.fine.create({ data: { teamId: team.id, playerId: treasurer.id, reason: "x", units: 1, unitPriceKr: 10, issuedById: anna.id } });
+    const byBo = await prisma.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "y", units: 1, unitPriceKr: 10, issuedById: bo.id } });
+    await signIn(anna);
+    expect(await deleteFine(undefined, formData({ id: byBo.id }))).toEqual({
+      ok: false,
+      error: "Kun den der gav bøden, bødekasseformanden eller en admin kan slette den.",
+    });
+    expect(await deleteFine(undefined, formData({ id: byAnna.id }))).toEqual({ ok: true });
+    await signIn(treasurer);
+    expect(await deleteFine(undefined, formData({ id: byBo.id }))).toEqual({ ok: true });
+    expect(await prisma.fine.count()).toBe(0);
+  });
+
   it("cannot delete another team's fine", async () => {
     const { treasurer } = await makeSquad();
     const other = await makeSquad("Andre");
@@ -158,48 +172,14 @@ describe("deleteFine", () => {
 });
 
 describe("payments", () => {
-  it("records a payment that brings the balance down, and deletes it again", async () => {
+  it("bring the balance down, and keep the account of somebody who has left", async () => {
     const { team, treasurer, anna } = await makeSquad();
     await prisma.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "x", units: 5, unitPriceKr: 10, issuedById: treasurer.id } });
-    await signIn(treasurer);
-    expect(await recordPayment(undefined, formData({ playerId: anna.id, amountKr: "30", note: "MobilePay" }))).toEqual({
-      ok: true,
-      note: "30 kr er registreret.",
-    });
+    await prisma.payment.create({ data: { teamId: team.id, playerId: anna.id, amountKr: 30, recordedById: treasurer.id } });
     expect((await fineBoard(team.id)).balances.find((b) => b.userId === anna.id)).toMatchObject({ finedKr: 50, paidKr: 30, owesKr: 20 });
 
-    const payment = await prisma.payment.findFirstOrThrow();
-    await deletePayment(undefined, formData({ id: payment.id }));
-    expect(await prisma.payment.count()).toBe(0);
-  });
-
-  it("takes a payment from somebody who has left but still owes", async () => {
-    const { team, treasurer, anna } = await makeSquad();
-    await prisma.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "x", units: 1, unitPriceKr: 10, issuedById: treasurer.id } });
     await prisma.teamMember.delete({ where: { userId_teamId: { userId: anna.id, teamId: team.id } } });
-    await signIn(treasurer);
-    expect((await recordPayment(undefined, formData({ playerId: anna.id, amountKr: "10" })))?.ok).toBe(true);
-
-    const board = await fineBoard(team.id);
-    expect(board.people.get(anna.id)).toMatchObject({ name: "Anna", onTeam: false });
-  });
-
-  it("refuses a stranger and a silly amount", async () => {
-    const { treasurer } = await makeSquad();
-    const other = await makeSquad("Andre");
-    await signIn(treasurer);
-    expect(await recordPayment(undefined, formData({ playerId: other.anna.id, amountKr: "10" }))).toEqual({
-      ok: false,
-      error: "Spilleren findes ikke på holdet.",
-    });
-    expect((await recordPayment(undefined, formData({ playerId: treasurer.id, amountKr: "-5" })))?.ok).toBe(false);
-  });
-
-  it("is refused to a player", async () => {
-    const { anna } = await makeSquad();
-    await signIn(anna);
-    await expectDenied(() => recordPayment(undefined, formData({ playerId: anna.id, amountKr: "10" })));
-    await expectDenied(() => deletePayment(undefined, formData({ id: "x" })));
+    expect((await fineBoard(team.id)).people.get(anna.id)).toMatchObject({ name: "Anna", onTeam: false });
   });
 });
 

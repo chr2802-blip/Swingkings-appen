@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireSuperAdmin, requireTeamUser, requireUser, signSession } from "@/lib/auth";
-import { acceptInvite, login, logout } from "@/app/actions/auth";
-import { TEST_PASSWORD, formData, joinTeam, makeInvite, makeMember, makeTeam, makeUser, signIn } from "../helpers/factories";
+import { joinWithLink, joinWithLinkAsMe, login, logout } from "@/app/actions/auth";
+import { TEST_PASSWORD, formData, joinTeam, makeInviteLink, makeMember, makeTeam, makeUser, signIn } from "../helpers/factories";
 import { expectRedirect } from "../helpers/expect";
 import { SESSION_COOKIE_NAME, cookieStore, hasSessionCookie, setClientIp } from "../helpers/next-mocks";
 
@@ -129,69 +129,79 @@ describe("the session", () => {
   });
 });
 
-describe("acceptInvite", () => {
-  async function invited(email = "ny@test.dk", role: "PLAYER" | "ADMIN" | "TREASURER" = "PLAYER") {
+describe("joining with an invitation link", () => {
+  async function linked(options: { maxUses?: number; uses?: number; expiresAt?: Date } = {}) {
     const team = await makeTeam();
     const admin = await makeMember(team.id, "Træner", "ADMIN");
-    const { invite, code } = await makeInvite({ teamId: team.id, email, createdById: admin.id, role });
-    return { team, admin, invite, code };
+    const { link, token } = await makeInviteLink({ teamId: team.id, createdById: admin.id, ...options });
+    return { team, admin, link, token };
   }
 
-  const accept = (fields: Record<string, string>) =>
-    acceptInvite(undefined, formData({ name: "Ny Spiller", password: "langt-nok-kodeord", ...fields }));
+  const join = (fields: Record<string, string>) =>
+    joinWithLink(undefined, formData({ name: "Ny Spiller", password: "langt-nok-kodeord", ...fields }));
 
-  it("creates an account, joins the team with the invited role and signs in", async () => {
-    const { team, invite, code } = await invited("ny@test.dk", "TREASURER");
-    await expectRedirect(() => accept({ email: "NY@test.dk", code: code.toLowerCase() }), "/oversigt");
+  it("makes an account, joins the team as a player, counts the place and signs in", async () => {
+    const { team, link, token } = await linked();
+    await expectRedirect(() => join({ token, email: " NY@test.dk " }), "/oversigt");
 
     const user = await prisma.user.findUniqueOrThrow({ where: { email: "ny@test.dk" }, include: { memberships: true } });
-    expect(user.memberships).toMatchObject([{ teamId: team.id, role: "TREASURER" }]);
+    expect(user.memberships).toMatchObject([{ teamId: team.id, role: "PLAYER" }]);
     expect(user.activeTeamId).toBe(team.id);
-    expect((await prisma.invite.findUniqueOrThrow({ where: { id: invite.id } })).acceptedAt).not.toBeNull();
+    expect((await prisma.inviteLink.findUniqueOrThrow({ where: { id: link.id } })).uses).toBe(1);
     expect((await getCurrentUser())?.id).toBe(user.id);
   });
 
   it("lets somebody with an account join with their existing password, and only that", async () => {
     const existing = await makeUser({ email: "ny@test.dk" });
-    const { team, code } = await invited();
-    expect(await accept({ email: "ny@test.dk", code, password: "et-andet-kodeord" })).toEqual({
-      error: "Du har allerede en konto. Skriv din nuværende adgangskode.",
+    const { team, token } = await linked();
+    expect(await join({ token, email: "ny@test.dk", password: "et-andet-kodeord" })).toEqual({
+      error: "Der findes allerede en konto med den e-mail. Skriv din nuværende adgangskode.",
     });
-    await expectRedirect(() => accept({ email: "ny@test.dk", code, password: TEST_PASSWORD }), "/oversigt");
+    await expectRedirect(() => join({ token, email: "ny@test.dk", password: TEST_PASSWORD }), "/oversigt");
     expect(await prisma.teamMember.count({ where: { userId: existing.id, teamId: team.id } })).toBe(1);
     expect(await prisma.user.count({ where: { email: "ny@test.dk" } })).toBe(1);
   });
 
-  it("refuses a wrong code, another email, an expired or a used invitation", async () => {
-    const { team, admin, code } = await invited();
-    const none = { error: "Der er ingen gyldig invitation med den e-mail og kode." };
-    expect(await accept({ email: "ny@test.dk", code: "AAAA-AAAA" })).toEqual(none);
-    expect(await accept({ email: "anden@test.dk", code })).toEqual(none);
-
-    const expired = await makeInvite({ teamId: team.id, email: "gammel@test.dk", createdById: admin.id, expiresAt: new Date(Date.now() - 1000) });
-    expect(await accept({ email: "gammel@test.dk", code: expired.code })).toEqual(none);
-    const used = await makeInvite({ teamId: team.id, email: "brugt@test.dk", createdById: admin.id, acceptedAt: new Date() });
-    expect(await accept({ email: "brugt@test.dk", code: used.code })).toEqual(none);
-    expect(await prisma.user.count()).toBe(1);
-  });
-
-  it("sends a phone without the app to /hent-appen after joining, and only there", async () => {
-    const { code } = await invited();
-    await expectRedirect(() => accept({ email: "ny@test.dk", code, next: "/hent-appen" }), "/hent-appen");
-    const second = await invited("to@test.dk");
-    await expectRedirect(() => accept({ email: "to@test.dk", code: second.code, next: "https://evil.example" }), "/oversigt");
+  it("refuses an unknown, an expired and a used-up link, and makes no account", async () => {
+    expect(await join({ token: "findes-ikke", email: "a@test.dk" })).toEqual({
+      error: "Linket virker ikke. Måske er det trukket tilbage — bed træneren om et nyt.",
+    });
+    const expired = await linked({ expiresAt: new Date(Date.now() - 1000) });
+    expect(await join({ token: expired.token, email: "b@test.dk" })).toEqual({ error: "Linket er udløbet. Bed træneren om et nyt." });
+    const full = await linked({ maxUses: 2, uses: 2 });
+    expect(await join({ token: full.token, email: "c@test.dk" })).toEqual({ error: "Linket er brugt op. Bed træneren om et nyt." });
+    expect(await prisma.user.count({ where: { email: { in: ["a@test.dk", "b@test.dk", "c@test.dk"] } } })).toBe(0);
   });
 
   it("says which field is missing", async () => {
-    expect(await accept({ email: "ny@test.dk", code: "" })).toEqual({ error: "Skriv koden fra invitationen." });
-    expect(await accept({ email: "ny@test.dk", code: "X", password: "kort" })).toEqual({
-      error: "Adgangskoden skal være mindst 8 tegn.",
-    });
+    const { token } = await linked();
+    expect(await join({ token: "", email: "ny@test.dk" })).toEqual({ error: "Linket mangler. Åbn det igen fra beskeden." });
+    expect(await join({ token, email: "ikke-en-mail" })).toEqual({ error: "Skriv en gyldig e-mail." });
+    expect(await join({ token, email: "ny@test.dk", password: "kort" })).toEqual({ error: "Adgangskoden skal være mindst 8 tegn." });
   });
 
-  it("is throttled like login", async () => {
-    await invited();
-    for (let i = 0; i < 8; i++) await accept({ email: "ny@test.dk", code: "AAAA-AAAA" });
-    expect((await accept({ email: "ny@test.dk", code: "AAAA-AAAA" }))?.error).toMatch(/^For mange forsøg/);
+  it("sends a phone without the app to /hent-appen after joining, and only there", async () => {
+    const { token } = await linked();
+    await expectRedirect(() => join({ token, email: "ny@test.dk", next: "/hent-appen" }), "/hent-appen");
+    const second = await linked();
+    await expectRedirect(() => join({ token: second.token, email: "to@test.dk", next: "https://evil.example" }), "/oversigt");
+  });
+
+  it("throttles wrong passwords for an existing account like login", async () => {
+    await makeUser({ email: "ny@test.dk" });
+    const { token } = await linked();
+    for (let i = 0; i < 8; i++) await join({ token, email: "ny@test.dk", password: "forkert-kodeord" });
+    expect((await join({ token, email: "ny@test.dk", password: TEST_PASSWORD }))?.error).toMatch(/^For mange forsøg/);
+  });
+
+  it("lets somebody already signed in join with one press", async () => {
+    const { team, token } = await linked();
+    const loner = await makeUser();
+    await signIn(loner);
+    await expectRedirect(() => joinWithLinkAsMe(undefined, formData({ token })), "/oversigt");
+    expect(await prisma.teamMember.findFirst({ where: { userId: loner.id, teamId: team.id } })).toMatchObject({ role: "PLAYER" });
+    expect(await joinWithLinkAsMe(undefined, formData({ token: "findes-ikke" }))).toEqual({
+      error: "Linket virker ikke. Måske er det trukket tilbage — bed træneren om et nyt.",
+    });
   });
 });

@@ -21,15 +21,23 @@ const STARTER_FINES = [
 ];
 
 const STARTER_JOBS = [
-  { title: "Vask spilletøj", people: 1 },
+  { title: "Trøjevask", people: 1 },
   { title: "Medbring frugt", people: 1 },
   { title: "Kørsel til udekamp", people: 2 },
+  { title: "Opkridtning", people: 2, autoAdd: false },
 ];
 
 async function main() {
   const email = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SUPER_ADMIN_PASSWORD;
   if (!email || !password) throw new Error("Set SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD");
+
+  // There is only one super admin (a unique index says so); a second run with another
+  // email would fail on it, so say why instead.
+  const existing = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" }, select: { email: true } });
+  if (existing && existing.email !== email) {
+    throw new Error(`There is already a super admin (${existing.email}); there can only be one.`);
+  }
 
   const user =
     (await prisma.user.findUnique({ where: { email } })) ??

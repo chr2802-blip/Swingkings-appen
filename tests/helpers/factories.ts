@@ -1,7 +1,7 @@
 import type { MemberRole, PlatformRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createSession, hashPassword } from "@/lib/auth";
-import { generateInviteCode, hashInviteCode } from "@/lib/invite-code";
+import { generateLinkToken, hashLinkToken } from "@/lib/invite-links";
 import { PHOTO_FIELD } from "@/lib/photo-file";
 import { SESSION_COOKIE_NAME, cookieStore } from "./next-mocks";
 import { pngBytes } from "./images";
@@ -94,39 +94,38 @@ export function formData(fields: Record<string, string | number | boolean | null
   return data;
 }
 
-export async function makeInvite(options: {
+/** An invitation link and its token, the one time the token is known. */
+export async function makeInviteLink(options: {
   teamId: string;
-  email: string;
   createdById: string;
-  role?: MemberRole;
+  maxUses?: number;
+  uses?: number;
   expiresAt?: Date;
-  acceptedAt?: Date | null;
 }) {
-  const code = generateInviteCode();
-  const invite = await prisma.invite.create({
+  const token = generateLinkToken();
+  const link = await prisma.inviteLink.create({
     data: {
       teamId: options.teamId,
-      email: options.email.toLowerCase(),
-      role: options.role ?? "PLAYER",
-      codeHash: hashInviteCode(code),
-      expiresAt: options.expiresAt ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      acceptedAt: options.acceptedAt ?? null,
       createdById: options.createdById,
+      tokenHash: hashLinkToken(token),
+      maxUses: options.maxUses ?? 30,
+      uses: options.uses ?? 0,
+      expiresAt: options.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   });
-  return { invite, code };
+  return { link, token };
 }
 
 export function makeMatch(
   teamId: string,
-  options: { startsAt?: Date; opponent?: string; source?: "MANUAL" | "KAMPKLAR"; kind?: "MATCH" | "TRAINING"; externalUid?: string } = {},
+  options: { startsAt?: Date; opponent?: string; title?: string; source?: "MANUAL" | "KAMPKLAR"; kind?: "MATCH" | "TRAINING" | "OTHER"; externalUid?: string } = {},
 ) {
   const opponent = options.opponent ?? "B.93";
   return prisma.match.create({
     data: {
       teamId,
-      title: `Swingkings - ${opponent}`,
-      opponent,
+      title: options.title ?? `Swingkings - ${opponent}`,
+      opponent: (options.kind ?? "MATCH") === "MATCH" ? opponent : null,
       startsAt: options.startsAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       source: options.source ?? "MANUAL",
       kind: options.kind ?? "MATCH",

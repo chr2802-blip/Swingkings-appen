@@ -4,6 +4,9 @@ import type { MemberRole } from "@prisma/client";
 import { FormDialog } from "@/components/form-dialog";
 import { Field, Input, Select } from "@/components/ui";
 import { updateMember } from "@/app/actions/teams";
+import { ROLE_DESCRIPTION, ROLE_LABEL } from "@/lib/access";
+
+const ROLES: MemberRole[] = ["PLAYER", "TREASURER", "ADMIN"];
 
 export function MemberDialog({
   member,
@@ -15,11 +18,20 @@ export function MemberDialog({
       <input type="hidden" name="userId" value={member.userId} />
       <Field label="Rolle" htmlFor="role">
         <Select id="role" name="role" defaultValue={member.role}>
-          <option value="PLAYER">Spiller</option>
-          <option value="TREASURER">Kasserer (bøder og betalinger)</option>
-          <option value="ADMIN">Træner/holdleder (alt)</option>
+          {ROLES.map((role) => (
+            <option key={role} value={role}>
+              {ROLE_LABEL[role]}
+            </option>
+          ))}
         </Select>
       </Field>
+      <ul className="space-y-1 text-xs text-slate-500">
+        {ROLES.map((role) => (
+          <li key={role}>
+            <strong className="font-medium text-slate-700">{ROLE_LABEL[role]}:</strong> {ROLE_DESCRIPTION[role]}
+          </li>
+        ))}
+      </ul>
       <Field label="Trøjenummer" htmlFor="shirtNumber">
         <Input id="shirtNumber" name="shirtNumber" type="number" inputMode="numeric" min={0} max={999} defaultValue={member.shirtNumber ?? ""} />
       </Field>

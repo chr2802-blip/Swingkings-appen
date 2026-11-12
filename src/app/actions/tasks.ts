@@ -8,22 +8,23 @@ import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { optionalId, optionalText, readForm, requiredText } from "@/lib/form";
+import { optionalText, readForm, requiredText } from "@/lib/form";
 import { deadlineOn } from "@/lib/time";
-import { createDistributedTasks } from "@/lib/tasks";
+import { createDistributedTasks, taskUrl } from "@/lib/tasks";
 import { notifyLater } from "@/lib/notify";
 
 function refresh(taskId?: string, matchId?: string | null) {
   revalidatePath("/opgaver", "layout");
+  revalidatePath("/aktiviteter");
   revalidatePath("/oversigt");
   if (taskId) revalidatePath(`/opgaver/${taskId}`);
-  if (matchId) revalidatePath(`/kampe/${matchId}`);
+  if (matchId) revalidatePath(`/aktiviteter/${matchId}`);
 }
 
 const taskSchema = z.object({
   title: requiredText("Giv opgaven et navn."),
   description: optionalText,
-  matchId: optionalId,
+  matchId: z.string().trim().min(1, "Vælg aktiviteten, opgaven hører til.").max(64),
   dueOn: z.string().trim().optional(),
   /** "auto" hands it out fairly, "pick" uses the ticked people, "none" leaves it open. */
   assign: z.enum(["auto", "pick", "none"]).default("pick"),
@@ -31,9 +32,9 @@ const taskSchema = z.object({
 });
 
 /**
- * A job tied to a match (its deadline is the kick-off unless given one), or standing
- * alone with a deadline of its own. Anybody on the team can create one; handing it out
- * is either picking people or letting the app pick fairly.
+ * A job on an activity; its deadline is the activity's start unless given one. Anybody
+ * on the team can create one; handing it out is either picking people or letting the
+ * app pick fairly.
  */
 export async function createTask(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -41,22 +42,18 @@ export async function createTask(_prev: ActionResult, formData: FormData): Promi
   if (!form.ok) return fail(form.error);
   const db = teamDb(user.teamId);
 
-  let match: { id: string; startsAt: Date } | null = null;
-  if (form.fields.matchId) {
-    match = await db.match.findFirst({ where: { id: form.fields.matchId }, select: { id: true, startsAt: true } });
-    if (!match) return fail("Kampen findes ikke.");
-  }
-  let dueAt: Date | null = match?.startsAt ?? null;
+  const match = await db.match.findFirst({ where: { id: form.fields.matchId }, select: { id: true, startsAt: true } });
+  if (!match) return fail("Aktiviteten findes ikke.");
+  let dueAt: Date | null = match.startsAt;
   if (form.fields.dueOn) {
     dueAt = deadlineOn(form.fields.dueOn);
     if (!dueAt) return fail("Fristen kunne ikke læses.");
   }
-  if (!match && !dueAt) return fail("Giv opgaven en frist, eller knyt den til en kamp.");
 
   const job = {
     title: form.fields.title,
     description: form.fields.description,
-    matchId: match?.id ?? null,
+    matchId: match.id,
     dueAt,
     people: form.fields.people,
   };
@@ -78,11 +75,11 @@ export async function createTask(_prev: ActionResult, formData: FormData): Promi
     notifyLater(picked, user.id, {
       title: `Ny opgave: ${task.title}`,
       body: `${user.name} har givet dig en opgave.`,
-      url: `/opgaver/${task.id}`,
+      url: taskUrl(task),
       tag: `task-${task.id}`,
     });
   }
-  refresh(taskId, match?.id);
+  refresh(taskId, match.id);
   return ok();
 }
 
@@ -112,7 +109,7 @@ export async function updateTask(_prev: ActionResult, formData: FormData): Promi
     dueAt = deadlineOn(form.fields.dueOn);
     if (!dueAt) return fail("Fristen kunne ikke læses.");
   } else if (!task.matchId) {
-    return fail("En opgave uden kamp skal have en frist.");
+    return fail("En opgave uden aktivitet skal have en frist.");
   }
   const picked = [...new Set(formData.getAll("assigneeId").map(String))];
   const db = teamDb(user.teamId);
@@ -135,7 +132,7 @@ export async function updateTask(_prev: ActionResult, formData: FormData): Promi
   notifyLater(added, user.id, {
     title: `Ny opgave: ${form.fields.title}`,
     body: `${user.name} har givet dig en opgave.`,
-    url: `/opgaver/${task.id}`,
+    url: taskUrl(task),
     tag: `task-${task.id}`,
   });
   refresh(task.id, task.matchId);
@@ -177,5 +174,5 @@ export async function deleteTask(_prev: ActionResult, formData: FormData): Promi
   if (!task) return fail("Du kan ikke slette den opgave.");
   await teamDb(user.teamId).task.deleteMany({ where: { id: task.id } });
   refresh(undefined, task.matchId);
-  redirect(task.matchId ? `/kampe/${task.matchId}` : "/opgaver");
+  redirect(task.matchId ? `/aktiviteter/${task.matchId}` : "/oversigt");
 }

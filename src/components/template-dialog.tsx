@@ -2,12 +2,12 @@
 
 import { FormDialog } from "@/components/form-dialog";
 import { Field, Input, Textarea } from "@/components/ui";
-import { saveTaskTemplate } from "@/app/actions/matches";
+import { saveTaskTemplate } from "@/app/actions/activities";
 
 export function TemplateDialog({
   template,
 }: {
-  template?: { id: string; title: string; description: string | null; people: number };
+  template?: { id: string; title: string; description: string | null; people: number; autoAdd: boolean };
 }) {
   return (
     <FormDialog
@@ -19,7 +19,7 @@ export function TemplateDialog({
     >
       {template && <input type="hidden" name="id" value={template.id} />}
       <Field label="Opgave" htmlFor="title">
-        <Input id="title" name="title" defaultValue={template?.title} placeholder="Fx vask spilletøj" maxLength={200} required />
+        <Input id="title" name="title" defaultValue={template?.title} placeholder="Fx trøjevask eller opkridtning" maxLength={200} required />
       </Field>
       <Field label="Antal personer" htmlFor="people">
         <Input id="people" name="people" type="number" inputMode="numeric" min={1} max={20} defaultValue={template?.people ?? 1} required />
@@ -27,6 +27,18 @@ export function TemplateDialog({
       <Field label="Beskrivelse (valgfri)" htmlFor="description">
         <Textarea id="description" name="description" rows={2} defaultValue={template?.description ?? ""} maxLength={2000} />
       </Field>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="autoAdd"
+          defaultChecked={template?.autoAdd ?? true}
+          className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+        />
+        <span>
+          Tilføj automatisk til nye kampe fra KampKlar
+          <span className="block text-xs text-slate-500">Ellers vælges den, når en aktivitet oprettes, eller på aktivitetens side.</span>
+        </span>
+      </label>
     </FormDialog>
   );
 }

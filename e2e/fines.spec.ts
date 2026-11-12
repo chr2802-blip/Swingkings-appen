@@ -35,31 +35,27 @@ test("a refused fine keeps the dialog open and says why", async ({ page, loginAs
   await expect(dialog).toBeVisible();
 });
 
-test("a payment brings what somebody owes down", async ({ page, loginAs }) => {
-  const { team, treasurer, anna } = await squad();
-  await db.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "Glemt støvler", units: 5, unitPriceKr: 10, issuedById: treasurer.id } });
-  await loginAs(treasurer);
-  await page.goto("/boder");
-  await page.getByRole("button", { name: "Betaling" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Hvem har betalt?").selectOption(anna.id);
-  await dialog.getByLabel("Beløb (kr)").fill("30");
-  await dialog.getByRole("button", { name: "Registrér" }).click();
-  await expect(dialog).toBeHidden();
-  expect(await db.payment.aggregate({ _sum: { amountKr: true } })).toEqual({ _sum: { amountKr: 30 } });
-
+test("a player gives a teammate a fine", async ({ page, loginAs }) => {
+  const { anna, bo } = await squad();
   await loginAs(anna);
-  await page.goto("/oversigt");
-  await expect(page.getByRole("link", { name: /Din bødekonto 20 kr/ })).toBeVisible();
+  await page.goto("/boder");
+  await page.getByRole("button", { name: "Giv bøde" }).click();
+  const dialog = page.getByRole("dialog", { name: "Giv bøde" });
+  await dialog.getByRole("checkbox", { name: "Bo" }).check();
+  await dialog.getByLabel("Hvad er bøden for?").fill("Glemte benskinner");
+  await dialog.getByRole("button", { name: "Giv bøde" }).click();
+  await expect(dialog).toBeHidden();
+  expect(await db.fine.findFirst({ where: { playerId: bo.id } })).toMatchObject({ issuedById: anna.id, reason: "Glemte benskinner" });
 });
 
-test("a player sees the fine box but gets no buttons to change it", async ({ page, loginAs }) => {
-  const { anna } = await squad();
+test("a player sees the catalogue but cannot change it", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
   await loginAs(anna);
-  await page.goto("/boder");
-  await expect(page.getByRole("heading", { name: "Bødekassen" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Giv bøde" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Betaling" })).toHaveCount(0);
+  await page.goto("/boder/katalog");
+  await expect(page.getByText("For sent")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ny bøde" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ret" })).toHaveCount(0);
 });
 
 test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {

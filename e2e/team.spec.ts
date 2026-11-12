@@ -35,7 +35,7 @@ test("a player is kept out of the team settings", async ({ page, loginAs }) => {
 test("a coach removes a player, who no longer reaches the team", async ({ page, loginAs }) => {
   const { team, admin, bo } = await squad();
   await loginAs(admin);
-  await page.goto("/hold/spillere");
+  await page.goto("/hold");
   const row = page.getByRole("listitem").filter({ has: page.getByText("Bo", { exact: true }) });
   await row.getByRole("button", { name: "Fjern" }).click();
   // Nothing that cannot be undone happens on the first press: it asks first.
@@ -55,11 +55,11 @@ test("one team never sees another's fines, matches or chat", async ({ page, logi
   await db.chatMessage.create({ data: { teamId: theirs.team.id, authorId: theirs.anna.id, body: "Hemmelig besked" } });
 
   await loginAs(ours.anna);
-  for (const path of ["/boder", "/kampe", "/chat", "/oversigt"]) {
+  for (const path of ["/boder", "/aktiviteter", "/chat", "/oversigt"]) {
     await page.goto(path);
     await expect(page.getByText(/Hemmelig/), path).toHaveCount(0);
   }
-  const response = await page.goto(`/kampe/${match.id}`);
+  const response = await page.goto(`/aktiviteter/${match.id}`);
   expect(response?.status()).toBe(404);
 });
 
@@ -74,4 +74,13 @@ test("somebody on two teams switches between them", async ({ page, loginAs }) =>
   await page.getByRole("button", { name: /Søndagsholdet/ }).or(page.getByRole("link", { name: /Søndagsholdet/ })).first().click();
   await expect(page.getByRole("button", { name: "Søndagsholdet" })).toBeVisible();
   await expect.poll(async () => (await db.user.findUniqueOrThrow({ where: { id: first.anna.id } })).activeTeamId).toBe(second.id);
+});
+
+test("the roster lists everybody on the team with their role", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/hold/spillere");
+  await expect(page.getByRole("heading", { name: "Spillere", level: 1 })).toBeVisible();
+  for (const name of ["Anna", "Bo", "Kasserer Kim", "Træner Tom"]) await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("Bødekasseformand").first()).toBeVisible();
 });

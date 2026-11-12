@@ -6,6 +6,8 @@ import { fineBoard, monthKings } from "@/lib/fine-data";
 import { movesFor } from "@/lib/challenges";
 import { kr } from "@/lib/money";
 import { OPEN_TASK } from "@/lib/tasks";
+import { LISTED_ACTIVITY } from "@/lib/activity-data";
+import { activityName } from "@/lib/activity";
 import { kickoffLabel, readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, SectionTitle } from "@/components/ui";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
@@ -21,9 +23,18 @@ export default async function OverviewPage() {
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
-      where: { kind: "MATCH", cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
+      where: { ...LISTED_ACTIVITY, cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
       orderBy: { startsAt: "asc" },
-      select: { id: true, title: true, opponent: true, startsAt: true, location: true, isHome: true, tasks: { select: TASK_SELECT } },
+      select: {
+        id: true,
+        kind: true,
+        title: true,
+        opponent: true,
+        startsAt: true,
+        location: true,
+        isHome: true,
+        tasks: { select: TASK_SELECT },
+      },
     }),
     db.task.findMany({
       where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } },
@@ -122,14 +133,22 @@ export default async function OverviewPage() {
       </div>
 
       <section>
-        <SectionTitle action={<Link href="/kampe" className="text-sm text-[var(--accent-text)] underline">Alle kampe</Link>}>
-          Næste kamp
+        <SectionTitle
+          action={
+            <Link href="/aktiviteter" className="text-sm text-[var(--accent-text)] underline">
+              Alle aktiviteter
+            </Link>
+          }
+        >
+          Næste aktivitet
         </SectionTitle>
         {nextMatch ? (
           <Card padded={false}>
-            <Link href={`/kampe/${nextMatch.id}`} className="press-card block px-5 py-4">
+            <Link href={`/aktiviteter/${nextMatch.id}`} className="press-card block px-5 py-4">
               <p className="font-display text-xl">
-                {nextMatch.opponent ? `${nextMatch.isHome === false ? "Ude mod" : nextMatch.isHome ? "Hjemme mod" : "Mod"} ${nextMatch.opponent}` : nextMatch.title}
+                {nextMatch.kind === "MATCH" && nextMatch.opponent
+                  ? `${nextMatch.isHome === false ? "Ude mod" : nextMatch.isHome ? "Hjemme mod" : "Mod"} ${nextMatch.opponent}`
+                  : activityName(nextMatch)}
               </p>
               <p className="text-sm text-slate-500">
                 {kickoffLabel(nextMatch.startsAt)} · {relativeDay(nextMatch.startsAt)}
@@ -145,14 +164,12 @@ export default async function OverviewPage() {
             )}
           </Card>
         ) : (
-          <Card className="text-sm text-slate-500">Ingen kommende kampe i kalenderen.</Card>
+          <Card className="text-sm text-slate-500">Ingen kommende aktiviteter i kalenderen.</Card>
         )}
       </section>
 
       <section>
-        <SectionTitle action={<Link href="/opgaver" className="text-sm text-[var(--accent-text)] underline">Alle opgaver</Link>}>
-          Dine opgaver
-        </SectionTitle>
+        <SectionTitle>Dine opgaver</SectionTitle>
         {myTasks.length === 0 ? (
           <Card className="text-sm text-slate-500">Du har ingen opgaver lige nu 🎉</Card>
         ) : (

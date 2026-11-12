@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { inviteCodeMatches } from "@/lib/invite-code";
+import { findInviteLink } from "@/lib/invite-links";
+import { DEFAULT_LINK_DAYS, DEFAULT_LINK_MAX_USES, LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import {
-  createInvite,
+  createInviteLink,
   createTeam,
   deleteTeam,
   removeMember,
-  revokeInvite,
+  revokeInviteLink,
   switchTeam,
   updateMember,
   updateTeam,
   visitTeam,
 } from "@/app/actions/teams";
-import { PHOTO_FIELD, formData, joinTeam, makeInvite, makeMember, makePhoto, makeSquad, makeTeam, makeUser, signIn } from "../helpers/factories";
+import { PHOTO_FIELD, formData, joinTeam, makeInviteLink, makeMember, makePhoto, makeSquad, makeTeam, makeUser, signIn } from "../helpers/factories";
 import { expectDenied, expectRedirect } from "../helpers/expect";
 
 const teamForm = (fields: Record<string, string> = {}) => formData({ name: "Swingkings", finePriceKr: "15", ...fields });
@@ -71,46 +72,60 @@ describe("updateTeam", () => {
   });
 });
 
-describe("invitations", () => {
-  it("creates a hashed one-time code and shows it once", async () => {
+describe("invitation links", () => {
+  it("makes a link with the chosen lifetime and number of places, shown once and stored hashed", async () => {
     const { team, admin } = await makeSquad();
     await signIn(admin);
-    const result = await createInvite(undefined, formData({ email: " Ny@Test.dk ", role: "TREASURER" }));
+    const result = await createInviteLink(undefined, formData({ days: "14", maxUses: "5" }));
     expect(result?.ok).toBe(true);
-    const code = /Koden er (\S+)\./.exec((result as { note: string }).note)![1]!;
-    const invite = await prisma.invite.findFirstOrThrow({ where: { teamId: team.id } });
-    expect(invite).toMatchObject({ email: "ny@test.dk", role: "TREASURER", createdById: admin.id });
-    expect(invite.codeHash).not.toContain(code.replace("-", ""));
-    expect(inviteCodeMatches(code, invite.codeHash)).toBe(true);
+    const path = (result as { note: string }).note;
+    expect(path).toMatch(/^\/join\/[\w-]{40,}$/);
+    const token = path.slice("/join/".length);
+
+    const link = await prisma.inviteLink.findFirstOrThrow({ where: { teamId: team.id } });
+    expect(link).toMatchObject({ maxUses: 5, uses: 0, createdById: admin.id });
+    expect(link.tokenHash).not.toContain(token);
+    expect((await findInviteLink(token))?.id).toBe(link.id);
+    const days = (link.expiresAt.getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(13.9);
+    expect(days).toBeLessThan(14.1);
   });
 
-  it("refuses somebody already on the team, and a bad email", async () => {
+  it("offers the defaults among its choices", () => {
+    expect(LINK_DAYS).toContain(DEFAULT_LINK_DAYS);
+    expect(LINK_MAX_USES).toContain(DEFAULT_LINK_MAX_USES);
+    expect(Math.max(...LINK_MAX_USES)).toBeLessThanOrEqual(50);
+  });
+
+  it("refuses a lifetime or a number of places that is not offered", async () => {
     const { admin } = await makeSquad();
-    const anna = await prisma.user.findFirstOrThrow({ where: { name: "Anna" } });
     await signIn(admin);
-    expect(await createInvite(undefined, formData({ email: anna.email, role: "PLAYER" }))).toEqual({
+    expect(await createInviteLink(undefined, formData({ days: "365", maxUses: "5" }))).toEqual({ ok: false, error: "Vælg hvor længe linket gælder." });
+    expect(await createInviteLink(undefined, formData({ days: "7", maxUses: "1000" }))).toEqual({
       ok: false,
-      error: "Den e-mail er allerede på holdet.",
+      error: "Vælg hvor mange der kan bruge linket.",
     });
-    expect(await createInvite(undefined, formData({ email: "nej", role: "PLAYER" }))).toEqual({ ok: false, error: "Skriv en gyldig e-mail." });
+    expect(await prisma.inviteLink.count()).toBe(0);
   });
 
-  it("revokes only its own team's invitations", async () => {
+  it("revokes only its own team's links", async () => {
     const { team, admin } = await makeSquad();
     const other = await makeSquad("Andre");
-    const mine = await makeInvite({ teamId: team.id, email: "a@test.dk", createdById: admin.id });
-    const theirs = await makeInvite({ teamId: other.team.id, email: "b@test.dk", createdById: other.admin.id });
+    const mine = await makeInviteLink({ teamId: team.id, createdById: admin.id });
+    const theirs = await makeInviteLink({ teamId: other.team.id, createdById: other.admin.id });
     await signIn(admin);
-    await revokeInvite(undefined, formData({ inviteId: theirs.invite.id }));
-    await revokeInvite(undefined, formData({ inviteId: mine.invite.id }));
-    expect(await prisma.invite.findMany({ select: { id: true } })).toEqual([{ id: theirs.invite.id }]);
+    await revokeInviteLink(undefined, formData({ linkId: theirs.link.id }));
+    await revokeInviteLink(undefined, formData({ linkId: mine.link.id }));
+    expect(await prisma.inviteLink.findMany({ select: { id: true } })).toEqual([{ id: theirs.link.id }]);
   });
 
   it("is admin-only", async () => {
-    const { treasurer } = await makeSquad();
-    await signIn(treasurer);
-    await expectDenied(() => createInvite(undefined, formData({ email: "x@test.dk", role: "PLAYER" })));
-    await expectDenied(() => revokeInvite(undefined, formData({ inviteId: "x" })));
+    const { treasurer, anna } = await makeSquad();
+    for (const who of [treasurer, anna]) {
+      await signIn(who);
+      await expectDenied(() => createInviteLink(undefined, formData({ days: "7", maxUses: "5" })));
+      await expectDenied(() => revokeInviteLink(undefined, formData({ linkId: "x" })));
+    }
   });
 });
 
@@ -147,7 +162,7 @@ describe("members", () => {
   it("never leaves a team without an admin", async () => {
     const { admin } = await makeSquad();
     await signIn(admin);
-    const lastAdmin = { ok: false, error: "Holdet skal have mindst én træner/holdleder." };
+    const lastAdmin = { ok: false, error: "Holdet skal have mindst én admin." };
     expect(await updateMember(undefined, formData({ userId: admin.id, role: "PLAYER" }))).toEqual(lastAdmin);
     expect(await removeMember(undefined, formData({ userId: admin.id }))).toEqual(lastAdmin);
   });
@@ -200,23 +215,21 @@ describe("switching teams", () => {
 });
 
 describe("super admin", () => {
-  it("creates a team with an invitation for its coach", async () => {
+  it("creates a team with a one-place link for its coach, and does not join it", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
     await signIn(root);
-    const result = await createTeam(undefined, formData({ name: "Nyt hold", adminEmail: "Coach@Test.dk" }));
+    const result = await createTeam(undefined, formData({ name: "Nyt hold", adminLink: "on" }));
     expect(result?.ok).toBe(true);
     const team = await prisma.team.findFirstOrThrow({ where: { name: "Nyt hold" } });
-    const invite = await prisma.invite.findFirstOrThrow({ where: { teamId: team.id } });
-    expect(invite).toMatchObject({ email: "coach@test.dk", role: "ADMIN" });
-    const code = /koden (\S+)\.$/.exec((result as { note: string }).note)![1]!;
-    expect(inviteCodeMatches(code, invite.codeHash)).toBe(true);
+    const token = (result as { note: string }).note.replace(/^\/join\//, "");
+    expect(await findInviteLink(token)).toMatchObject({ teamId: team.id, maxUses: 1 });
     expect(await prisma.teamMember.count({ where: { userId: root.id } })).toBe(0);
   });
 
   it("joins a team it creates without a coach, as its admin", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
     await signIn(root);
-    await createTeam(undefined, formData({ name: "Nyt hold", adminEmail: "" }));
+    expect(await createTeam(undefined, formData({ name: "Nyt hold" }))).toEqual({ ok: true, note: "Nyt hold er oprettet, og du er træner på det." });
     const team = await prisma.team.findFirstOrThrow({ where: { name: "Nyt hold" } });
     expect(await prisma.teamMember.findFirst({ where: { userId: root.id, teamId: team.id } })).toMatchObject({ role: "ADMIN" });
     expect((await prisma.user.findUniqueOrThrow({ where: { id: root.id } })).activeTeamId).toBe(team.id);

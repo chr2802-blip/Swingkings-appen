@@ -9,12 +9,15 @@ const assignees = async (taskId: string) =>
   (await prisma.taskAssignee.findMany({ where: { taskId }, select: { userId: true } })).map((a) => a.userId).sort();
 
 describe("createTask", () => {
-  it("lets any player make a job with a deadline and the people they pick", async () => {
+  it("lets any player put a job with its own deadline and the people they pick on an activity", async () => {
     const { team, anna, bo } = await makeSquad();
+    const activity = await makeMatch(team.id);
     await signIn(anna);
-    expect(await createTask(undefined, formData({ title: "Købe bolde", dueOn: "2030-06-07", assign: "pick", assigneeId: [bo.id, anna.id] }))).toEqual({ ok: true });
+    expect(
+      await createTask(undefined, formData({ title: "Købe bolde", matchId: activity.id, dueOn: "2030-06-07", assign: "pick", assigneeId: [bo.id, anna.id] })),
+    ).toEqual({ ok: true });
     const task = await prisma.task.findFirstOrThrow({ where: { teamId: team.id } });
-    expect(task).toMatchObject({ title: "Købe bolde", createdById: anna.id, matchId: null });
+    expect(task).toMatchObject({ title: "Købe bolde", createdById: anna.id, matchId: activity.id });
     // The end of that day, on the team's clock.
     expect(task.dueAt?.toISOString()).toBe("2030-06-07T21:59:59.999Z");
     expect(await assignees(task.id)).toEqual([anna.id, bo.id].sort());
@@ -33,21 +36,23 @@ describe("createTask", () => {
   });
 
   it("leaves a job open for somebody to take", async () => {
-    const { anna } = await makeSquad();
+    const { team, anna } = await makeSquad();
+    const activity = await makeMatch(team.id);
     await signIn(anna);
-    await createTask(undefined, formData({ title: "Kage", dueOn: "2030-06-07", assign: "none", assigneeId: anna.id }));
+    await createTask(undefined, formData({ title: "Kage", matchId: activity.id, assign: "none", assigneeId: anna.id }));
     expect(await assignees((await prisma.task.findFirstOrThrow()).id)).toEqual([]);
   });
 
-  it("refuses a job with no deadline and no match, a bad date, a stranger and another team's match", async () => {
-    const { anna } = await makeSquad();
+  it("refuses a job on no activity, a bad date, a stranger and another team's activity", async () => {
+    const { team, anna } = await makeSquad();
     const other = await makeSquad("Andre");
+    const activity = await makeMatch(team.id);
     await signIn(anna);
-    const make = (fields: Record<string, string | string[]>) => createTask(undefined, formData({ title: "X", ...fields }));
-    expect(await make({})).toEqual({ ok: false, error: "Giv opgaven en frist, eller knyt den til en kamp." });
+    const make = (fields: Record<string, string | string[]>) => createTask(undefined, formData({ title: "X", matchId: activity.id, ...fields }));
+    expect(await createTask(undefined, formData({ title: "X", matchId: "", dueOn: "2030-06-07" }))).toEqual({ ok: false, error: "Vælg aktiviteten, opgaven hører til." });
     expect(await make({ dueOn: "2030-02-30" })).toEqual({ ok: false, error: "Fristen kunne ikke læses." });
     expect(await make({ dueOn: "2030-06-07", assigneeId: other.anna.id })).toEqual({ ok: false, error: "En af de valgte er ikke på holdet." });
-    expect(await make({ matchId: (await makeMatch(other.team.id)).id })).toEqual({ ok: false, error: "Kampen findes ikke." });
+    expect(await make({ matchId: (await makeMatch(other.team.id)).id })).toEqual({ ok: false, error: "Aktiviteten findes ikke." });
     expect(await make({ title: "", dueOn: "2030-06-07" })).toEqual({ ok: false, error: "Giv opgaven et navn." });
     expect(await prisma.task.count()).toBe(0);
   });
@@ -89,7 +94,7 @@ describe("editing and deleting", () => {
     const other = await makeSquad("Andre");
     const task = await jobBy(anna, team.id);
     await signIn(anna);
-    expect(await updateTask(undefined, formData({ id: task.id, title: "X" }))).toEqual({ ok: false, error: "En opgave uden kamp skal have en frist." });
+    expect(await updateTask(undefined, formData({ id: task.id, title: "X" }))).toEqual({ ok: false, error: "En opgave uden aktivitet skal have en frist." });
     expect(await updateTask(undefined, formData({ id: task.id, title: "X", dueOn: "nej" }))).toEqual({ ok: false, error: "Fristen kunne ikke læses." });
     expect(await updateTask(undefined, formData({ id: task.id, title: "X", dueOn: "2030-06-08", assigneeId: other.bo.id }))).toEqual({
       ok: false,
@@ -97,7 +102,7 @@ describe("editing and deleting", () => {
     });
   });
 
-  it("deletes and goes back to the match it hung off, or the job list", async () => {
+  it("deletes and goes back to the activity it hung off, or the front page", async () => {
     const { team, anna } = await makeSquad();
     const match = await makeMatch(team.id);
     const onMatch = await jobBy(anna, team.id, match.id);
@@ -105,8 +110,8 @@ describe("editing and deleting", () => {
     await signIn(anna);
     // A match job keeps its kick-off when no new date is given.
     expect(await updateTask(undefined, formData({ id: onMatch.id, title: "Kørsel" }))).toEqual({ ok: true });
-    await expectRedirect(() => deleteTask(undefined, formData({ id: onMatch.id })), `/kampe/${match.id}`);
-    await expectRedirect(() => deleteTask(undefined, formData({ id: alone.id })), "/opgaver");
+    await expectRedirect(() => deleteTask(undefined, formData({ id: onMatch.id })), `/aktiviteter/${match.id}`);
+    await expectRedirect(() => deleteTask(undefined, formData({ id: alone.id })), "/oversigt");
     expect(await prisma.task.count()).toBe(0);
   });
 });

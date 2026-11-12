@@ -18,6 +18,8 @@ describe("applyCalendar", () => {
       data: [
         { teamId: team.id, title: "Tøjvask", people: 1 },
         { teamId: team.id, title: "Kørsel", people: 2 },
+        // Chosen by hand per activity; the sync leaves it alone.
+        { teamId: team.id, title: "Opkridtning", people: 1, autoAdd: false },
       ],
     });
 

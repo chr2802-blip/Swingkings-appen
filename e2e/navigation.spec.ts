@@ -48,7 +48,7 @@ test("a super admin creates a team and becomes its coach; nobody else reaches th
   await page.goto("/admin");
   await page.getByLabel("Holdets navn").fill("Nyt hold");
   await page.getByRole("button", { name: "Opret hold" }).click();
-  await expect(page.getByText("Nyt hold er oprettet.")).toBeVisible();
+  await expect(page.getByText("Nyt hold er oprettet, og du er træner på det.")).toBeVisible();
   expect(await db.teamMember.findFirst({ where: { userId: root.id, team: { name: "Nyt hold" } } })).toMatchObject({ role: "ADMIN" });
 
   const { admin } = await squad();
