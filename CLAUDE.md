@@ -102,5 +102,8 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   Pages read `photoId`, never the bytes.
 - **A migration that adds a table ends with `ENABLE ROW LEVEL SECURITY`** (Supabase serves
   `public` to the publishable key). Run `npm run db:check` after any schema change.
+- **No Suspense boundaries** (`<Suspense>`, `loading.tsx`): an action that revalidates
+  then waits on the boundary and its button can hang ("Stemmer…") on a slow machine. It
+  happened twice and failed CI a few runs in ten; `tests/unit/no-suspense.test.ts` refuses it.
 - **Push and realtime are optional** and silent when unconfigured; `notifyLater` and
   `announce` run after the response via `after()`.
