@@ -83,7 +83,8 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   const match = await db.match.create({ data: { teamId: team.id, title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3) } });
   await loginAs(anna);
   await page.goto(`/aktiviteter/${match.id}`);
-  await page.getByRole("button", { name: "Ny opgave" }).click();
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("dialog", { name: "Handlinger" }).getByRole("button", { name: "Ny opgave" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Opgave").fill("Købe nye bolde");
   await dialog.getByLabel("Hvem skal gøre det?").selectOption("pick");
@@ -103,8 +104,13 @@ test("somebody takes an open job", async ({ page, loginAs }) => {
   const task = await db.task.create({ data: { teamId: team.id, title: "Kage til kampen", dueAt: inDays(2) } });
   await loginAs(bo);
   await page.goto(`/opgaver/${task.id}`);
-  await page.getByRole("button", { name: "Jeg tager den" }).click();
-  await expect(page.getByRole("button", { name: "Tag mig af opgaven" })).toBeVisible();
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  const menu = page.getByRole("dialog", { name: "Handlinger" });
+  await menu.getByRole("button", { name: "Jeg tager den" }).click();
+  // The drawer closes once it has worked, and offers the way back next time.
+  await expect(menu).toBeHidden();
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await expect(menu.getByRole("button", { name: "Tag mig af opgaven" })).toBeVisible();
   expect(await db.taskAssignee.count({ where: { taskId: task.id, userId: bo.id } })).toBe(1);
 });
 
@@ -124,4 +130,28 @@ test("an admin keeps the team's standard jobs under the team settings; a player 
   await loginAs(anna);
   await page.goto("/hold");
   await expect(page.getByRole("button", { name: "Ny standardopgave" })).toHaveCount(0);
+});
+
+test("an activity shows one action button, and its drawer hands over to the dialog it opens", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3) } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  for (const name of ["Ny opgave", "Giv bøde", "Ret aktivitet", "Slet aktivitet"]) {
+    await expect(page.getByRole("button", { name })).toHaveCount(0);
+  }
+
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  const menu = page.getByRole("dialog", { name: "Handlinger" });
+  for (const name of ["Ny opgave", "Giv bøde", "Ret aktivitet", "Slet aktivitet"]) {
+    await expect(menu.getByRole("button", { name })).toBeVisible();
+  }
+  await menu.getByRole("button", { name: "Giv bøde" }).click();
+  const dialog = page.getByRole("dialog", { name: "Giv bøde" });
+  await expect(dialog).toBeVisible();
+  await expect(menu).toBeHidden();
+  await dialog.getByRole("button", { name: "Annuller" }).click();
+  await expect(dialog).toBeHidden();
+  // Two sheets overlapped on the way; the page must scroll again once both are gone.
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("");
 });

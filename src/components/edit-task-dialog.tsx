@@ -13,7 +13,7 @@ export function EditTaskDialog({
   members: { userId: string; name: string; photoId: string | null; shirtNumber: number | null }[];
 }) {
   return (
-    <FormDialog trigger="Ret" triggerVariant="secondary" title="Ret opgave" action={updateTask} submitLabel="Gem">
+    <FormDialog trigger="Ret opgave" triggerVariant="secondary" title="Ret opgave" action={updateTask} submitLabel="Gem">
       <input type="hidden" name="id" value={task.id} />
       <Field label="Opgave" htmlFor="title">
         <Input id="title" name="title" defaultValue={task.title} maxLength={200} required />

@@ -10,7 +10,7 @@ import type { ActivityOption, TemplateOption } from "@/lib/activity-data";
 export function StandardTasksDialog({ activityId, templates }: { activityId: string; templates: TemplateOption[] }) {
   return (
     <FormDialog
-      trigger="+ Standardopgaver"
+      trigger="Tilføj standardopgaver"
       triggerVariant="secondary"
       title="Tilføj standardopgaver"
       action={addStandardTasks}

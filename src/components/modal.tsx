@@ -5,6 +5,20 @@ import { createPortal } from "react-dom";
 
 const EXIT_MS = 200;
 
+// Sheets can overlap — the action drawer is still closing as the dialog it opened comes
+// up — so the page is locked while any is mounted, and unlocked by the last to go.
+let locks = 0;
+let unlocked = "";
+function lockScroll() {
+  if (locks++ === 0) {
+    unlocked = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  return () => {
+    if (--locks === 0) document.body.style.overflow = unlocked;
+  };
+}
+
 /**
  * Full-screen sheet on a phone, centred panel from `sm` up, portalled into <body> so it
  * sits above the tab bar. `size="drawer"` rises only as far as its contents need — for
@@ -49,11 +63,10 @@ export function Modal({
       if (event.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKeyDown);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockScroll();
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previous;
+      unlock();
     };
   }, [mounted]);
 

@@ -14,6 +14,7 @@ import { ActivityDialog } from "@/components/activity-dialog";
 import { CopyTasksDialog, StandardTasksDialog } from "@/components/activity-task-dialogs";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { ChallengeCard } from "@/components/challenge-card";
+import { ActionMenu } from "@/components/action-menu";
 import { ActionButton } from "@/components/action-button";
 import { deleteActivity, setSignup } from "@/app/actions/activities";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
@@ -62,17 +63,39 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
       <PageHeader
         title={match.kind === "MATCH" && match.opponent ? `${match.isHome === false ? "Ude mod" : match.isHome ? "Hjemme mod" : "Mod"} ${match.opponent}` : match.title}
         action={
-          match.source === "MANUAL" && (
-            <ActivityDialog
-              activity={{
+          <ActionMenu>
+            <TaskDialog members={roster} activityId={match.id} />
+            {templates.length > 0 && <StandardTasksDialog activityId={match.id} templates={templates} />}
+            {copyable.length > 0 && <CopyTasksDialog activityId={match.id} copyable={copyable} />}
+            <GiveFineDialog
+              members={board.roster}
+              fineTypes={board.fineTypes}
+              finePriceKr={board.finePriceKr}
+              matches={option}
+              defaultMatchId={match.id}
+            />
+            {match.source === "MANUAL" && (
+              <ActivityDialog
+                activity={{
                 id: match.id,
                 title: match.title,
                 startsAtInput: toLocalDateTimeInput(match.startsAt),
                 location: match.location,
                 note: match.note,
               }}
-            />
-          )
+              />
+            )}
+            {match.source === "MANUAL" && (
+              <ActionButton
+                action={deleteActivity}
+                fields={{ id: match.id }}
+                label="Slet aktivitet"
+                variant="danger"
+                confirm="Slet aktiviteten og dens opgaver?"
+                confirmLabel="Slet aktivitet"
+              />
+            )}
+          </ActionMenu>
         }
       />
 
@@ -121,13 +144,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
       )}
 
       <section className="mb-8">
-        <SectionTitle action={<TaskDialog members={roster} activityId={match.id} />}>Opgaver</SectionTitle>
-        {(templates.length > 0 || copyable.length > 0) && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {templates.length > 0 && <StandardTasksDialog activityId={match.id} templates={templates} />}
-            {copyable.length > 0 && <CopyTasksDialog activityId={match.id} copyable={copyable} />}
-          </div>
-        )}
+        <SectionTitle>Opgaver</SectionTitle>
         {match.tasks.length === 0 ? (
           <EmptyState icon="🧺">Ingen opgaver endnu.</EmptyState>
         ) : (
@@ -142,19 +159,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
       </section>
 
       <section className="mb-8">
-        <SectionTitle
-          action={
-            <GiveFineDialog
-              members={board.roster}
-              fineTypes={board.fineTypes}
-              finePriceKr={board.finePriceKr}
-              matches={option}
-              defaultMatchId={match.id}
-            />
-          }
-        >
-          {match.kind === "MATCH" ? "Bøder fra kampen" : "Bøder"}
-        </SectionTitle>
+        <SectionTitle>{match.kind === "MATCH" ? "Bøder fra kampen" : "Bøder"}</SectionTitle>
         {match.fines.length === 0 ? (
           <EmptyState>Ingen bøder endnu.</EmptyState>
         ) : (
@@ -192,16 +197,6 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         </section>
       )}
 
-      {match.source === "MANUAL" && (
-        <ActionButton
-          action={deleteActivity}
-          fields={{ id: match.id }}
-          label="Slet aktivitet"
-          variant="danger"
-          confirm="Slet aktiviteten og dens opgaver?"
-          confirmLabel="Slet aktivitet"
-        />
-      )}
     </div>
   );
 }

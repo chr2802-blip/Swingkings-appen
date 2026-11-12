@@ -30,7 +30,7 @@ export function ActivityDialog({
 }) {
   return (
     <FormDialog
-      trigger={activity ? "Ret" : "Ny aktivitet"}
+      trigger={activity ? "Ret aktivitet" : "Ny aktivitet"}
       triggerVariant={activity ? "secondary" : "primary"}
       title={activity ? "Ret aktivitet" : "Ny aktivitet"}
       action={saveActivity}
