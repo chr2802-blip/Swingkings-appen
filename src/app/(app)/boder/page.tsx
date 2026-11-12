@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
-import { canManageFines } from "@/lib/access";
+import { canDeleteFine } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { fineBoard, matchOptions, monthKings } from "@/lib/fine-data";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
@@ -9,14 +9,12 @@ import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/
 import { Avatar } from "@/components/photo";
 import { FinesTabs } from "@/components/fines-tabs";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
-import { PaymentDialog } from "@/components/payment-dialog";
 import { ActionButton } from "@/components/action-button";
 import { deleteFine } from "@/app/actions/fines";
 import { Crown, Star } from "@/components/crest";
 
 export default async function FinesPage() {
   const user = await requireTeamUser();
-  const manages = canManageFines(user, user.teamId);
   const db = teamDb(user.teamId);
   const [board, kings, recent, matches] = await Promise.all([
     fineBoard(user.teamId),
@@ -31,10 +29,11 @@ export default async function FinesPage() {
         unitPriceKr: true,
         createdAt: true,
         challengeId: true,
+        issuedById: true,
         player: { select: { id: true, name: true, photoId: true } },
       },
     }),
-    manages ? matchOptions(user.teamId) : Promise.resolve([]),
+    matchOptions(user.teamId),
   ]);
 
   const totals = board.balances.reduce(
@@ -53,17 +52,12 @@ export default async function FinesPage() {
         title="Bødekassen"
         description={`1 bøde = ${kr(board.finePriceKr)}`}
         action={
-          manages && (
-            <>
-              <PaymentDialog members={board.roster} />
-              <GiveFineDialog
-                members={board.roster}
-                fineTypes={board.fineTypes}
-                finePriceKr={board.finePriceKr}
-                matches={matches}
-              />
-            </>
-          )
+          <GiveFineDialog
+            members={board.roster}
+            fineTypes={board.fineTypes}
+            finePriceKr={board.finePriceKr}
+            matches={matches}
+          />
         }
       />
       <FinesTabs current="/boder" />
@@ -163,7 +157,7 @@ export default async function FinesPage() {
                       {fine.challengeId && " · ⚔️ udfordring"}
                     </p>
                   </div>
-                  {manages && (
+                  {canDeleteFine(user, user.teamId, fine) && (
                     <ActionButton
                       action={deleteFine}
                       fields={{ id: fine.id }}

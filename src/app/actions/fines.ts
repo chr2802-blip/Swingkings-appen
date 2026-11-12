@@ -5,7 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
-import { assertFineManager, canManageFines } from "@/lib/access";
+import { assertFineManager, canDeleteFine, canManageFines } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { canMove, type ChallengeMove } from "@/lib/challenges";
@@ -75,8 +75,8 @@ const fineSchema = z.object({
  * from the catalogue (its name and number of fines, unless overridden) or written freely.
  */
 export async function giveFine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  // Anybody on the team may give a fine; taking one back is `deleteFine`'s question.
   const user = await requireTeamUser();
-  assertFineManager(user, user.teamId);
   const playerIds = [...new Set(formData.getAll("playerId").map(String).filter(Boolean))];
   const form = readForm(fineSchema, (() => {
     const data = new FormData();
@@ -134,11 +134,11 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
 
 export async function deleteFine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  assertFineManager(user, user.teamId);
   const id = String(formData.get("id") ?? "");
   const db = teamDb(user.teamId);
-  const fine = await db.fine.findFirst({ where: { id }, select: { challengeId: true } });
+  const fine = await db.fine.findFirst({ where: { id }, select: { challengeId: true, issuedById: true } });
   if (!fine) return ok();
+  if (!canDeleteFine(user, user.teamId, fine)) return fail("Kun den der gav bøden, bødekasseformanden eller en admin kan slette den.");
   await db.fine.deleteMany({ where: { id } });
   // A fine that settled a challenge takes the settlement with it, so the challenge is
   // open again to be settled properly rather than marked won by nobody.
@@ -148,38 +148,6 @@ export async function deleteFine(_prev: ActionResult, formData: FormData): Promi
       data: { status: "ACCEPTED", winnerId: null, settledAt: null },
     });
   }
-  refresh();
-  return ok();
-}
-
-/* ── Payments ───────────────────────────────────────────────────────────────────── */
-
-const paymentSchema = z.object({
-  playerId: z.string().min(1, "Vælg hvem der har betalt."),
-  amountKr: wholeNumber("Beløbet skal være et helt antal kroner (1–100.000).", 1, 100_000),
-  note: optionalText,
-});
-
-export async function recordPayment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  const user = await requireTeamUser();
-  assertFineManager(user, user.teamId);
-  const form = readForm(paymentSchema, formData);
-  if (!form.ok) return fail(form.error);
-  const db = teamDb(user.teamId);
-  // Somebody who has left can still pay off what they owe, so this asks the ledger too.
-  const known =
-    (await db.teamMember.count({ where: { userId: form.fields.playerId } })) +
-    (await db.fine.count({ where: { playerId: form.fields.playerId } }));
-  if (known === 0) return fail("Spilleren findes ikke på holdet.");
-  await db.payment.create({ data: { ...form.fields, teamId: user.teamId, recordedById: user.id } });
-  refresh();
-  return ok(`${kr(form.fields.amountKr)} er registreret.`);
-}
-
-export async function deletePayment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  const user = await requireTeamUser();
-  assertFineManager(user, user.teamId);
-  await teamDb(user.teamId).payment.deleteMany({ where: { id: String(formData.get("id") ?? "") } });
   refresh();
   return ok();
 }

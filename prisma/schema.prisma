@@ -93,7 +93,7 @@ model Team {
 
   members       TeamMember[]
   activeFor     User[]         @relation("ActiveTeam")
-  invites       Invite[]
+  inviteLinks   InviteLink[]
   fineTypes     FineType[]
   fines         Fine[]
   payments      Payment[]
@@ -126,11 +126,11 @@ model User {
   photoId      String?
   createdAt    DateTime     @default(now())
 
-  activeTeam        Team?              @relation("ActiveTeam", fields: [activeTeamId], references: [id], onDelete: SetNull)
-  photo             Photo?             @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
-  memberships       TeamMember[]
-  pushSubscriptions PushSubscription[]
-  invitesCreated    Invite[]           @relation("InviteCreatedBy")
+  activeTeam         Team?              @relation("ActiveTeam", fields: [activeTeamId], references: [id], onDelete: SetNull)
+  photo              Photo?             @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  memberships        TeamMember[]
+  pushSubscriptions  PushSubscription[]
+  inviteLinksCreated InviteLink[]       @relation("InviteLinkCreatedBy")
 
   finesReceived    Fine[]    @relation("FinePlayer")
   finesIssued      Fine[]    @relation("FineIssuedBy")
@@ -182,22 +182,29 @@ model TeamMember {
   @@index([teamId])
 }
 
-model Invite {
+/**
+ * A link that lets people sign up and join a team (`/join/<token>`). The admin posts it
+ * wherever the team talks; whoever opens it creates an account, or joins with the one
+ * they have. Only a hash of the token is stored, so the link is shown once. A link
+ * carries no role: everybody joins as a player, and an admin gives roles afterwards.
+ * `maxUses` is the hard limit on how many people one link can bring in, so a link that
+ * escapes the group chat cannot become an account factory. `uses` is only ever raised
+ * through a guarded update that compares it with `maxUses` (`redeemInviteLink`).
+ */
+model InviteLink {
   id          String     @id @default(cuid())
-  email       String
   teamId      String
-  role        MemberRole @default(PLAYER)
-  codeHash    String
+  tokenHash   String     @unique
+  maxUses     Int
+  uses        Int        @default(0)
   expiresAt   DateTime
-  acceptedAt  DateTime?
   createdById String
   createdAt   DateTime   @default(now())
 
   team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  createdBy User @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy User @relation("InviteLinkCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([teamId])
-  @@index([email])
   @@index([createdById])
 }
 

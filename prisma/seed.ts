@@ -32,6 +32,13 @@ async function main() {
   const password = process.env.SUPER_ADMIN_PASSWORD;
   if (!email || !password) throw new Error("Set SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD");
 
+  // There is only one super admin (a unique index says so); a second run with another
+  // email would fail on it, so say why instead.
+  const existing = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" }, select: { email: true } });
+  if (existing && existing.email !== email) {
+    throw new Error(`There is already a super admin (${existing.email}); there can only be one.`);
+  }
+
   const user =
     (await prisma.user.findUnique({ where: { email } })) ??
     (await prisma.user.create({
