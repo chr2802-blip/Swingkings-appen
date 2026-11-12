@@ -7,7 +7,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createSession, destroySession, hashPassword, requireUser, verifyPassword } from "@/lib/auth";
 import { findInviteLink, LINK_PROBLEM_TEXT, linkProblem, redeemInviteLink, type Joiner } from "@/lib/invite-links";
-import { checkRateLimit, clearAttempts, recordAttempt, takeAttempt } from "@/lib/rate-limit";
+import { clearAttempts, takeAttempt } from "@/lib/rate-limit";
 
 export type FormState = { error?: string } | undefined;
 
@@ -32,15 +32,13 @@ export async function login(_prev: FormState, formData: FormData): Promise<FormS
   if (!parsed.success) return { error: "Skriv din e-mail og din adgangskode." };
   const email = parsed.data.email.toLowerCase();
 
-  const limit = await checkRateLimit("login", email);
+  // Counted first and cleared on success: a burst of guesses at once each sees the others.
+  const limit = await takeAttempt("login", email);
   if (!limit.allowed) return { error: `For mange forsøg. Prøv igen om ${limit.retryAfterMinutes} min.` };
 
   const user = await prisma.user.findUnique({ where: { email } });
   const matches = await verifyPassword(parsed.data.password, user?.passwordHash ?? NO_ACCOUNT_HASH);
-  if (!user || !matches) {
-    await recordAttempt("login", email);
-    return { error: "Forkert e-mail eller adgangskode." };
-  }
+  if (!user || !matches) return { error: "Forkert e-mail eller adgangskode." };
 
   await clearAttempts("login", email);
   await createSession(user.id, user.tokenVersion);
@@ -85,14 +83,13 @@ export async function joinWithLink(_prev: FormState, formData: FormData): Promis
   const problem = linkProblem(link);
   if (!link || problem) return { error: LINK_PROBLEM_TEXT[problem ?? "unknown"] };
 
-  const limit = await checkRateLimit("join", email);
+  const limit = await takeAttempt("join", email);
   if (!limit.allowed) return { error: `For mange forsøg. Prøv igen om ${limit.retryAfterMinutes} min.` };
 
   const existing = await prisma.user.findUnique({ where: { email } });
   let joiner: Joiner;
   if (existing) {
     if (!(await verifyPassword(parsed.data.password, existing.passwordHash))) {
-      await recordAttempt("join", email);
       return { error: "Der findes allerede en konto med den e-mail. Skriv din nuværende adgangskode." };
     }
     joiner = { userId: existing.id };
