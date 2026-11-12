@@ -9,18 +9,32 @@ import { FeedPostCard } from "@/components/feed-post";
 import { FeedMore } from "@/components/feed-more";
 
 /**
- * The team's feed — pictures, stories and polls — as a section of the front page, which
- * is where it lives (there is no feed tab). `#feed` is its address; push links go there.
- *
- * The first `FEED_PAGE` posts come with the page; `FeedMore` fetches the rest as the
- * reader scrolls towards the end.
+ * What the feed shows, read alongside the rest of the front page's data so it adds no
+ * wait of its own.
  */
-export async function TeamFeed({ user }: { user: TeamUser }) {
+export async function teamFeedData(user: TeamUser) {
   const admin = canAdministerTeam(user, user.teamId);
   const [posts, roster] = await Promise.all([
     feedPosts(user.teamId, { id: user.id, canAdminister: admin }),
     teamRoster(user.teamId),
   ]);
+  return { admin, posts, roster };
+}
+
+/**
+ * The team's feed — pictures, stories and polls — as a section of the front page, which
+ * is where it lives (there is no feed tab). `#feed` is its address; push links go there.
+ *
+ * The first `FEED_PAGE` posts come with the page; `FeedMore` fetches the rest as the
+ * reader scrolls towards the end.
+ *
+ * Not behind a `<Suspense>`: with the feed streamed in, an action that renders the front
+ * page anew (a vote, a comment) pressed in the first moment after it opened could leave
+ * its button pending and the page unchanged for good. The poll test in
+ * `e2e/feed-chat.spec.ts` votes straight away.
+ */
+export function TeamFeed({ user, data }: { user: TeamUser; data: Awaited<ReturnType<typeof teamFeedData>> }) {
+  const { admin, posts, roster } = data;
   // Changes on every render, so the posts `FeedMore` fetched are fetched again when an
   // action (a like, a comment) has the page rendered anew.
   const renderedAt = Date.now();

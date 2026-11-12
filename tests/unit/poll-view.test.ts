@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pollView } from "@/lib/feed";
+import { pollView, sortByVotes } from "@/lib/feed";
 
 const now = new Date("2026-11-11T12:00:00Z");
 const anna = { id: "anna", name: "Anna", photoId: null };
@@ -60,6 +60,24 @@ describe("pollView", () => {
       [1, []],
     ]);
     expect(JSON.stringify(view)).not.toContain("anna\"");
+  });
+
+  it("puts the most votes first once the result is shown, ties in the written order", () => {
+    const three = poll({
+      options: [
+        { id: "o1", text: "Anna", playerId: null, player: null },
+        { id: "o2", text: "Bo", playerId: null, player: null },
+        { id: "o3", text: "Carl", playerId: null, player: null },
+      ],
+      votes: [
+        { optionId: "o3", voterId: "anna", voter: anna },
+        { optionId: "o3", voterId: "bo", voter: bo },
+      ],
+    });
+    expect(pollView(three, "anna", { id: "bo", canAdminister: false }, now).options.map((o) => o.id)).toEqual(["o3", "o1", "o2"]);
+    // Before voting nothing is counted, so nothing gives the leader away.
+    expect(pollView(three, "anna", { id: "carl", canAdminister: false }, now).options.map((o) => o.id)).toEqual(["o1", "o2", "o3"]);
+    expect(sortByVotes([{ votes: 1, n: "a" }, { votes: 3, n: "b" }, { votes: 1, n: "c" }]).map((o) => o.n)).toEqual(["b", "a", "c"]);
   });
 
   it("labels the closing time and the match", () => {

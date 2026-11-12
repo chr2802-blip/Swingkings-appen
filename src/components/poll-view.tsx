@@ -4,8 +4,11 @@ import { useState } from "react";
 import { useFormAction } from "@/components/use-form-action";
 import { Avatar } from "@/components/photo";
 import { Badge, Button } from "@/components/ui";
-import { ActionButton } from "@/components/action-button";
-import { closePoll, vote } from "@/app/actions/social";
+import { useChangingVote } from "@/components/post-menu";
+import { vote } from "@/app/actions/social";
+
+/** Results show this many answers until "Vis alle" is pressed. */
+const RESULTS_SHOWN = 5;
 
 export type PollOptionView = {
   id: string;
@@ -36,14 +39,18 @@ export type PollViewData = {
 };
 
 /**
- * A poll on a post. Before voting: the answers to pick. After voting — or once it is
- * closed — the results, with names beside each answer unless the poll is anonymous.
- * An open poll can be voted again ("Skift stemme") until it closes.
+ * A poll on a post. Before voting: the answers to pick, in two columns once there are
+ * more than four, so nothing scrolls. After voting — or once it is closed — the
+ * results, most votes first. Who voted for what, voting again and closing the poll are
+ * in the post's ⋯ menu (`PostMenu`).
  */
 export function PollView({ poll }: { poll: PollViewData }) {
-  const [changing, setChanging] = useState(false);
+  const { changing, setChanging } = useChangingVote();
+  const [showAll, setShowAll] = useState(false);
   const { state, pending, handleSubmit } = useFormAction(vote, { onSuccess: () => setChanging(false) });
   const showResults = (poll.hasVoted || !poll.open) && !changing;
+  const twoColumns = poll.options.length > 4;
+  const shown = showAll ? poll.options : poll.options.slice(0, RESULTS_SHOWN);
 
   return (
     <div className="space-y-3 rounded-2xl bg-slate-50 p-4">
@@ -59,7 +66,7 @@ export function PollView({ poll }: { poll: PollViewData }) {
 
       {showResults ? (
         <ul className="space-y-2">
-          {poll.options.map((option) => (
+          {shown.map((option) => (
             <li key={option.id}>
               <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <span
@@ -79,30 +86,40 @@ export function PollView({ poll }: { poll: PollViewData }) {
                   </span>
                 </div>
               </div>
-              {option.voters.length > 0 && (
-                <p className="mt-1 flex flex-wrap gap-x-2 px-1 text-xs text-slate-500">
-                  {option.voters.map((v) => v.name.split(" ")[0]).join(", ")}
-                </p>
-              )}
             </li>
           ))}
+          {poll.options.length > RESULTS_SHOWN && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setShowAll((value) => !value)}
+                className="press-button px-1 text-sm font-medium text-[var(--accent-text)]"
+              >
+                {showAll ? "Vis færre" : `Vis alle ${poll.options.length} svar`}
+              </button>
+            </li>
+          )}
         </ul>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-2">
           <input type="hidden" name="pollId" value={poll.id} />
-          <ul className="max-h-80 space-y-1.5 overflow-y-auto">
+          <ul className={twoColumns ? "grid grid-cols-2 gap-1.5" : "space-y-1.5"}>
             {poll.options.map((option) => (
-              <li key={option.id}>
-                <label className="press-card flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm has-[:checked]:border-[var(--accent)] has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_8%,white)]">
+              <li key={option.id} className="min-w-0">
+                <label
+                  className={`press-card flex h-full cursor-pointer items-center rounded-xl border border-slate-200 bg-white text-sm has-[:checked]:border-[var(--accent)] has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_8%,white)] ${
+                    twoColumns ? "gap-2 px-2.5 py-2" : "gap-2.5 px-3 py-2.5"
+                  }`}
+                >
                   <input
                     type={poll.multipleChoice ? "checkbox" : "radio"}
                     name="optionId"
                     value={option.id}
                     defaultChecked={poll.myChoices.includes(option.id)}
-                    className="h-4 w-4 accent-[var(--accent)]"
+                    className="h-4 w-4 shrink-0 accent-[var(--accent)]"
                   />
                   {option.isPlayer && <Avatar name={option.text} photoId={option.playerPhotoId} size="xs" />}
-                  <span className="min-w-0 flex-1">{option.text}</span>
+                  <span className="min-w-0 flex-1 leading-tight break-words">{option.text}</span>
                 </label>
               </li>
             ))}
@@ -131,22 +148,6 @@ export function PollView({ poll }: { poll: PollViewData }) {
           {poll.ballots === 1 ? "1 har stemt" : `${poll.ballots} har stemt`}
           {poll.hasVoted && poll.anonymous && " · du har stemt"}
         </span>
-        {showResults && poll.open && poll.hasVoted && !poll.anonymous && (
-          <Button type="button" variant="ghost" className="px-2! py-1! text-xs" onClick={() => setChanging(true)}>
-            Skift stemme
-          </Button>
-        )}
-        {poll.open && poll.canClose && (
-          <ActionButton
-            action={closePoll}
-            fields={{ pollId: poll.id }}
-            label="Luk afstemning"
-            variant="ghost"
-            className="px-2! py-1! text-xs"
-            confirm="Luk afstemningen?"
-            confirmLabel="Luk den"
-          />
-        )}
       </div>
     </div>
   );

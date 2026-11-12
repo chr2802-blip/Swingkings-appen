@@ -239,7 +239,9 @@ describe("polls", () => {
 
     const [forBo] = await feedPosts(team.id, { id: bo.id, canAdminister: false });
     expect(forBo!.poll).toMatchObject({ hasVoted: true, myChoices: [optionIds[1]], canClose: false });
-    expect(forBo!.poll!.options[1]).toMatchObject({ votes: 1, leading: true, voters: [{ id: bo.id, name: "Bo" }] });
+    // Shown most votes first: the answer Bo picked has moved to the top.
+    expect(forBo!.poll!.options.map((o) => o.id)).toEqual([optionIds[1], optionIds[0]]);
+    expect(forBo!.poll!.options[0]).toMatchObject({ votes: 1, leading: true, voters: [{ id: bo.id, name: "Bo" }] });
   });
 
   it("never names a voter of an anonymous poll, even after it closes", async () => {

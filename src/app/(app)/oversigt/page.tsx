@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { requireTeamUser } from "@/lib/auth";
 import { teamDb } from "@/lib/team-db";
 import Image from "next/image";
@@ -12,15 +11,14 @@ import { activityName } from "@/lib/activity";
 import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallCard } from "@/components/install-app";
-import { TeamFeed } from "@/components/team-feed";
+import { TeamFeed, teamFeedData } from "@/components/team-feed";
 import { Crown } from "@/components/crest";
 import { HomeBanner } from "@/components/home-banner";
-import { FeedSkeleton } from "@/components/skeleton";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, kings, nextMatch, firstTask, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
+  const [board, kings, nextMatch, firstTask, myTaskCount, openChallenges, pollsWaiting, newPosts, feed] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
@@ -50,6 +48,7 @@ export default async function OverviewPage() {
         where: { authorId: { not: user.id }, createdAt: { gt: member?.feedSeenAt ?? member?.createdAt ?? new Date() } },
       }),
     ),
+    teamFeedData(user),
   ]);
   const mine = board.balances.find((row) => row.userId === user.id);
   const waitingOnMe = openChallenges.filter((c) => movesFor(c, user.id, false).some((m) => m !== "cancel")).length;
@@ -149,10 +148,7 @@ export default async function OverviewPage() {
       <InstallCard />
       <NotificationSetup compact />
 
-      {/* The feed is the heaviest read on the page: stream it in after the rest. */}
-      <Suspense fallback={<FeedSkeleton />}>
-        <TeamFeed user={user} />
-      </Suspense>
+      <TeamFeed user={user} data={feed} />
     </div>
   );
 }
