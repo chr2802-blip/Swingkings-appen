@@ -73,6 +73,8 @@ export async function deleteChatMessage(_prev: ActionResult, formData: FormData)
 const pollSchema = z.object({
   pollQuestion: z.string().trim().min(1, "Skriv spørgsmålet til afstemningen.").max(200),
   pollKind: z.enum(["custom", "players"]).default("custom"),
+  /** "on" when the players were picked from the roster; otherwise every player is an answer. */
+  pollPickPlayers: z.enum(["on", "off"]).default("off"),
   pollAnonymous: z.enum(["on", "off"]).default("off"),
   pollMultiple: z.enum(["on", "off"]).default("off"),
   pollClosesAt: z.string().trim().optional(),
@@ -81,8 +83,8 @@ const pollSchema = z.object({
 
 /**
  * A post: pictures (up to ten, already shrunk in the browser), some words, a poll — at
- * least one of them. A poll's answers are either typed, or every player on the team
- * ("Kampens spiller"). Whether it is anonymous is fixed here and never changed later.
+ * least one of them. A poll's answers are either typed, or players on the team — the
+ * ones ticked on the roster (`pollPlayerId`), or all of them. Whether it is anonymous is fixed here and never changed later.
  */
 export async function createPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -106,7 +108,13 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
     let options: { text: string; playerId: string | null }[];
     if (form.fields.pollKind === "players") {
       const roster = await teamRoster(user.teamId);
-      options = roster.map((m) => ({ text: m.name, playerId: m.userId }));
+      let chosen = roster;
+      if (form.fields.pollPickPlayers === "on") {
+        const picked = new Set(formData.getAll("pollPlayerId").map(String).filter(Boolean));
+        if ([...picked].some((id) => !roster.some((m) => m.userId === id))) return fail("Spilleren er ikke på holdet.");
+        chosen = roster.filter((m) => picked.has(m.userId));
+      }
+      options = chosen.map((m) => ({ text: m.name, playerId: m.userId }));
     } else {
       options = cleanOptions(formData.getAll("pollOption").map(String)).map((t) => ({ text: t, playerId: null }));
     }

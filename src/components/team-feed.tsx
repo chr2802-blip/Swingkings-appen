@@ -1,7 +1,7 @@
 import type { TeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { FEED_PAGE, feedPosts, nextFeedCursor } from "@/lib/feed";
-import { matchOptions } from "@/lib/fine-data";
+import { teamRoster } from "@/lib/roster";
 import { EmptyState, SectionTitle } from "@/components/ui";
 import { PostDialog } from "@/components/post-dialog";
 import { FeedSeen } from "@/components/feed-seen";
@@ -17,9 +17,9 @@ import { FeedMore } from "@/components/feed-more";
  */
 export async function TeamFeed({ user }: { user: TeamUser }) {
   const admin = canAdministerTeam(user, user.teamId);
-  const [posts, matches] = await Promise.all([
+  const [posts, roster] = await Promise.all([
     feedPosts(user.teamId, { id: user.id, canAdminister: admin }),
-    matchOptions(user.teamId),
+    teamRoster(user.teamId),
   ]);
   // Changes on every render, so the posts `FeedMore` fetched are fetched again when an
   // action (a like, a comment) has the page rendered anew.
@@ -30,9 +30,9 @@ export async function TeamFeed({ user }: { user: TeamUser }) {
       <FeedSeen />
       <SectionTitle
         action={
-          <div className="flex gap-2">
-            <PostDialog matches={matches} />
-          </div>
+          <PostDialog
+            members={roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId, shirtNumber: m.shirtNumber }))}
+          />
         }
       >
         Feed
