@@ -4,7 +4,8 @@ import { Card, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { CreateTeamForm } from "@/components/create-team-form";
 import { ActionButton } from "@/components/action-button";
-import { deleteTeam, visitTeam } from "@/app/actions/teams";
+import { createDemoTeamAction, deleteTeam, removeDemoTeamAction, visitTeam } from "@/app/actions/teams";
+import { DEMO_TEAM_NAME } from "@/lib/demo-team";
 
 /** The installation: every team on it. Reads across teams on purpose, so `prisma` directly. */
 export default async function AdminPage() {
@@ -19,6 +20,32 @@ export default async function AdminPage() {
       <Card>
         <CreateTeamForm />
       </Card>
+      <section>
+        <SectionTitle>Testdata</SectionTitle>
+        <Card>
+          <p className="mb-3 text-sm text-slate-600">
+            Holdet &quot;{DEMO_TEAM_NAME}&quot; med otte opdigtede spillere, bøder, aktiviteter, opgaver, chat og
+            afstemninger, så appen kan prøves af. Du bliver admin på det. Spillerne kan ikke logge ind.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <ActionButton
+              action={createDemoTeamAction}
+              fields={{}}
+              label="Opret testhold"
+              confirm="Opret testholdet? Findes det allerede, laves det forfra."
+              confirmLabel="Opret testhold"
+            />
+            <ActionButton
+              action={removeDemoTeamAction}
+              fields={{}}
+              label="Slet testhold"
+              variant="ghost"
+              confirm="Slet testholdet og alle dets opdigtede spillere?"
+              confirmLabel="Slet testholdet"
+            />
+          </div>
+        </Card>
+      </section>
       <section>
         <SectionTitle>Hold</SectionTitle>
         <Card padded={false}>

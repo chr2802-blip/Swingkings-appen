@@ -56,3 +56,24 @@ test("a super admin creates a team and becomes its coach; nobody else reaches th
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/oversigt$/);
 });
+
+test("a super admin makes the test team, lands on it, and takes it away again", async ({ page, loginAs }) => {
+  const root = await db.user.create({ data: { email: "root@e2e.dk", name: "Root", passwordHash: "x", role: "SUPER_ADMIN" } });
+  await loginAs(root);
+  await page.goto("/admin");
+  await page.getByRole("button", { name: "Opret testhold" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Opret testhold" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByRole("listitem").filter({ hasText: "Swingkings Demo" })).toBeVisible();
+  expect(await db.teamMember.findFirst({ where: { userId: root.id, team: { name: "Swingkings Demo" } } })).toMatchObject({ role: "ADMIN" });
+
+  await page.goto("/chat");
+  await expect(page.getByText("Husk mødetid 13:45 på lørdag! 💪")).toBeVisible();
+
+  await page.goto("/admin");
+  await page.getByRole("button", { name: "Slet testhold" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Slet testholdet" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: "Swingkings Demo" })).toBeHidden();
+  expect(await db.team.count({ where: { name: "Swingkings Demo" } })).toBe(0);
+  expect(await db.user.count({ where: { email: { endsWith: "@demo.swingkings.dk" } } })).toBe(0);
+});
