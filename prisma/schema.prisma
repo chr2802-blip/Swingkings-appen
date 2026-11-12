@@ -23,7 +23,7 @@ enum PlatformRole {
  * What somebody may do on one team. Answered per team, on TeamMember, because the
  * treasurer of the first team can be an ordinary player on the second.
  * ADMIN     træner/holdleder: everything, including members, matches and settings.
- * TREASURER kasserer/bødeformand: fine types, fines and payments.
+ * TREASURER bødekasseformand: the fine catalogue, others' fines, resetting and withdrawing.
  * PLAYER    everybody else: challenges, tasks, chat and the feed.
  */
 enum MemberRole {

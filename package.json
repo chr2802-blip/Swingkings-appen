@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && vitest run --project unit && prisma migrate deploy && next build",
+    "build": "prisma generate && vitest run --project unit && next build && prisma migrate deploy",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
