@@ -181,6 +181,28 @@ describe("polls", () => {
     expect(options.every((o) => o.playerId)).toBe(true);
   });
 
+  it("makes a poll of the players ticked on the roster, and refuses a player from another team", async () => {
+    const { anna, bo } = await makeSquad();
+    const other = await makeSquad("Andre");
+    await signIn(anna);
+    expect(await createPost(undefined, pollForm({ pollKind: "players", pollPickPlayers: "on", pollPlayerId: [bo.id, anna.id] }))).toEqual({ ok: true });
+    const options = await prisma.pollOption.findMany({ orderBy: { position: "asc" } });
+    expect(options.map((o) => [o.text, o.playerId])).toEqual([
+      ["Anna", anna.id],
+      ["Bo", bo.id],
+    ]);
+
+    expect(await createPost(undefined, pollForm({ pollKind: "players", pollPickPlayers: "on", pollPlayerId: [bo.id, other.anna.id] }))).toEqual({
+      ok: false,
+      error: "Spilleren er ikke på holdet.",
+    });
+    expect(await createPost(undefined, pollForm({ pollKind: "players", pollPickPlayers: "on", pollPlayerId: [bo.id] }))).toEqual({
+      ok: false,
+      error: "En afstemning skal have mindst to svarmuligheder.",
+    });
+    expect(await prisma.poll.count()).toBe(1);
+  });
+
   it("refuses a poll with one answer, a past closing time and another team's match", async () => {
     const { anna } = await makeSquad();
     const other = await makeSquad("Andre");
