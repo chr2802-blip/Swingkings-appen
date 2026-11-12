@@ -1,12 +1,24 @@
 "use client";
 
 import { useFormAction } from "@/components/use-form-action";
+import { MenuForm, useMenuSlot } from "@/components/action-menu";
 import { Button } from "@/components/ui";
 import { syncCalendar } from "@/app/actions/activities";
 
 /** "Hent fra KampKlar" — reads the feed now rather than waiting for the morning job. */
 export function SyncButton() {
   const { state, pending, handleSubmit } = useFormAction(syncCalendar);
+  const menu = useMenuSlot();
+  if (menu) {
+    return (
+      <MenuForm
+        onSubmit={handleSubmit}
+        pending={pending}
+        label={pending ? "Henter…" : "Hent fra KampKlar"}
+        message={state && { ok: state.ok, text: state.ok ? (state.note ?? "Hentet.") : state.error }}
+      />
+    );
+  }
   return (
     <form onSubmit={handleSubmit} className="relative">
       <Button type="submit" variant="secondary" disabled={pending} aria-busy={pending}>

@@ -7,6 +7,7 @@ import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { FinesTabs } from "@/components/fines-tabs";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { ActionButton } from "@/components/action-button";
+import { ActionMenu } from "@/components/action-menu";
 import { removeFineType } from "@/app/actions/fines";
 
 export default async function CataloguePage() {
@@ -43,17 +44,17 @@ export default async function CataloguePage() {
                   <p className="text-xs text-slate-500">{kr(type.units * team.finePriceKr)}</p>
                 </div>
                 {manages && (
-                  <div className="flex">
+                  <ActionMenu icon label={`Handlinger for ${type.name}`} title={type.name}>
                     <FineTypeDialog finePriceKr={team.finePriceKr} fineType={type} />
                     <ActionButton
                       action={removeFineType}
                       fields={{ id: type.id }}
-                      label="Fjern"
-                      variant="ghost"
+                      label="Fjern fra kataloget"
+                      variant="danger"
                       confirm={`Fjern “${type.name}” fra kataloget?`}
                       confirmLabel="Fjern"
                     />
-                  </div>
+                  </ActionMenu>
                 )}
               </li>
             ))}

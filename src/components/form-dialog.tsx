@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Button, type Variant } from "@/components/ui";
+import { MenuTrigger } from "@/components/action-menu";
 import { useFormAction } from "@/components/use-form-action";
 import type { FormAction } from "@/lib/action-result";
 
@@ -70,9 +71,9 @@ export function FormDialog({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button type="button" variant={triggerVariant} className={triggerClassName} onClick={() => setOpen(true)}>
+      <MenuTrigger variant={triggerVariant} className={triggerClassName} onClick={() => setOpen(true)}>
         {trigger}
-      </Button>
+      </MenuTrigger>
       <Modal open={open} onClose={() => setOpen(false)} title={title} size={size}>
         {open && (
           <DialogForm action={action} submitLabel={submitLabel} onDone={() => setOpen(false)} onCancel={() => setOpen(false)}>

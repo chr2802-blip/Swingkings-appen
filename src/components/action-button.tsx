@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button, type Variant } from "@/components/ui";
+import { MenuForm, MenuTrigger, useMenuSlot } from "@/components/action-menu";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { useFormAction } from "@/components/use-form-action";
 import type { FormAction } from "@/lib/action-result";
@@ -30,11 +31,30 @@ export function ActionButton({
   confirmLabel?: string;
 }) {
   const [asking, setAsking] = useState(false);
-  const { state, pending, handleSubmit } = useFormAction(action, { onSuccess: () => setAsking(false) });
+  const menu = useMenuSlot();
+  const { state, pending, handleSubmit } = useFormAction(action, {
+    onSuccess: () => {
+      setAsking(false);
+      menu?.close();
+    },
+  });
 
   const hidden = Object.entries(fields).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />);
 
   if (!confirm) {
+    if (menu) {
+      return (
+        <MenuForm
+          onSubmit={handleSubmit}
+          pending={pending}
+          variant={variant}
+          label={label}
+          message={state?.ok === false ? { ok: false, text: state.error } : null}
+        >
+          {hidden}
+        </MenuForm>
+      );
+    }
     return (
       <form onSubmit={handleSubmit} className="inline-flex flex-col items-start gap-1">
         {hidden}
@@ -52,9 +72,9 @@ export function ActionButton({
 
   return (
     <>
-      <Button type="button" variant={variant} className={className} onClick={() => setAsking(true)}>
+      <MenuTrigger variant={variant} className={className} onClick={() => setAsking(true)}>
         {label}
-      </Button>
+      </MenuTrigger>
       <Modal open={asking} onClose={() => setAsking(false)} title={confirm} size="drawer">
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           {hidden}

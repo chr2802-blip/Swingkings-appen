@@ -7,6 +7,7 @@ import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle, Tabs } from "@/components/ui";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { SyncButton } from "@/components/sync-button";
+import { ActionMenu } from "@/components/action-menu";
 import { copyableActivities, LISTED_ACTIVITY, templateOptions } from "@/lib/activity-data";
 import { activityName } from "@/lib/activity";
 
@@ -58,10 +59,14 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
               : undefined
         }
         action={
-          <>
-            {team.calendarUrl && <SyncButton />}
+          team.calendarUrl ? (
+            <ActionMenu>
+              <ActivityDialog templates={templates} copyable={copyable} />
+              <SyncButton />
+            </ActionMenu>
+          ) : (
             <ActivityDialog templates={templates} copyable={copyable} />
-          </>
+          )
         }
       />
       <Tabs
