@@ -433,3 +433,29 @@ h1,
     transition-duration: 1ms !important;
   }
 }
+
+/*
+ * The header and the tab bar slide away while scrolling down and come back on the way up
+ * (`ScrollBars` sets the attribute). The header keeps the strip under the phone's status
+ * bar, so the clock never sits on top of the page.
+ */
+.app-topbar,
+.app-bottombar {
+  transition: translate var(--dur-base) var(--ease-arrive);
+}
+
+:root[data-bars="hidden"] .app-topbar {
+  translate: 0 calc(-100% + env(safe-area-inset-top));
+}
+
+:root[data-bars="hidden"] .app-bottombar {
+  /* Past its own height, so the shadow above it goes too. */
+  translate: 0 calc(100% + 32px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-topbar,
+  .app-bottombar {
+    transition: none;
+  }
+}

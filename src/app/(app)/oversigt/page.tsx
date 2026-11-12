@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireTeamUser } from "@/lib/auth";
 import { teamDb } from "@/lib/team-db";
 import Image from "next/image";
@@ -16,6 +17,7 @@ import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
 import { Crown } from "@/components/crest";
 import { HomeBanner } from "@/components/home-banner";
+import { FeedSkeleton } from "@/components/skeleton";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
@@ -176,7 +178,10 @@ export default async function OverviewPage() {
         )}
       </section>
 
-      <TeamFeed user={user} />
+      {/* The feed is the heaviest read on the page: stream it in after the rest. */}
+      <Suspense fallback={<FeedSkeleton />}>
+        <TeamFeed user={user} />
+      </Suspense>
     </div>
   );
 }
