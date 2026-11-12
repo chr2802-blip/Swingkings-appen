@@ -36,13 +36,13 @@ const EXEMPT: Record<string, string> = {
 };
 
 /** `src/lib/x.ts` → `@/lib/x`, which is how a test imports it. */
-const importPath = (file: string) => "@/" + file.replace(/^src\//, "").replace(/\.ts$/, "");
+const importPath = (file: string) => "@/" + file.replace(/^src\//, "").replace(/\.tsx?$/, "");
 const imported = (file: string) => testText.includes(`"${importPath(file)}"`);
 
 describe("every module has a test", () => {
   const modules = [
     ...sources("src/lib").filter((f) => f.endsWith(".ts")),
-    ...sources("src/app/actions").filter((f) => f.endsWith(".ts")),
+    ...sources("src/app/actions").filter((f) => /\.tsx?$/.test(f)),
     ...sources("src/app/api").filter((f) => f.endsWith("route.ts")),
     "src/middleware.ts",
   ];

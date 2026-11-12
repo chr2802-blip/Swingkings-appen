@@ -10,6 +10,9 @@ const alias = { "@": path.resolve(import.meta.dirname, "src") };
  * created and migrated by `tests/integration/global-setup.ts`. Never the dev database.
  */
 export default defineConfig({
+  // Server actions that render (`src/app/actions/feed.tsx`) hold JSX; tsconfig preserves it
+  // for Next, so the tests compile it themselves.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     env: { TZ: "UTC" },
     // An `it.only` left in is a file reduced to one test, which reads as a pass.

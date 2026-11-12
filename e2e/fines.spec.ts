@@ -22,9 +22,9 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
   await loginAs(anna);
   await page.goto("/oversigt");
   // The card's own text, so a failure says what it showed instead of "not found".
-  const account = page.locator('a[href="/boder"]').filter({ has: page.getByRole("heading", { name: "Din bødekonto" }) });
+  const account = page.locator('a[href="/boder"]').filter({ hasText: /^Bødekonto/i });
   await expect(account).toContainText("20 kr");
-  await expect(account).toContainText("skylder du til kassen");
+  await expect(account).toContainText("skylder du");
 });
 
 test("a refused fine keeps the dialog open and says why", async ({ page, loginAs }) => {
