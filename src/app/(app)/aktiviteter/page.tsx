@@ -7,6 +7,7 @@ import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle, Tabs } from "@/components/ui";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { SyncButton } from "@/components/sync-button";
+import { ActionMenu } from "@/components/action-menu";
 import { copyableActivities, LISTED_ACTIVITY, templateOptions } from "@/lib/activity-data";
 import { activityName } from "@/lib/activity";
 
@@ -40,6 +41,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
         cancelledAt: true,
         source: true,
         tasks: { where: { doneAt: null }, select: { id: true } },
+        _count: { select: { signups: { where: { going: true } } } },
       },
     }),
     templateOptions(user.teamId),
@@ -58,10 +60,14 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
               : undefined
         }
         action={
-          <>
-            {team.calendarUrl && <SyncButton />}
+          team.calendarUrl ? (
+            <ActionMenu>
+              <ActivityDialog templates={templates} copyable={copyable} />
+              <SyncButton />
+            </ActionMenu>
+          ) : (
             <ActivityDialog templates={templates} copyable={copyable} />
-          </>
+          )
         }
       />
       <Tabs
@@ -110,6 +116,9 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
                           ) : match.isHome !== null ? (
                             <Badge tone="accent">{match.isHome ? "Hjemme" : "Ude"}</Badge>
                           ) : null}
+                          {match.source === "MANUAL" && match._count.signups > 0 && (
+                            <span className="text-xs text-slate-500">{match._count.signups} kommer</span>
+                          )}
                           {match.tasks.length > 0 && (
                             <span className="text-xs text-slate-500">
                               {match.tasks.length === 1 ? "1 opgave" : `${match.tasks.length} opgaver`}

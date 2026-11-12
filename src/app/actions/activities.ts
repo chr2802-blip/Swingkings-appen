@@ -25,12 +25,9 @@ function pickedTemplates(formData: FormData) {
 }
 
 const activitySchema = z.object({
-  kind: z.enum(["MATCH", "TRAINING", "OTHER"]).default("MATCH"),
-  title: optionalText,
-  opponent: optionalText,
+  title: requiredText("Giv aktiviteten et navn."),
   startsAt: z.string().min(1, "Vælg tidspunkt for aktiviteten."),
   location: optionalText,
-  venue: z.enum(["home", "away", "unknown"]).default("unknown"),
   note: optionalText,
   copyFromId: optionalId,
 });
@@ -40,37 +37,26 @@ const activitySchema = z.object({
  * team. The standard jobs themselves (the templates) and the calendar link are team
  * settings, for admins.
  *
- * An activity typed in by hand: a cup game or a friendly, an extra training, the
- * afslutningsfest. Activities from the feed are added by the sync. A new one can be
- * given standard jobs (the ticked templates) and the jobs of an earlier activity.
+ * An activity typed in by hand: the afslutningsfest, a holdtur, a fællesspisning. Matches
+ * and trainings come from KampKlar and are not made here, so a hand-made activity is
+ * always `OTHER` — and saving an older hand-made match or training makes it one too.
+ * Teammates sign up for it (`setSignup`). A new one can be given standard jobs (the ticked
+ * templates) and the jobs of an earlier activity.
  */
 export async function saveActivity(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const form = readForm(activitySchema, formData);
   if (!form.ok) return fail(form.error);
-  const { kind, opponent } = form.fields;
   const startsAt = parseLocalDateTime(form.fields.startsAt);
   if (!startsAt) return fail("Tidspunktet kunne ikke læses.");
-
-  let title: string;
-  let isHome: boolean | null = null;
-  if (kind === "MATCH") {
-    if (!opponent) return fail("Skriv modstanderen.");
-    if (opponent.length > 200) return fail("Teksten er for lang (højst 200 tegn).");
-    isHome = form.fields.venue === "unknown" ? null : form.fields.venue === "home";
-    title = isHome === false ? `${opponent} - ${user.teamName}` : `${user.teamName} - ${opponent}`;
-  } else {
-    title = form.fields.title ?? (kind === "TRAINING" ? "Træning" : "");
-    if (!title) return fail("Giv aktiviteten et navn.");
-    if (title.length > 200) return fail("Teksten er for lang (højst 200 tegn).");
-  }
+  if (form.fields.title.length > 200) return fail("Teksten er for lang (højst 200 tegn).");
   const data = {
-    kind,
-    title,
-    opponent: kind === "MATCH" ? opponent : null,
+    kind: "OTHER" as const,
+    title: form.fields.title,
+    opponent: null,
+    isHome: null,
     startsAt,
     location: form.fields.location,
-    isHome,
     note: form.fields.note,
   };
 
@@ -111,6 +97,32 @@ export async function deleteActivity(_prev: ActionResult, formData: FormData): P
   await db.match.deleteMany({ where: { id } });
   refresh();
   redirect("/aktiviteter");
+}
+
+/**
+ * Says whether the signed-in player comes to a hand-made activity (`going` is "yes" or
+ * "no"); answering again changes the answer. Activities from KampKlar and cancelled ones
+ * take no answers.
+ */
+export async function setSignup(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  const going = String(formData.get("going") ?? "");
+  if (going !== "yes" && going !== "no") return fail("Svar ja eller nej.");
+  const db = teamDb(user.teamId);
+  const activity = await db.match.findFirst({
+    where: { id: String(formData.get("activityId") ?? "") },
+    select: { id: true, source: true, cancelledAt: true },
+  });
+  if (!activity) return fail("Aktiviteten findes ikke.");
+  if (activity.source !== "MANUAL") return fail("Der er ikke tilmelding til aktiviteter fra KampKlar.");
+  if (activity.cancelledAt) return fail("Aktiviteten er aflyst.");
+  await db.activitySignup.upsert({
+    where: { matchId_userId: { matchId: activity.id, userId: user.id } },
+    create: { teamId: user.teamId, matchId: activity.id, userId: user.id, going: going === "yes" },
+    update: { going: going === "yes" },
+  });
+  refresh();
+  return ok();
 }
 
 export async function syncCalendar(): Promise<ActionResult> {

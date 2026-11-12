@@ -11,14 +11,14 @@ import { activityName } from "@/lib/activity";
 import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallCard } from "@/components/install-app";
-import { TeamFeed, teamFeedData } from "@/components/team-feed";
+import { TeamFeed } from "@/components/team-feed";
 import { Crown } from "@/components/crest";
 import { HomeBanner } from "@/components/home-banner";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, kings, nextMatch, firstTask, myTaskCount, openChallenges, pollsWaiting, newPosts, feed] = await Promise.all([
+  const [board, kings, nextMatch, firstTask, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
@@ -48,7 +48,6 @@ export default async function OverviewPage() {
         where: { authorId: { not: user.id }, createdAt: { gt: member?.feedSeenAt ?? member?.createdAt ?? new Date() } },
       }),
     ),
-    teamFeedData(user),
   ]);
   const mine = board.balances.find((row) => row.userId === user.id);
   const waitingOnMe = openChallenges.filter((c) => movesFor(c, user.id, false).some((m) => m !== "cancel")).length;
@@ -148,7 +147,8 @@ export default async function OverviewPage() {
       <InstallCard />
       <NotificationSetup compact />
 
-      <TeamFeed user={user} data={feed} />
+      {/* No Suspense boundary round it: see tests/unit/no-suspense.test.ts. */}
+      <TeamFeed user={user} />
     </div>
   );
 }

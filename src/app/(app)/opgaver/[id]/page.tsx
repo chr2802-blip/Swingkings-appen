@@ -9,6 +9,7 @@ import { activityName } from "@/lib/activity";
 import { Badge, Card, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { ActionButton } from "@/components/action-button";
+import { ActionMenu } from "@/components/action-menu";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
 import { deleteTask, setTaskDone, toggleTakeTask } from "@/app/actions/tasks";
 
@@ -36,19 +37,39 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       <PageHeader
         title={task.title}
         action={
-          canEdit && (
-            <EditTaskDialog
-              members={roster}
-              task={{
-                id: task.id,
-                title: task.title,
-                description: task.description,
-                dueOn: task.dueAt && (!task.match || task.dueAt.getTime() !== task.match.startsAt.getTime()) ? formatInZone(task.dueAt, "yyyy-MM-dd") : "",
-                hasMatch: task.match !== null,
-                assigneeIds: task.assignees.map((a) => a.user.id),
-              }}
+          <ActionMenu>
+            <ActionButton
+              action={setTaskDone}
+              fields={{ id: task.id, done: String(!task.doneAt) }}
+              label={task.doneAt ? "Markér som ikke udført" : "Markér som udført ✓"}
             />
-          )
+            {!task.doneAt && (
+              <ActionButton action={toggleTakeTask} fields={{ id: task.id }} label={mine ? "Tag mig af opgaven" : "Jeg tager den"} />
+            )}
+            {canEdit && (
+              <EditTaskDialog
+                members={roster}
+                task={{
+                  id: task.id,
+                  title: task.title,
+                  description: task.description,
+                  dueOn: task.dueAt && (!task.match || task.dueAt.getTime() !== task.match.startsAt.getTime()) ? formatInZone(task.dueAt, "yyyy-MM-dd") : "",
+                  hasMatch: task.match !== null,
+                  assigneeIds: task.assignees.map((a) => a.user.id),
+                }}
+              />
+            )}
+            {canEdit && (
+              <ActionButton
+                action={deleteTask}
+                fields={{ id: task.id }}
+                label="Slet opgave"
+                variant="danger"
+                confirm="Slet opgaven?"
+                confirmLabel="Slet opgaven"
+              />
+            )}
+          </ActionMenu>
         }
       />
       <Card className="mb-6 space-y-3">
@@ -89,27 +110,6 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
         )}
       </Card>
 
-      <div className="flex flex-wrap gap-2">
-        <ActionButton
-          action={setTaskDone}
-          fields={{ id: task.id, done: String(!task.doneAt) }}
-          label={task.doneAt ? "Markér som ikke udført" : "Markér som udført ✓"}
-          variant={task.doneAt ? "secondary" : "primary"}
-        />
-        {!task.doneAt && (
-          <ActionButton action={toggleTakeTask} fields={{ id: task.id }} label={mine ? "Tag mig af opgaven" : "Jeg tager den"} />
-        )}
-        {canEdit && (
-          <ActionButton
-            action={deleteTask}
-            fields={{ id: task.id }}
-            label="Slet"
-            variant="danger"
-            confirm="Slet opgaven?"
-            confirmLabel="Slet opgaven"
-          />
-        )}
-      </div>
     </div>
   );
 }

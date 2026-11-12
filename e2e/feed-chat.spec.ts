@@ -91,8 +91,8 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   // Bo has not voted, so the menu offers nothing about the poll — and Bo did not write the post.
   await expect(page.getByRole("button", { name: "Handlinger" })).toHaveCount(0);
 
-  // Pressed the moment the page opens: with the feed streamed in behind a <Suspense>
-  // this left the button pending for good now and then (see `TeamFeed`).
+  // Pressed the moment the page opens: with the feed behind a <Suspense> this left the
+  // button pending for good now and then (see tests/unit/no-suspense.test.ts).
   await page.getByRole("radio", { name: "Victor" }).check();
   await page.getByRole("button", { name: "Stem", exact: true }).click();
   await expect(page.getByText("2 har stemt")).toBeVisible();

@@ -19,11 +19,13 @@ import {
   deleteTaskTemplate,
   saveActivity,
   saveTaskTemplate,
+  setSignup,
   syncCalendar,
 } from "@/app/actions/activities";
 import { fetchCalendar, syncTeamCalendar } from "@/lib/kampklar";
 import { LISTED_ACTIVITY, copyableActivities, templateOptions } from "@/lib/activity-data";
-import { KIND_LABEL, activityName } from "@/lib/activity";
+import { KIND_LABEL, activityName, signupSummary } from "@/lib/activity";
+import { teamRoster } from "@/lib/roster";
 import { formData, makeMatch, makeSquad, signIn } from "../helpers/factories";
 import { captureRedirect, expectDenied, expectRedirect } from "../helpers/expect";
 
@@ -37,34 +39,29 @@ beforeEach(() => {
 });
 
 describe("saveActivity", () => {
-  it("lets any player add a match on the team's clock, with the ticked standard jobs, and opens it", async () => {
+  it("lets any player add an activity on the team's clock, with the ticked standard jobs, and opens it", async () => {
     const { team, anna } = await makeSquad();
-    const wash = await prisma.taskTemplate.create({ data: { teamId: team.id, title: "Trøjevask", people: 1 } });
+    const wash = await prisma.taskTemplate.create({ data: { teamId: team.id, title: "Grill", people: 1 } });
     await prisma.taskTemplate.create({ data: { teamId: team.id, title: "Ikke valgt", people: 1 } });
     await signIn(anna);
 
     const to = await captureRedirect(() =>
-      saveActivity(undefined, formData({ kind: "MATCH", opponent: "B.93", startsAt: "2030-06-01T14:30", venue: "away", location: "Banen", templateId: [wash.id] })),
+      saveActivity(undefined, formData({ title: "Afslutningsfest", startsAt: "2030-06-01T19:30", location: "Klubhuset", templateId: [wash.id] })),
     );
     const match = await prisma.match.findFirstOrThrow({ where: { teamId: team.id }, include: { tasks: true } });
     expect(to).toBe(`/aktiviteter/${match.id}`);
-    expect(match).toMatchObject({ kind: "MATCH", title: "B.93 - Swingkings", isHome: false, source: "MANUAL", location: "Banen" });
-    expect(match.startsAt.toISOString()).toBe("2030-06-01T12:30:00.000Z");
-    expect(match.tasks.map((t) => t.title)).toEqual(["Trøjevask"]);
+    expect(match).toMatchObject({ kind: "OTHER", title: "Afslutningsfest", opponent: null, isHome: null, source: "MANUAL", location: "Klubhuset" });
+    expect(match.startsAt.toISOString()).toBe("2030-06-01T17:30:00.000Z");
+    expect(match.tasks.map((t) => t.title)).toEqual(["Grill"]);
+    expect(activityName(match)).toBe("Afslutningsfest");
+    expect(KIND_LABEL).toEqual({ MATCH: "Kamp", TRAINING: "Træning", OTHER: "Aktivitet" });
   });
 
-  it("names a training and anything else by its title, a training 'Træning' by default", async () => {
+  it("never makes a match or a training by hand, whatever the form says", async () => {
     const { team, anna } = await makeSquad();
     await signIn(anna);
-    await captureRedirect(() => saveActivity(undefined, formData({ kind: "TRAINING", startsAt: "2030-06-02T17:00" })));
-    await captureRedirect(() => saveActivity(undefined, formData({ kind: "OTHER", title: "Afslutningsfest", startsAt: "2030-06-20T19:00" })));
-    const rows = await prisma.match.findMany({ where: { teamId: team.id }, orderBy: { startsAt: "asc" } });
-    expect(rows.map((r) => [r.kind, r.title, r.opponent])).toEqual([
-      ["TRAINING", "Træning", null],
-      ["OTHER", "Afslutningsfest", null],
-    ]);
-    expect(rows.map(activityName)).toEqual(["Træning", "Afslutningsfest"]);
-    expect(KIND_LABEL).toEqual({ MATCH: "Kamp", TRAINING: "Træning", OTHER: "Aktivitet" });
+    await captureRedirect(() => saveActivity(undefined, formData({ kind: "MATCH", opponent: "B.93", venue: "home", title: "Holdtur", startsAt: "2030-06-02T17:00" })));
+    expect(await prisma.match.findFirstOrThrow({ where: { teamId: team.id } })).toMatchObject({ kind: "OTHER", title: "Holdtur", opponent: null, isHome: null });
   });
 
   it("copies an earlier activity's jobs onto a new one, but not another team's", async () => {
@@ -75,37 +72,105 @@ describe("saveActivity", () => {
     const theirs = await makeMatch(other.team.id);
     await signIn(anna);
 
-    expect(await saveActivity(undefined, formData({ kind: "OTHER", title: "Fest", startsAt: "2030-06-20T19:00", copyFromId: theirs.id }))).toEqual({
+    expect(await saveActivity(undefined, formData({ title: "Fest", startsAt: "2030-06-20T19:00", copyFromId: theirs.id }))).toEqual({
       ok: false,
       error: "Aktiviteten, der skulle kopieres opgaver fra, findes ikke.",
     });
-    await captureRedirect(() => saveActivity(undefined, formData({ kind: "OTHER", title: "Fest 2030", startsAt: "2030-06-20T19:00", copyFromId: last.id })));
+    await captureRedirect(() => saveActivity(undefined, formData({ title: "Fest 2030", startsAt: "2030-06-20T19:00", copyFromId: last.id })));
     const copy = await prisma.match.findFirstOrThrow({ where: { title: "Fest 2030" }, include: { tasks: true } });
     expect(copy.tasks.map((t) => t.title)).toEqual(["Grill"]);
   });
 
-  it("edits a hand-made activity but not one from KampKlar or another team's", async () => {
+  it("edits a hand-made activity — an old hand-made match becomes an activity — but not one from KampKlar or another team's", async () => {
     const { team, anna } = await makeSquad();
     const other = await makeSquad("Andre");
     const manual = await makeMatch(team.id);
     const synced = await makeMatch(team.id, { source: "KAMPKLAR" });
     const theirs = await makeMatch(other.team.id);
     await signIn(anna);
-    const edit = (id: string) => saveActivity(undefined, formData({ id, kind: "MATCH", opponent: "AB", startsAt: "2030-06-01T10:00", venue: "home" }));
+    const edit = (id: string) => saveActivity(undefined, formData({ id, title: "Klubdag", startsAt: "2030-06-01T10:00", note: "Tag madpakke med" }));
 
     expect(await edit(manual.id)).toEqual({ ok: true });
-    expect(await prisma.match.findUniqueOrThrow({ where: { id: manual.id } })).toMatchObject({ title: "Swingkings - AB", isHome: true });
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: manual.id } })).toMatchObject({
+      kind: "OTHER",
+      title: "Klubdag",
+      opponent: null,
+      isHome: null,
+      note: "Tag madpakke med",
+    });
     expect(await edit(synced.id)).toEqual({ ok: false, error: "Aktiviteten kommer fra KampKlar og rettes der." });
     expect(await edit(theirs.id)).toEqual({ ok: false, error: "Aktiviteten findes ikke længere." });
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: theirs.id } })).toMatchObject({ title: "Swingkings - B.93" });
   });
 
-  it("refuses a match with no opponent, a nameless activity and a time it cannot read", async () => {
+  it("refuses a nameless activity, a name too long and a time it cannot read", async () => {
     const { anna } = await makeSquad();
     await signIn(anna);
-    expect(await saveActivity(undefined, formData({ kind: "MATCH", opponent: "", startsAt: "2030-06-01T10:00" }))).toEqual({ ok: false, error: "Skriv modstanderen." });
-    expect(await saveActivity(undefined, formData({ kind: "OTHER", startsAt: "2030-06-01T10:00" }))).toEqual({ ok: false, error: "Giv aktiviteten et navn." });
-    expect(await saveActivity(undefined, formData({ kind: "MATCH", opponent: "AB", startsAt: "i morgen" }))).toEqual({ ok: false, error: "Tidspunktet kunne ikke læses." });
+    expect(await saveActivity(undefined, formData({ title: "", startsAt: "2030-06-01T10:00" }))).toEqual({ ok: false, error: "Giv aktiviteten et navn." });
+    expect((await saveActivity(undefined, formData({ title: "x".repeat(201), startsAt: "2030-06-01T10:00" })))?.ok).toBe(false);
+    expect(await saveActivity(undefined, formData({ title: "Fest", startsAt: "i morgen" }))).toEqual({ ok: false, error: "Tidspunktet kunne ikke læses." });
     expect(await prisma.match.count()).toBe(0);
+  });
+});
+
+describe("setSignup", () => {
+  it("lets a player say they come, change their mind, and lists everybody against the roster", async () => {
+    const { team, anna, bo, admin } = await makeSquad();
+    const party = await makeMatch(team.id, { kind: "OTHER", title: "Afslutningsfest" });
+    const answer = (going: string) => setSignup(undefined, formData({ activityId: party.id, going }));
+
+    await signIn(anna);
+    expect(await answer("yes")).toEqual({ ok: true });
+    await signIn(bo);
+    expect(await answer("yes")).toEqual({ ok: true });
+    expect(await answer("no")).toEqual({ ok: true });
+
+    const rows = await prisma.activitySignup.findMany({ where: { matchId: party.id } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.teamId === team.id)).toBe(true);
+    const summary = signupSummary(await teamRoster(team.id), rows);
+    expect(summary.going.map((m) => m.userId)).toEqual([anna.id]);
+    expect(summary.notGoing.map((m) => m.userId)).toEqual([bo.id]);
+    expect(summary.unanswered.map((m) => m.userId)).toContain(admin.id);
+  });
+
+  it("takes no answers for another team's activity, one from KampKlar, a cancelled one, or a muddled answer", async () => {
+    const { team, anna } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const theirs = await makeMatch(other.team.id, { kind: "OTHER", title: "Deres fest" });
+    const synced = await makeMatch(team.id, { source: "KAMPKLAR" });
+    const cancelled = await prisma.match.create({
+      data: { teamId: team.id, kind: "OTHER", title: "Aflyst fest", startsAt: new Date("2030-06-01T17:00:00Z"), cancelledAt: new Date() },
+    });
+    const party = await makeMatch(team.id, { kind: "OTHER", title: "Fest" });
+    await signIn(anna);
+
+    expect(await setSignup(undefined, formData({ activityId: theirs.id, going: "yes" }))).toEqual({ ok: false, error: "Aktiviteten findes ikke." });
+    expect(await setSignup(undefined, formData({ activityId: synced.id, going: "yes" }))).toEqual({
+      ok: false,
+      error: "Der er ikke tilmelding til aktiviteter fra KampKlar.",
+    });
+    expect(await setSignup(undefined, formData({ activityId: cancelled.id, going: "yes" }))).toEqual({ ok: false, error: "Aktiviteten er aflyst." });
+    expect(await setSignup(undefined, formData({ activityId: party.id, going: "måske" }))).toEqual({ ok: false, error: "Svar ja eller nej." });
+    expect(await prisma.activitySignup.count()).toBe(0);
+  });
+
+  it("goes with the activity when it is deleted", async () => {
+    const { team, anna } = await makeSquad();
+    const party = await makeMatch(team.id, { kind: "OTHER", title: "Fest" });
+    await signIn(anna);
+    await setSignup(undefined, formData({ activityId: party.id, going: "yes" }));
+    await expectRedirect(() => deleteActivity(undefined, formData({ id: party.id })), "/aktiviteter");
+    expect(await prisma.activitySignup.count()).toBe(0);
+  });
+
+  it("leaves out the answer of somebody no longer on the team", () => {
+    const roster = [{ userId: "a" }, { userId: "b" }];
+    expect(signupSummary(roster, [{ userId: "gone", going: true }, { userId: "b", going: false }])).toEqual({
+      going: [],
+      notGoing: [{ userId: "b" }],
+      unanswered: [{ userId: "a" }],
+    });
   });
 });
 

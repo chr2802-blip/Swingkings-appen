@@ -14,6 +14,7 @@ import { TeamSettingsForm } from "@/components/team-settings-form";
 import { InviteLinkForm } from "@/components/invite-link-form";
 import { MemberDialog } from "@/components/member-dialog";
 import { ActionButton } from "@/components/action-button";
+import { ActionMenu } from "@/components/action-menu";
 import { removeMember, revokeInviteLink } from "@/app/actions/teams";
 import { deleteTaskTemplate } from "@/app/actions/activities";
 
@@ -69,17 +70,19 @@ export default async function TeamSettingsPage() {
                     {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
                   </div>
                 </div>
-                <MemberDialog member={member} />
-                {member.userId !== user.id && (
-                  <ActionButton
-                    action={removeMember}
-                    fields={{ userId: member.userId }}
-                    label="Fjern"
-                    variant="ghost"
-                    confirm={`Fjern ${member.name} fra holdet?`}
-                    confirmLabel="Fjern fra holdet"
-                  />
-                )}
+                <ActionMenu icon label={`Handlinger for ${member.name}`} title={member.name}>
+                  <MemberDialog member={member} />
+                  {member.userId !== user.id && (
+                    <ActionButton
+                      action={removeMember}
+                      fields={{ userId: member.userId }}
+                      label="Fjern fra holdet"
+                      variant="danger"
+                      confirm={`Fjern ${member.name} fra holdet?`}
+                      confirmLabel="Fjern fra holdet"
+                    />
+                  )}
+                </ActionMenu>
               </li>
             ))}
           </ul>
@@ -119,15 +122,17 @@ export default async function TeamSettingsPage() {
                       {t.description && ` · ${t.description}`}
                     </p>
                   </div>
-                  <TemplateDialog template={t} />
-                  <ActionButton
-                    action={deleteTaskTemplate}
-                    fields={{ id: t.id }}
-                    label="Slet"
-                    variant="ghost"
-                    confirm={`Slet “${t.title}”?`}
-                    confirmLabel="Slet"
-                  />
+                  <ActionMenu icon label={`Handlinger for ${t.title}`} title={t.title}>
+                    <TemplateDialog template={t} />
+                    <ActionButton
+                      action={deleteTaskTemplate}
+                      fields={{ id: t.id }}
+                      label="Slet"
+                      variant="danger"
+                      confirm={`Slet “${t.title}”?`}
+                      confirmLabel="Slet"
+                    />
+                  </ActionMenu>
                 </li>
               ))}
             </ul>
