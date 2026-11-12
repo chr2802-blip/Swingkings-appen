@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { generateLinkToken, hashLinkToken, findInviteLink, redeemInviteLink } from "@/lib/invite-links";
-import { makeMember, makeTeam } from "./factory";
+import { makeMember, makeTeam } from "../helpers/factories";
 
 let clientIp = "203.0.113.1";
 vi.mock("next/headers", () => ({

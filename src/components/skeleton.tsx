@@ -6,17 +6,6 @@ export function SkeletonBlock({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-2xl bg-slate-200/70 ${className}`} />;
 }
 
-export function PageSkeleton() {
-  return (
-    <div className="space-y-6" aria-busy="true" aria-label="Indlæser">
-      <SkeletonBlock className="h-8 w-40" />
-      <SkeletonBlock className="h-28" />
-      <SkeletonBlock className="h-20" />
-      <SkeletonBlock className="h-20" />
-    </div>
-  );
-}
-
 export function FeedSkeleton() {
   return (
     <section className="mx-auto max-w-xl space-y-6" aria-busy="true" aria-label="Indlæser feed">

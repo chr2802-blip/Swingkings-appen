@@ -30,7 +30,7 @@ const TENANCY = [
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
-  { ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts"] },
+  { ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "playwright-report/**", "test-results/**"] },
   {
     // Pages and components are where a forgotten `where: { teamId }` would show one team
     // another's data. They read team-scoped models through `teamDb`.

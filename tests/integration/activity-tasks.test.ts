@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { addTemplatesToActivity, copyTasksFromActivity } from "@/lib/tasks";
-import { makeMember, makeTeam } from "./factory";
+import { makeMember, makeTeam } from "../helpers/factories";
 
 const day = (d: number, h = 12) => new Date(Date.UTC(2026, 10, d, h));
 
