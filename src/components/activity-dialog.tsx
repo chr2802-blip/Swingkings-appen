@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import type { ActivityKind } from "@prisma/client";
 import { FormDialog } from "@/components/form-dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { TemplatePicker } from "@/components/template-picker";
@@ -10,19 +8,16 @@ import type { ActivityOption, TemplateOption } from "@/lib/activity-data";
 
 export type EditableActivity = {
   id: string;
-  kind: ActivityKind;
   title: string;
-  opponent: string | null;
   startsAtInput: string;
   location: string | null;
-  isHome: boolean | null;
   note: string | null;
 };
 
 /**
- * An activity typed in by hand — a match, a training, or anything else (afslutningsfest).
- * One from KampKlar is edited in KampKlar. A new one can be given standard jobs and the
- * jobs of an earlier activity in the same go.
+ * An activity typed in by hand — the afslutningsfest, a holdtur — that teammates sign up
+ * for. Matches and trainings come from KampKlar and are not made here. A new one can be
+ * given standard jobs and the jobs of an earlier activity in the same go.
  */
 export function ActivityDialog({
   activity,
@@ -33,7 +28,6 @@ export function ActivityDialog({
   templates?: TemplateOption[];
   copyable?: ActivityOption[];
 }) {
-  const [kind, setKind] = useState<ActivityKind>(activity?.kind ?? "MATCH");
   return (
     <FormDialog
       trigger={activity ? "Ret" : "Ny aktivitet"}
@@ -43,42 +37,16 @@ export function ActivityDialog({
       submitLabel="Gem aktivitet"
     >
       {activity && <input type="hidden" name="id" value={activity.id} />}
-      <Field label="Type" htmlFor="kind">
-        <Select id="kind" name="kind" value={kind} onChange={(e) => setKind(e.target.value as ActivityKind)}>
-          <option value="MATCH">Kamp</option>
-          <option value="TRAINING">Træning</option>
-          <option value="OTHER">Anden aktivitet</option>
-        </Select>
+      <Field label="Navn" htmlFor="title">
+        <Input
+          id="title"
+          name="title"
+          defaultValue={activity?.title ?? ""}
+          placeholder="Fx afslutningsfest"
+          maxLength={200}
+          required
+        />
       </Field>
-      {kind === "MATCH" ? (
-        <>
-          <Field label="Modstander" htmlFor="opponent">
-            <Input id="opponent" name="opponent" defaultValue={activity?.opponent ?? ""} maxLength={200} required />
-          </Field>
-          <Field label="Hjemme eller ude" htmlFor="venue">
-            <Select
-              id="venue"
-              name="venue"
-              defaultValue={activity?.isHome === true ? "home" : activity?.isHome === false ? "away" : "unknown"}
-            >
-              <option value="home">Hjemme</option>
-              <option value="away">Ude</option>
-              <option value="unknown">Ved ikke</option>
-            </Select>
-          </Field>
-        </>
-      ) : (
-        <Field label="Navn" htmlFor="title">
-          <Input
-            id="title"
-            name="title"
-            defaultValue={activity && activity.kind !== "MATCH" ? activity.title : ""}
-            placeholder={kind === "TRAINING" ? "Træning" : "Fx afslutningsfest"}
-            maxLength={200}
-            required={kind === "OTHER"}
-          />
-        </Field>
-      )}
       <Field label="Starter" htmlFor="startsAt">
         <Input id="startsAt" name="startsAt" type="datetime-local" defaultValue={activity?.startsAtInput} required />
       </Field>

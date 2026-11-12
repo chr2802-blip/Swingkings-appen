@@ -6,37 +6,61 @@ const inDays = (days: number) => new Date(Date.now() + days * 86_400_000);
 const localInput = (date: Date) =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Copenhagen", dateStyle: "short", timeStyle: "short" }).format(date).replace(" ", "T");
 
-test("a player adds a match with a standard job ticked, and it opens with the job handed out", async ({ page, loginAs }) => {
+test("a player adds an activity with a standard job ticked, and it opens with the job handed out", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
-  await db.taskTemplate.createMany({ data: [{ teamId: team.id, title: "Trøjevask", people: 1 }, { teamId: team.id, title: "Frugt", people: 1 }] });
+  await db.taskTemplate.createMany({ data: [{ teamId: team.id, title: "Grill", people: 1 }, { teamId: team.id, title: "Frugt", people: 1 }] });
   await loginAs(anna);
   await page.goto("/aktiviteter");
   await page.getByRole("button", { name: "Ny aktivitet" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Modstander").fill("B.93");
-  await dialog.getByLabel("Starter").fill(localInput(inDays(5)));
-  await dialog.getByLabel("Hjemme eller ude").selectOption("away");
-  await dialog.getByRole("checkbox", { name: /Trøjevask/ }).check();
+  // Matches and trainings come from KampKlar: the form has no type to pick.
+  await expect(dialog.getByLabel("Type")).toHaveCount(0);
+  await dialog.getByLabel("Navn").fill("Afslutningsfest");
+  await dialog.getByLabel("Starter").fill(localInput(inDays(10)));
+  await dialog.getByRole("checkbox", { name: /Grill/ }).check();
   await dialog.getByRole("button", { name: "Gem aktivitet" }).click();
 
   await expect(page).toHaveURL(/\/aktiviteter\/\w+$/);
-  await expect(page.getByRole("heading", { name: "Mod B.93", level: 1 })).toBeVisible();
-  await expect(page.getByText("Trøjevask")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Afslutningsfest", level: 1 })).toBeVisible();
+  await expect(page.getByText("Grill")).toBeVisible();
   await expect(page.getByText("Frugt")).toHaveCount(0);
   expect(await db.taskAssignee.count()).toBe(1);
+  expect(await db.match.findFirst({ where: { teamId: team.id } })).toMatchObject({ kind: "OTHER" });
 });
 
-test("an activity that is not a match is named by its title", async ({ page, loginAs }) => {
-  const { anna } = await squad();
+test("players sign up for a hand-made activity and see who comes", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: inDays(10) } });
   await loginAs(anna);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await expect(page.getByText("Kommer du?")).toBeVisible();
+  await page.getByRole("button", { name: "Jeg kommer", exact: true }).click();
+  await expect(page.getByText("Du kommer ✅")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Kommer (1)" })).toBeVisible();
+
+  await loginAs(bo);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await page.getByRole("button", { name: "Jeg kommer ikke" }).click();
+  await expect(page.getByText("Du kommer ikke", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Kommer ikke (1)" })).toBeVisible();
+  expect(await db.activitySignup.findMany({ where: { matchId: party.id }, orderBy: { going: "desc" }, select: { userId: true, going: true } })).toEqual([
+    { userId: anna.id, going: true },
+    { userId: bo.id, going: false },
+  ]);
+
   await page.goto("/aktiviteter");
-  await page.getByRole("button", { name: "Ny aktivitet" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Type").selectOption("OTHER");
-  await dialog.getByLabel("Navn").fill("Afslutningsfest");
-  await dialog.getByLabel("Starter").fill(localInput(inDays(10)));
-  await dialog.getByRole("button", { name: "Gem aktivitet" }).click();
-  await expect(page.getByRole("heading", { name: "Afslutningsfest", level: 1 })).toBeVisible();
+  await expect(page.getByText("1 kommer")).toBeVisible();
+});
+
+test("an activity from KampKlar takes no sign-ups", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({
+    data: { teamId: team.id, title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3), source: "KAMPKLAR", externalUid: "x" },
+  });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  await expect(page.getByRole("heading", { name: "Mod AB", level: 1 })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Jeg kommer", exact: true })).toHaveCount(0);
 });
 
 test("old links to matches and the task list land in their new homes", async ({ page, loginAs }) => {

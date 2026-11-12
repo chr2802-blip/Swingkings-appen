@@ -28,8 +28,10 @@ kommer fra **DBU KampKlar**: en admin indsætter holdets kalenderlink
 (*Fodbold-appen / Mit DBU → KampKlar → holdets kalender → "Eksporter kalender"*) under
 Holdindstillinger, og kalenderen hentes hver morgen og med knappen **Hent fra KampKlar**.
 Flyttede aktiviteter opdateres, fjernede/aflyste markeres som aflyst, og træninger vises kun
-under "Med træninger" (medmindre de har opgaver). Alle på holdet kan oprette aktiviteter i
-hånden og hente fra KampKlar.
+under "Med træninger" (medmindre de har opgaver). Kampe og træninger kommer kun fra KampKlar;
+i hånden opretter man **andre aktiviteter** (afslutningsfest, holdtur), som alle på holdet
+kan **tilmelde sig** ("Jeg kommer" / "Jeg kommer ikke"), og siden viser, hvem der kommer,
+hvem der ikke gør, og hvem der mangler at svare. Alle kan hente fra KampKlar.
 
 **Opgaver** hører til en aktivitet (fristen er dens start, hvis ikke andet er valgt) — der er
 intet særskilt opgavemenupunkt; dine egne opgaver står på forsiden. En opgave gives til

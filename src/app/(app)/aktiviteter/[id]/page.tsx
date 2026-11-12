@@ -15,9 +15,9 @@ import { CopyTasksDialog, StandardTasksDialog } from "@/components/activity-task
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { ChallengeCard } from "@/components/challenge-card";
 import { ActionButton } from "@/components/action-button";
-import { deleteActivity } from "@/app/actions/activities";
+import { deleteActivity, setSignup } from "@/app/actions/activities";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
-import { activityName, KIND_LABEL } from "@/lib/activity";
+import { activityName, KIND_LABEL, signupSummary } from "@/lib/activity";
 
 const person = { select: { id: true, name: true, photoId: true } } as const;
 
@@ -40,6 +40,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
           orderBy: { createdAt: "desc" },
           include: { challenger: person, opponent: person, match: { select: { opponent: true, title: true } } },
         },
+        signups: { select: { userId: true, going: true } },
       },
     }),
   );
@@ -51,6 +52,9 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
     copyableActivities(user.teamId, match.id),
   ]);
   const label = activityName(match);
+  const takesSignups = match.source === "MANUAL";
+  const signups = signupSummary(roster, match.signups);
+  const mine = match.signups.find((s) => s.userId === user.id)?.going;
   const option = [{ id: match.id, label: `${label} · ${kickoffLabel(match.startsAt)}` }];
 
   return (
@@ -62,12 +66,9 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
             <ActivityDialog
               activity={{
                 id: match.id,
-                kind: match.kind,
                 title: match.title,
-                opponent: match.opponent,
                 startsAtInput: toLocalDateTimeInput(match.startsAt),
                 location: match.location,
-                isHome: match.isHome,
                 note: match.note,
               }}
             />
@@ -88,6 +89,36 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         </div>
         {match.note && <p className="text-sm whitespace-pre-line text-slate-600">{match.note}</p>}
       </Card>
+
+      {takesSignups && (
+        <section className="mb-8">
+          <SectionTitle>Tilmelding</SectionTitle>
+          <Card className="space-y-4">
+            <p className="text-sm font-medium">
+              {mine === true ? "Du kommer ✅" : mine === false ? "Du kommer ikke" : "Kommer du?"}
+            </p>
+            {!match.cancelledAt && (
+              <div className="flex flex-wrap gap-2">
+                <ActionButton
+                  action={setSignup}
+                  fields={{ activityId: match.id, going: "yes" }}
+                  label="Jeg kommer"
+                  variant={mine === true ? "primary" : "secondary"}
+                />
+                <ActionButton
+                  action={setSignup}
+                  fields={{ activityId: match.id, going: "no" }}
+                  label="Jeg kommer ikke"
+                  variant={mine === false ? "primary" : "secondary"}
+                />
+              </div>
+            )}
+            <SignupGroup title="Kommer" people={signups.going} />
+            <SignupGroup title="Kommer ikke" people={signups.notGoing} />
+            <SignupGroup title="Har ikke svaret" people={signups.unanswered} />
+          </Card>
+        </section>
+      )}
 
       <section className="mb-8">
         <SectionTitle action={<TaskDialog members={roster} activityId={match.id} />}>Opgaver</SectionTitle>
@@ -171,6 +202,18 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
           confirmLabel="Slet aktivitet"
         />
       )}
+    </div>
+  );
+}
+
+function SignupGroup({ title, people }: { title: string; people: { userId: string; name: string }[] }) {
+  if (people.length === 0) return null;
+  return (
+    <div>
+      <h3 className="text-xs font-semibold text-slate-500">
+        {title} ({people.length})
+      </h3>
+      <p className="text-sm">{people.map((p) => p.name).join(", ")}</p>
     </div>
   );
 }
