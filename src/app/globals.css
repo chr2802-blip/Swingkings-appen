@@ -487,22 +487,6 @@ h1,
   }
 }
 
-/*
- * Frosted glass: the page shows faintly through the bars as it scrolls beneath them.
- * Without backdrop-filter the bars are simply solid.
- */
-.app-glass {
-  background-color: var(--band);
-}
-
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .app-glass {
-    background-color: color-mix(in srgb, var(--band) 88%, transparent);
-    -webkit-backdrop-filter: blur(18px) saturate(1.8);
-    backdrop-filter: blur(18px) saturate(1.8);
-  }
-}
-
 /* The tab bar's one highlight, gliding to the tab tapped with a little overshoot. */
 .app-pill {
   transition: translate var(--dur-slow, 380ms) var(--ease-spring);

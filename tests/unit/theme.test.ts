@@ -27,6 +27,16 @@ describe("themes", () => {
     }
   });
 
+  it("paints the header and tab bar solid --band, like the phone's own bars", () => {
+    const read = (f: string) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
+    for (const file of ["app/(app)/layout.tsx", "components/bottom-nav.tsx"]) {
+      const bar = /className="(app-(?:topbar|bottombar)[^"]*)"/.exec(read(file))?.[1];
+      expect(bar, file).toContain("bg-[var(--band)]");
+      expect(bar, file).not.toMatch(/backdrop|glass|\bbg-[^ ]*\/\d/);
+    }
+    expect(css).not.toMatch(/\.app-(?:topbar|bottombar|glass)[^{]*\{[^}]*backdrop-filter/);
+  });
+
   it("puts white text only on the club's own dark frame", () => {
     expect(themeEnum.filter((t) => darkBand(t as keyof typeof BANDS))).toEqual(["SWINGKINGS"]);
   });
