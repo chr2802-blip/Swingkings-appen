@@ -17,6 +17,10 @@ test("a post with words shows in the feed, and a teammate likes and comments", a
   await expect(page.getByText("Sikke en sejr i dag!")).toBeVisible();
   await page.getByRole("button", { name: /Synes godt om|Like|👍|❤/ }).first().click();
   await expect.poll(() => db.postLike.count()).toBe(1);
+  // Who liked it is shown as a face, not written out as a name.
+  const likers = page.getByRole("img", { name: "Bo synes godt om opslaget" });
+  await expect(likers).toBeVisible();
+  await expect(likers).toHaveText("B");
   await page.getByRole("button", { name: "0 kommentarer" }).click();
   const comments = page.getByRole("dialog", { name: "Kommentarer" });
   await expect(comments.getByText("Ingen kommentarer endnu")).toBeVisible();

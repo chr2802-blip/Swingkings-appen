@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pollView, sortByVotes } from "@/lib/feed";
+import { LIKERS_SHOWN, likersView, pollView, sortByVotes } from "@/lib/feed";
 
 const now = new Date("2026-11-11T12:00:00Z");
 const anna = { id: "anna", name: "Anna", photoId: null };
@@ -89,5 +89,28 @@ describe("pollView", () => {
     );
     expect(view.closesLabel).toMatch(/^Slutter 20\. nov\.? kl\. 19:00$/);
     expect(view.matchLabel).toMatch(/^B\.93 · /);
+  });
+});
+
+describe("likersView", () => {
+  const likes = (...names: string[]) => names.map((name) => ({ userId: name, user: { name, photoId: null } }));
+
+  it("shows nobody and says nothing when nobody has liked", () => {
+    expect(likersView([])).toEqual({ faces: [], more: 0, label: "" });
+  });
+
+  it("names one, and joins the last of several with og", () => {
+    expect(likersView(likes("Anna Berg")).label).toBe("Anna Berg synes godt om opslaget");
+    expect(likersView(likes("Anna", "Bo")).label).toBe("Anna og Bo synes godt om opslaget");
+    expect(likersView(likes("Anna", "Bo", "Carl"))).toMatchObject({ more: 0, label: "Anna, Bo og Carl synes godt om opslaget" });
+  });
+
+  it("shows the first faces in order and counts the rest", () => {
+    const many = likes("A", "B", "C", "D", "E", "F", "G");
+    const view = likersView(many);
+    expect(view.faces).toEqual(many.slice(0, LIKERS_SHOWN));
+    expect(view.more).toBe(7 - LIKERS_SHOWN);
+    expect(view.label).toBe("A, B, C, D, E og 2 mere synes godt om opslaget");
+    expect(likersView(many, 2)).toMatchObject({ faces: many.slice(0, 2), more: 5 });
   });
 });

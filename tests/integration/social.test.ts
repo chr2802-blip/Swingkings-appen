@@ -137,6 +137,24 @@ describe("feed posts", () => {
     expect(await prisma.postComment.count()).toBe(0);
   });
 
+  it("reads who liked a post with their picture, first to like first", async () => {
+    const { team, anna, bo, admin } = await makeSquad();
+    const photo = await makePhoto(team.id);
+    await prisma.user.update({ where: { id: bo.id }, data: { photoId: photo.id } });
+    const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "x" } });
+    await prisma.postLike.createMany({
+      data: [
+        { postId: post.id, userId: admin.id, createdAt: new Date("2026-11-01T12:00:00Z") },
+        { postId: post.id, userId: bo.id, createdAt: new Date("2026-11-01T10:00:00Z") },
+      ],
+    });
+    const [read] = await feedPosts(team.id, { id: anna.id, canAdminister: false });
+    expect(read!.likes).toEqual([
+      { userId: bo.id, user: { name: bo.name, photoId: photo.id } },
+      { userId: admin.id, user: { name: admin.name, photoId: null } },
+    ]);
+  });
+
   it("cannot like, comment on or delete another team's post", async () => {
     const { anna } = await makeSquad();
     const other = await makeSquad("Andre");
