@@ -161,3 +161,89 @@ test("a form that moves on to a new page leaves the browser's history alone", as
   await expect(page).toHaveURL(/\/aktiviteter$/);
   await expect(dialog).toBeHidden();
 });
+
+test("a tab's page comes in from the side the tab is on, and a page inside a tab opens", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: new Date(Date.now() + 3 * 86_400_000) } });
+  await loginAs(anna);
+  await page.goto("/boder");
+  const shown = page.getByTestId("page");
+  const tabs = page.getByRole("navigation").last();
+  await expect(shown).toHaveAttribute("data-motion", "first");
+
+  await tabs.getByRole("link", { name: "Aktiviteter" }).click();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect(shown).toHaveAttribute("data-motion", "forward");
+  expect(await shown.evaluate((el) => getComputedStyle(el).animationName)).toBe("page-forward");
+
+  await page.getByRole("link", { name: /Afslutningsfest/ }).click();
+  await expect(page.getByRole("heading", { name: "Afslutningsfest", level: 1 })).toBeVisible();
+  await expect(shown).toHaveAttribute("data-motion", "open");
+
+  await tabs.getByRole("link", { name: "Bøder" }).click();
+  await expect(page).toHaveURL(/\/boder$/);
+  await expect(shown).toHaveAttribute("data-motion", "backward");
+
+  // Once in, the page is itself again: nothing is left on it for a fixed child to hang from.
+  await expect.poll(() => shown.evaluate((el) => el.getAnimations().length)).toBe(0);
+  expect(await shown.evaluate((el) => [getComputedStyle(el).translate, getComputedStyle(el).opacity])).toEqual(["none", "1"]);
+});
+
+test("back, and a swipe between the fine box's pages, bring nothing in", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  const shown = page.getByTestId("page");
+  await page.getByRole("navigation").last().getByRole("link", { name: "Bøder" }).click();
+  await expect(shown).toHaveAttribute("data-motion", "backward");
+
+  // The page was already there, beside the one shown; only the address moved.
+  await page.getByRole("tab", { name: "Historik" }).click();
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await expect(shown).toHaveAttribute("data-motion", "none");
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect(shown).toHaveAttribute("data-motion", "none");
+
+  // And the next tap is a new page again.
+  await page.getByRole("navigation").last().getByRole("link", { name: "Chat" }).click();
+  await expect(page).toHaveURL(/\/chat$/);
+  await expect(shown).toHaveAttribute("data-motion", "forward");
+});
+
+test("the page on screen steps aside while a tapped tab's page is on its way", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/boder");
+  const shown = page.getByTestId("page");
+  await expect(shown).not.toHaveAttribute("data-leaving");
+
+  // Hold the new page back until the old one has been seen to step aside.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/chat(\?|$)/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.getByRole("navigation").last().getByRole("link", { name: "Chat" }).click();
+  await expect(shown).toHaveAttribute("data-leaving", "forward");
+  await expect(page).toHaveURL(/\/boder$/);
+
+  release();
+  await expect(page).toHaveURL(/\/chat$/);
+  await expect(shown).not.toHaveAttribute("data-leaving");
+  await expect(shown).toHaveAttribute("data-motion", "forward");
+});
+
+test("with reduced motion a page neither comes in nor steps aside", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/boder");
+  const shown = page.getByTestId("page");
+  await page.getByRole("navigation").last().getByRole("link", { name: "Chat" }).click();
+  await expect(page).toHaveURL(/\/chat$/);
+  await expect(shown).toHaveAttribute("data-motion", "forward");
+  expect(await shown.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+});

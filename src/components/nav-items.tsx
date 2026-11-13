@@ -70,6 +70,9 @@ export const ADMIN_ITEM: NavItem = {
   ),
 };
 
+/** The tabs in the order they sit in the menu, for which way a page comes in (`pageMotion`). */
+export const TAB_PATHS = [...NAV_ITEMS, ADMIN_ITEM].map((item) => [item.href, ...(item.also ?? [])]);
+
 export function isInTab(item: NavItem, pathname: string) {
   return [item.href, ...(item.also ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
 }

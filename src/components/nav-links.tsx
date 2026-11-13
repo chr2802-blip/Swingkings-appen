@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLeaveHome } from "./home-banner";
-import { ADMIN_ITEM, NAV_ITEMS, isInTab } from "./nav-items";
+import { ADMIN_ITEM, NAV_ITEMS, TAB_PATHS, isInTab } from "./nav-items";
+import { PageLeaving } from "./page-transition";
+import { pageMotion } from "@/lib/page-motion";
 
 export function NavLinks({ showAdmin }: { showAdmin: boolean }) {
   const pathname = usePathname();
@@ -24,6 +26,7 @@ export function NavLinks({ showAdmin }: { showAdmin: boolean }) {
             }`}
           >
             {item.label}
+            <PageLeaving motion={pageMotion(pathname, item.href, TAB_PATHS)} />
           </Link>
         );
       })}
