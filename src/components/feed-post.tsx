@@ -1,4 +1,4 @@
-import type { feedPosts } from "@/lib/feed";
+import { likersView, type feedPosts } from "@/lib/feed";
 import { stampLabel } from "@/lib/time";
 import { Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
@@ -17,6 +17,7 @@ export type FeedPost = Awaited<ReturnType<typeof feedPosts>>[number];
  */
 export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewerId: string; admin: boolean }) {
   const liked = post.likes.some((like) => like.userId === viewerId);
+  const likers = likersView(post.likes);
   return (
     <PostState>
       <Card padded={false} className="overflow-hidden">
@@ -61,14 +62,20 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
                 canDelete: comment.author.id === viewerId || admin,
               }))}
             />
-            {post.likes.length > 0 && (
-              <p className="ml-auto min-w-0 truncate pl-2 text-xs text-slate-500">
-                {post.likes
-                  .slice(0, 3)
-                  .map((like) => like.user.name.split(" ")[0])
-                  .join(", ")}
-                {post.likes.length > 3 && ` og ${post.likes.length - 3} mere`}
-              </p>
+            {/* Who liked it, as overlapping faces; the names are read out and shown on hover. */}
+            {likers.faces.length > 0 && (
+              <div role="img" aria-label={likers.label} title={likers.label} className="ml-auto flex shrink-0 items-center pl-2">
+                {likers.faces.map((like) => (
+                  <Avatar
+                    key={like.userId}
+                    name={like.user.name}
+                    photoId={like.user.photoId}
+                    size="xs"
+                    className="-ml-1.5 ring-2 ring-white first:ml-0"
+                  />
+                ))}
+                {likers.more > 0 && <span className="ml-1.5 text-xs text-slate-500">+{likers.more}</span>}
+              </div>
             )}
           </div>
         </div>

@@ -57,7 +57,8 @@ export async function feedPosts(
       createdAt: true,
       author: person,
       photos: { orderBy: { position: "asc" }, select: { photoId: true } },
-      likes: { select: { userId: true, user: { select: { name: true } } } },
+      // Shown as faces, first to like first — hence the picture and the order.
+      likes: { orderBy: [{ createdAt: "asc" }, { userId: "asc" }], select: { userId: true, user: { select: { name: true, photoId: true } } } },
       comments: { orderBy: { createdAt: "asc" }, select: { id: true, body: true, createdAt: true, author: person } },
       poll: {
         select: {
@@ -144,6 +145,26 @@ export function pollView(
       }),
     ),
   };
+}
+
+/** A post shows this many of the faces that liked it; the rest are a number. */
+export const LIKERS_SHOWN = 5;
+
+/**
+ * Who liked a post, as the feed shows it: the first few as faces, the rest counted, and
+ * one sentence naming them for somebody who cannot see the faces.
+ */
+export function likersView<T extends { user: { name: string } }>(likes: T[], shown = LIKERS_SHOWN) {
+  const faces = likes.slice(0, shown);
+  const more = likes.length - faces.length;
+  const names = faces.map((like) => like.user.name);
+  const list =
+    more > 0
+      ? `${names.join(", ")} og ${more} mere`
+      : names.length > 1
+        ? `${names.slice(0, -1).join(", ")} og ${names.at(-1)}`
+        : (names[0] ?? "");
+  return { faces, more, label: list ? `${list} synes godt om opslaget` : "" };
 }
 
 /**
