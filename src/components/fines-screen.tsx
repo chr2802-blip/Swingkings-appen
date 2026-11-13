@@ -5,142 +5,59 @@ import { teamDb } from "@/lib/team-db";
 import { fineBoard, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
 import { waitsOn } from "@/lib/challenges";
 import { fineUnits, kr } from "@/lib/money";
-import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
+import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { Avatar } from "@/components/photo";
-import { SwipeLink, SwipePages } from "@/components/swipe-pages";
+import { SwipePages } from "@/components/swipe-pages";
 import { FineHistory } from "@/components/fine-history";
-import { GiveFineDialog } from "@/components/give-fine-dialog";
-import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
-import { ChallengeDialog } from "@/components/challenge-dialog";
+import { FineCreateMenu } from "@/components/fine-create-menu";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
-import { CreateMenu } from "@/components/create-button";
 import { removeFineType, resetFines } from "@/app/actions/fines";
 import { Crown } from "@/components/crest";
 
-/** How many fines the board's page shows; the rest are on /boder/historik. */
-const RECENT = 5;
+/** How far back the history page goes. A team gives a few fines a week, so this is a year or two. */
+const HISTORY = 100;
 
-/** The three pages of the fine box, in the order they are swiped through. */
-export const FINE_PAGES = ["/boder", "/boder/udfordringer", "/boder/katalog"] as const;
+/** The pages under the overview, in the order they are swiped through. */
+export const FINE_PAGES = ["/boder", "/boder/historik", "/boder/katalog"] as const;
 
 type Board = Awaited<ReturnType<typeof fineBoard>>;
 
 /**
- * The fine box: the board, the challenges and the catalogue as one screen to swipe
- * across. Each has its own address (`show`), and all three are read at once, so a swipe
- * never waits on the server.
+ * The fine box: the overview stays put at the top — what you owe, what is in the box, and
+ * the way to the challenges — and under it the board, the history and the catalogue are
+ * swiped between. Each has its own address (`show`), and all three are read at once, so
+ * a swipe never waits on the server.
  */
 export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeof FINE_PAGES)[number] }) {
-  const db = teamDb(user.teamId);
-  // One fine more than shown, so the page knows whether there is a history worth linking to.
-  const [board, kings, recent, matches, open, closed] = await Promise.all([
+  const [board, kings, history, matches, pending] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
-    fineHistory(user.teamId, RECENT + 1),
+    fineHistory(user.teamId, HISTORY),
     matchOptions(user.teamId),
-    db.challenge.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude }),
-    db.challenge.findMany({
-      where: { status: { in: ["SETTLED", "CANCELLED"] } },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      include: challengeCardInclude,
-    }),
+    teamDb(user.teamId).challenge.findMany({ where: { status: "PENDING" } }),
   ]);
   const manages = canManageFines(user, user.teamId);
-
-  // What is waiting on the viewer goes first: it is the reason they opened the page.
-  const waiting = open.filter((c) => waitsOn(c, user.id));
-  const others = open.filter((c) => !waiting.includes(c));
-  const card = (c: (typeof open)[number]) => (
-    <ChallengeCard key={c.id} challenge={c} viewerId={user.id} managesFines={manages} finePriceKr={board.finePriceKr} />
-  );
-
-  return (
-    <>
-      {/* The same "+" on all three pages: whichever is shown, these are what one makes here. */}
-      <CreateMenu>
-        <GiveFineDialog members={board.roster} fineTypes={board.fineTypes} finePriceKr={board.finePriceKr} matches={matches} />
-        <ChallengeDialog opponents={board.roster.filter((m) => m.userId !== user.id)} finePriceKr={board.finePriceKr} matches={matches} />
-        {manages && <FineTypeDialog finePriceKr={board.finePriceKr} />}
-      </CreateMenu>
-      <SwipePages
-        initial={FINE_PAGES.indexOf(show)}
-        pages={[
-          {
-            href: "/boder",
-            title: "Bødekassen",
-            children: <BoardPage user={user} board={board} kings={kings.userIds} recent={recent} manages={manages} />,
-          },
-          {
-            href: "/boder/udfordringer",
-            title: "Udfordringer",
-            children: (
-              <>
-                <p className="mb-6 text-sm text-slate-500">
-                  Udfordr dig ud af dine bøder. Meld resultatet, en anden godkender, og taberen overtager indsatsen.
-                </p>
-                {waiting.length > 0 && (
-                  <section className="mb-8">
-                    <SectionTitle>Venter på din godkendelse</SectionTitle>
-                    <div className="space-y-3">{waiting.map(card)}</div>
-                  </section>
-                )}
-                <section className="mb-8">
-                  <SectionTitle>Dine meldinger</SectionTitle>
-                  {others.length === 0 ? (
-                    <EmptyState icon="⚔️">Ingen udfordringer venter. Hvem tør?</EmptyState>
-                  ) : (
-                    <div className="space-y-3">{others.map(card)}</div>
-                  )}
-                </section>
-                {closed.length > 0 && (
-                  <section>
-                    <SectionTitle>Afsluttede</SectionTitle>
-                    <div className="space-y-3">{closed.map(card)}</div>
-                  </section>
-                )}
-              </>
-            ),
-          },
-          {
-            href: "/boder/katalog",
-            title: "Bødekatalog",
-            children: <CataloguePage board={board} manages={manages} />,
-          },
-        ]}
-      />
-    </>
-  );
-}
-
-function BoardPage({
-  user,
-  board,
-  kings,
-  recent,
-  manages,
-}: {
-  user: TeamUser;
-  board: Board;
-  kings: string[];
-  recent: Awaited<ReturnType<typeof fineHistory>>;
-  manages: boolean;
-}) {
   const totals = board.balances.reduce(
-    (sum, row) => ({
-      fined: sum.fined + row.finedKr,
-      owed: sum.owed + row.owesKr,
-    }),
+    (sum, row) => ({ fined: sum.fined + row.finedKr, owed: sum.owed + row.owesKr }),
     { fined: 0, owed: 0 },
   );
   const mine = board.balances.find((row) => row.userId === user.id);
+  const waiting = pending.filter((c) => waitsOn(c, user.id)).length;
 
   return (
-    <>
-      {/* The two numbers people come for, side by side, so the board starts on the first screen. */}
-      <Card padded={false} className="mb-6 overflow-hidden">
+    <div>
+      <PageHeader title="Bødekassen" />
+      <FineCreateMenu
+        viewerId={user.id}
+        members={board.roster}
+        fineTypes={board.fineTypes}
+        finePriceKr={board.finePriceKr}
+        matches={matches}
+      />
+
+      <Card padded={false} className="mb-5 overflow-hidden">
         <div className={`grid divide-x divide-slate-100 ${mine ? "grid-cols-2" : ""}`}>
           {mine && (
             <Link href={`/boder/spiller/${user.id}`} className="press-card px-4 py-3">
@@ -155,21 +72,28 @@ function BoardPage({
             <p className="text-xs text-slate-500">{kr(totals.owed)} udestående</p>
           </div>
         </div>
-        {mine && mine.units > 0 && (
-          <SwipeLink
-            href="/boder/udfordringer"
-            className="press-card block border-t border-slate-100 px-4 py-2.5 text-sm font-medium text-[var(--accent-text)]"
-          >
-            ⚔️ Udfordr dig ud af dem ›
-          </SwipeLink>
-        )}
+        <Link
+          href="/boder/udfordringer"
+          className="press-card flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-sm"
+        >
+          <span className="font-medium">⚔️ Udfordringer</span>
+          {waiting > 0 ? (
+            <Badge tone="amber">{waiting} venter på dig</Badge>
+          ) : (
+            <span className="text-xs text-slate-500">
+              {pending.length > 0 ? `${pending.length} venter på godkendelse ›` : mine && mine.units > 0 ? "Udfordr dig ud af dine bøder ›" : "Se dem ›"}
+            </span>
+          )}
+        </Link>
       </Card>
 
-      <section className="mb-8">
-        <SectionTitle
-          action={
-            manages &&
-            totals.owed > 0 && (
+      <SwipePages
+        initial={FINE_PAGES.indexOf(show)}
+        pages={[
+          {
+            href: "/boder",
+            title: "Bødetavlen",
+            action: manages && totals.owed > 0 && (
               <ActionButton
                 action={resetFines}
                 fields={{ playerId: "alle" }}
@@ -178,68 +102,67 @@ function BoardPage({
                 confirm="Nulstil hele holdets bøder? Historikken bliver, men ingen har udestående bagefter."
                 confirmLabel="Nulstil alle"
               />
-            )
-          }
-        >
-          Bødetavlen
-        </SectionTitle>
-        <Card padded={false}>
-          <ol className="divide-y divide-slate-100">
-            {board.balances.map((row, index) => {
-              const person = board.people.get(row.userId);
-              if (!person) return null;
-              const isMe = row.userId === user.id;
-              return (
-                <li key={row.userId}>
-                  <Link
-                    href={`/boder/spiller/${row.userId}`}
-                    aria-current={isMe ? "true" : undefined}
-                    className={`press-card flex items-center gap-3 px-4 py-2.5 ${
-                      isMe ? "border-l-4 border-[var(--gold)] bg-[var(--gold-tint)] pl-3" : ""
-                    }`}
-                  >
-                    <span className="w-5 text-right text-sm text-slate-400">{index + 1}</span>
-                    <Avatar name={person.name} photoId={person.photoId} size="sm" />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5 font-medium">
-                        <span className="truncate">{person.name}</span>
-                        {kings.includes(row.userId) && (
-                          <span title="Månedens bødekonge" className="flex items-center">
-                            <Crown className="h-4 w-4" />
-                            <span className="sr-only">(månedens bødekonge)</span>
-                          </span>
-                        )}
-                        {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
-                        {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
-                      </span>
-                    </span>
-                    {row.owesKr > 0 ? <Badge tone="red">{kr(row.owesKr)}</Badge> : <Badge tone="green">ren tavle</Badge>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ol>
-        </Card>
-      </section>
+            ),
+            children: <BoardPage userId={user.id} board={board} kings={kings.userIds} />,
+          },
+          {
+            href: "/boder/historik",
+            title: "Historik",
+            children:
+              history.length === 0 ? (
+                <EmptyState icon="😇">Ingen bøder endnu. Det varer nok ikke længe.</EmptyState>
+              ) : (
+                <FineHistory fines={history} user={user} />
+              ),
+          },
+          {
+            href: "/boder/katalog",
+            title: "Katalog",
+            children: <CataloguePage board={board} manages={manages} />,
+          },
+        ]}
+      />
+    </div>
+  );
+}
 
-      <section>
-        <SectionTitle>Seneste bøder</SectionTitle>
-        {recent.length === 0 ? (
-          <EmptyState icon="😇">Ingen bøder endnu. Det varer nok ikke længe.</EmptyState>
-        ) : (
-          <>
-            <FineHistory fines={recent.slice(0, RECENT)} user={user} />
-            {recent.length > RECENT && (
-              <p className="mt-3 text-center">
-                <Link href="/boder/historik" className="text-sm font-medium text-[var(--accent-text)] underline">
-                  Se hele historikken
-                </Link>
-              </p>
-            )}
-          </>
-        )}
-      </section>
-    </>
+function BoardPage({ userId, board, kings }: { userId: string; board: Board; kings: string[] }) {
+  return (
+    <Card padded={false}>
+      <ol className="divide-y divide-slate-100">
+        {board.balances.map((row, index) => {
+          const person = board.people.get(row.userId);
+          if (!person) return null;
+          const isMe = row.userId === userId;
+          return (
+            <li key={row.userId}>
+              <Link
+                href={`/boder/spiller/${row.userId}`}
+                aria-current={isMe ? "true" : undefined}
+                className={`press-card flex items-center gap-3 px-4 py-2.5 ${
+                  isMe ? "border-l-4 border-[var(--gold)] bg-[var(--gold-tint)] pl-3" : ""
+                }`}
+              >
+                <span className="w-5 text-right text-sm text-slate-400">{index + 1}</span>
+                <Avatar name={person.name} photoId={person.photoId} size="sm" />
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
+                  <span className="truncate">{person.name}</span>
+                  {kings.includes(row.userId) && (
+                    <span title="Månedens bødekonge" className="flex items-center">
+                      <Crown className="h-4 w-4" />
+                      <span className="sr-only">(månedens bødekonge)</span>
+                    </span>
+                  )}
+                  {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
+                  {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
+                </span>
+                {row.owesKr > 0 ? <Badge tone="red">{kr(row.owesKr)}</Badge> : <Badge tone="green">ren tavle</Badge>}
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
   );
 }
 
@@ -247,13 +170,14 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
   const types = board.fineTypes;
   return (
     <>
-      <p className="mb-6 text-sm text-slate-500">Hvad koster hvad. 1 bøde = {kr(board.finePriceKr)}.</p>
-      {types.length === 0 ? (
+      <p className="mb-3 text-sm text-slate-500">Hvad koster hvad. 1 bøde = {kr(board.finePriceKr)}.</p>
+      {types.length === 0 && (
         <EmptyState icon="📜">
           {manages ? "Kataloget er tomt. Opret holdets bøder, så er de klar, når der skal deles ud." : "Kataloget er tomt endnu."}
         </EmptyState>
-      ) : (
-        <Card padded={false}>
+      )}
+      {(types.length > 0 || manages) && (
+        <Card padded={false} className={`overflow-hidden ${types.length === 0 ? "mt-3" : ""}`}>
           <ul className="divide-y divide-slate-100">
             {types.map((type) => (
               <li key={type.id} className="flex items-center gap-3 px-4 py-3">
@@ -280,6 +204,12 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
                 )}
               </li>
             ))}
+            {/* Making a new one is the list's last row, where the new one will land. */}
+            {manages && (
+              <li>
+                <FineTypeDialog finePriceKr={board.finePriceKr} />
+              </li>
+            )}
           </ul>
         </Card>
       )}

@@ -64,18 +64,15 @@ test("a player sees the catalogue but cannot change it", async ({ page, loginAs 
   await loginAs(anna);
   await page.goto("/boder/katalog");
   await expect(page.getByText("For sent")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ny bøde" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Ret", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Opret" }).click();
-  const menu = page.getByRole("dialog", { name: "Opret" });
-  await expect(menu.getByRole("button", { name: "Giv bøde" })).toBeVisible();
-  await expect(menu.getByRole("button", { name: "Ny bøde i kataloget" })).toHaveCount(0);
 });
 
 test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
   const { team, treasurer } = await squad();
   await loginAs(treasurer);
   await page.goto("/boder/katalog");
-  await create(page, "Ny bøde i kataloget");
+  await page.getByRole("button", { name: "Ny bøde" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Navn").fill("Rødt kort");
   await dialog.getByLabel("Antal bøder").fill("10");
@@ -83,6 +80,17 @@ test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Rødt kort")).toBeVisible();
   await expect(page.getByText("100 kr")).toBeVisible();
+  // The new fine lands in the list, and the row that made it stays last, ready for the next.
+  const rows = page.getByRole("tabpanel").getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Rødt kort");
+  await expect(rows.last().getByRole("button", { name: "Ny bøde" })).toBeVisible();
+  // It is a row like the others: as tall and as wide, with its words in the middle.
+  const [fine, add] = [(await rows.first().boundingBox())!, (await rows.last().boundingBox())!];
+  expect(Math.abs(add.height - fine.height)).toBeLessThanOrEqual(1);
+  const button = rows.last().getByRole("button", { name: "Ny bøde" });
+  expect((await button.boundingBox())!.width).toBe(add.width);
+  await expect(button).toHaveCSS("justify-content", "center");
   expect(await db.fineType.count({ where: { teamId: team.id } })).toBe(1);
 });
 
@@ -130,17 +138,13 @@ test("a treasurer resets a player, and a player cannot", async ({ page, loginAs 
   expect(await db.fine.count({ where: { playerId: anna.id, clearedAt: null } })).toBe(0);
 });
 
-test("the front page leads with what you owe and what is in the box, and keeps the long history on its own page", async ({ page, loginAs }) => {
+test("the overview stays on top: what you owe, what is in the box and the way to the challenges", async ({ page, loginAs }) => {
   const { team, treasurer, anna, bo } = await squad();
-  const other = await squad("Andre");
-  const give = (teamId: string, playerId: string, issuedById: string, reason: string, minutesAgo: number, clearedAt?: Date) =>
-    db.fine.create({
-      data: { teamId, playerId, issuedById, reason, units: 1, unitPriceKr: 10, clearedAt, createdAt: new Date(Date.now() - minutesAgo * 60_000) },
-    });
-  await give(team.id, anna.id, treasurer.id, "Ældste bøde", 60, new Date());
-  for (let n = 1; n <= 4; n++) await give(team.id, bo.id, treasurer.id, `Bøde nummer ${n}`, 10 * n);
-  await give(team.id, anna.id, bo.id, "Glemte bolde", 1);
-  await give(other.team.id, other.anna.id, other.treasurer.id, "De andres bøde", 0);
+  const give = (playerId: string, reason: string, clearedAt?: Date) =>
+    db.fine.create({ data: { teamId: team.id, playerId, issuedById: treasurer.id, reason, units: 1, unitPriceKr: 10, clearedAt } });
+  await give(anna.id, "Nulstillet bøde", new Date());
+  await give(anna.id, "Glemte bolde");
+  for (let n = 1; n <= 4; n++) await give(bo.id, `Bøde nummer ${n}`);
 
   await loginAs(anna);
   await page.goto("/boder");
@@ -152,101 +156,134 @@ test("the front page leads with what you owe and what is in the box, and keeps t
   await expect(box).toContainText("60 kr");
   await expect(box).toContainText("50 kr udestående");
   await expect(page.getByRole("link", { name: /Bo .*40 kr/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: "⚔️ Udfordr dig ud af dem ›" })).toHaveAttribute("href", "/boder/udfordringer");
+  const challenges = page.getByRole("link", { name: /Udfordringer/ });
+  await expect(challenges).toContainText("Udfordr dig ud af dine bøder");
 
-  // Only the newest five here; the oldest waits behind the link.
-  await expect(page.getByText("Glemte bolde")).toBeVisible();
-  await expect(page.getByText("Bøde nummer 4")).toBeVisible();
-  await expect(page.getByText("Ældste bøde")).toHaveCount(0);
-  await page.getByRole("link", { name: "Se hele historikken" }).click();
-  await expect(page).toHaveURL(/\/boder\/historik$/);
-  await expect(page.getByRole("heading", { name: "Historik" })).toBeVisible();
-  await expect(page.getByText("Ældste bøde")).toBeVisible();
-  await expect(page.getByText(/· nulstillet/)).toBeVisible();
-  await expect(page.getByText("De andres bøde")).toHaveCount(0);
-  // A player deletes nothing here: none of these were given by Anna.
-  await expect(page.getByRole("button", { name: "Slet" })).toHaveCount(0);
-
+  // A challenge between two others waits on Anna, and the overview says so on every page under it.
+  await db.challenge.create({
+    data: { teamId: team.id, winnerId: bo.id, loserId: treasurer.id, reportedById: bo.id, description: "Flest mål", units: 1 },
+  });
+  await page.goto("/boder/katalog");
+  await expect(mine).toContainText("10 kr");
+  await expect(challenges).toContainText("1 venter på dig");
+  await challenges.click();
+  await expect(page).toHaveURL(/\/boder\/udfordringer$/);
+  await expect(page.getByRole("heading", { name: "Venter på din godkendelse" })).toBeVisible();
   await page.getByRole("link", { name: "Bødekassen" }).click();
   await expect(page).toHaveURL(/\/boder$/);
-  await page.getByRole("link", { name: /Du skylder/ }).click();
+
+  await mine.click();
   await expect(page).toHaveURL(new RegExp(`/boder/spiller/${anna.id}$`));
 });
 
-test("the history page lets whoever gave a fine take it back, and is empty before the first fine", async ({ page, loginAs }) => {
-  const { team, anna, bo } = await squad();
+test("the history lists the team's fines and lets whoever gave one take it back", async ({ page, loginAs }) => {
+  const { team, treasurer, anna, bo } = await squad();
+  const other = await squad("Andre");
   await loginAs(anna);
   await page.goto("/boder/historik");
+  await expect(page.getByRole("tab", { name: "Historik" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
-  await page.goto("/boder");
   await expect(page.getByRole("link", { name: /Du skylder/ })).toContainText("Ren tavle");
-  await expect(page.getByRole("link", { name: "Se hele historikken" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Udfordr dig ud af dem/ })).toHaveCount(0);
 
+  await db.fine.create({ data: { teamId: team.id, playerId: anna.id, issuedById: treasurer.id, reason: "Kassererens bøde", units: 1, unitPriceKr: 10, clearedAt: new Date() } });
   await db.fine.create({ data: { teamId: team.id, playerId: bo.id, issuedById: anna.id, reason: "Glemte bolde", units: 1, unitPriceKr: 10 } });
+  await db.fine.create({ data: { teamId: other.team.id, playerId: other.anna.id, issuedById: other.treasurer.id, reason: "De andres bøde", units: 1, unitPriceKr: 10 } });
   await page.goto("/boder/historik");
+  await expect(page.getByText("Kassererens bøde")).toBeVisible();
+  await expect(page.getByText(/· nulstillet/)).toBeVisible();
+  await expect(page.getByText("De andres bøde")).toHaveCount(0);
+  // Only the fine Anna gave herself is hers to delete.
+  await expect(page.getByRole("button", { name: "Slet" })).toHaveCount(1);
   await page.getByRole("button", { name: "Slet" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Slet bøden" }).click();
-  await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
-  expect(await db.fine.count({ where: { teamId: team.id } })).toBe(0);
+  await expect(page.getByText("Glemte bolde")).toHaveCount(0);
+  await expect(page.getByText("Kassererens bøde")).toBeVisible();
+  expect(await db.fine.count({ where: { teamId: team.id } })).toBe(1);
 });
 
-test("the board, the challenges and the catalogue are swiped between, and the dots say where you are", async ({ page, loginAs }) => {
+test("the board, the history and the catalogue are swiped between under the overview", async ({ page, loginAs }) => {
   const { team, treasurer, anna } = await squad();
   await db.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
   await db.fine.create({ data: { teamId: team.id, playerId: anna.id, issuedById: treasurer.id, reason: "Glemte bolde", units: 1, unitPriceKr: 10 } });
-  await loginAs(anna);
+  await loginAs(treasurer);
   await page.goto("/boder");
-  const title = page.getByRole("heading", { level: 1 });
-  const dot = (name: string) => page.getByRole("tab", { name });
-  await expect(title).toHaveText("Bødekassen");
-  await expect(dot("Bødekassen")).toHaveAttribute("aria-selected", "true");
+  const tab = (name: string) => page.getByRole("tab", { name });
+  const shown = page.getByRole("tabpanel");
+  const overview = page.getByRole("link", { name: /Du skylder/ });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Bødekassen");
+  await expect(tab("Bødetavlen")).toHaveAttribute("aria-selected", "true");
   // Only the page shown is there to read and to tab through.
-  await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  await expect(shown).toHaveCount(1);
+  await expect(shown).toHaveAccessibleName("Bødetavlen");
   await expect(page.getByText("Hvad koster hvad.")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Nulstil alle" })).toBeVisible();
 
   // A finger dragged across the screen: real touch input, so the browser does the scrolling.
   const cdp = await page.context().newCDPSession(page);
-  const swipe = async (dx: number) => {
+  const swipe = async (dx: number, y = 600) => {
     const from = dx < 0 ? 350 : 60;
     const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number) =>
-      cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y: 500 }] });
+      cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y }] });
     await touch("touchStart", from);
     for (let step = 1; step <= 15; step++) await touch("touchMove", from + (dx * step) / 15);
     await touch("touchEnd");
   };
 
-  await swipe(-290);
-  await expect(title).toHaveText("Udfordringer");
-  await expect(page).toHaveURL(/\/boder\/udfordringer$/);
-  await expect(dot("Udfordringer")).toHaveAttribute("aria-selected", "true");
-  // The "+" is the fine box's, not the page's: it stays the same across the swipe.
+  // The overview is not part of the swipe: a drag across it moves nothing.
+  const tile = (await overview.boundingBox())!;
+  await swipe(-290, tile.y + tile.height / 2);
+  await expect(page.getByRole("link", { name: /Anna .*10 kr/ })).toBeInViewport();
+  await expect(tab("Bødetavlen")).toHaveAttribute("aria-selected", "true");
+
+  // The names keep up with the finger: past half way, with the finger still down, the
+  // name and the button have changed and the underline is on its way.
+  const underline = page.getByRole("tablist").locator("span");
+  const from = (await underline.boundingBox())!.x;
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y: 600 }] });
+  await touch("touchStart", 380);
+  for (let x = 360; x >= 100; x -= 20) await touch("touchMove", x);
+  await expect(tab("Historik")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Nulstil alle" })).toHaveCount(0);
+  expect((await underline.boundingBox())!.x).toBeGreaterThan(from);
+  expect((await underline.boundingBox())!.x).toBeLessThan((await tab("Historik").boundingBox())!.x);
+  await expect(page).toHaveURL(/\/boder$/);
+  await touch("touchEnd");
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  const under = (await tab("Historik").boundingBox())!;
+  await expect.poll(async () => (await underline.boundingBox())!.x).toBeCloseTo(under.x, 0);
+  expect((await underline.boundingBox())!.width).toBeCloseTo(under.width, 0);
+  await expect(shown).toHaveAccessibleName("Historik");
+  await expect(page.getByText("Glemte bolde")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Nulstil alle" })).toHaveCount(0);
+  // The title, the button and the overview stay where they were.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Bødekassen");
   await expect(page.getByRole("button", { name: "Opret" })).toBeVisible();
+  await expect(overview).toBeInViewport();
 
   await swipe(-290);
-  await expect(title).toHaveText("Bødekatalog");
+  await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
   await expect(page).toHaveURL(/\/boder\/katalog$/);
   await expect(page.getByText("For sent")).toBeVisible();
+  // Making a new one is the last row of the list, not a button beside the names.
+  await expect(page.getByRole("tabpanel").getByRole("listitem").last().getByRole("button", { name: "Ny bøde" })).toBeVisible();
   // The last page: there is nothing further to the right.
   await swipe(-290);
-  await expect(title).toHaveText("Bødekatalog");
+  await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
 
   await swipe(290);
-  await expect(title).toHaveText("Udfordringer");
+  await expect(tab("Historik")).toHaveAttribute("aria-selected", "true");
 
-  // Without a finger: the dots, and the link on the board.
-  await dot("Bødekassen").click();
-  await expect(title).toHaveText("Bødekassen");
+  // Without a finger: the names.
+  await tab("Bødetavlen").click();
+  await expect(tab("Bødetavlen")).toHaveAttribute("aria-selected", "true");
   await expect(page).toHaveURL(/\/boder$/);
-  await page.getByRole("link", { name: /Udfordr dig ud af dem/ }).click();
-  await expect(title).toHaveText("Udfordringer");
-  await expect(page).toHaveURL(/\/boder\/udfordringer$/);
-  await dot("Bødekatalog").click();
-  await expect(title).toHaveText("Bødekatalog");
+  await tab("Katalog").click();
+  await expect(page).toHaveURL(/\/boder\/katalog$/);
+  await expect(shown).toHaveAccessibleName("Katalog");
 
   // A reload stays on the page it was left on.
   await page.reload();
-  await expect(title).toHaveText("Bødekatalog");
-  await expect(dot("Bødekatalog")).toHaveAttribute("aria-selected", "true");
+  await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("For sent")).toBeVisible();
 });

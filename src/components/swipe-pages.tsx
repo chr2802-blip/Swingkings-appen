@@ -1,16 +1,16 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 export type SwipePage = {
   /** Where this page lives; the address bar follows the swipe, so a reload stays put. */
   href: string;
   title: string;
+  /** The button beside the names while this page is the one shown. */
+  action?: React.ReactNode;
   children: React.ReactNode;
 };
-
-const GoTo = createContext<(href: string) => void>(() => {});
 
 /** How long the scroller must be still before the page it stopped on is the page. */
 const SETTLE_MS = 120;
@@ -18,8 +18,11 @@ const SETTLE_MS = 120;
 const ARRIVE_MS = 1500;
 
 /**
- * Pages side by side that a finger swipes between, with the title and a row of dots following along. The dots are the tabs: tap one, or use them from a
- * keyboard, where there is nothing to swipe with.
+ * Pages side by side that a finger swipes between, under a row of their names: the one
+ * shown is underlined, and its button sits beside them. The underline moves with the
+ * finger, and the name and the button change when the swipe is half way — not when it
+ * has ended. The names are the tabs: tap one, or use them from a keyboard, where there
+ * is nothing to swipe with.
  *
  * The pages sit in a row that scrolls sideways and snaps, so the swipe is the browser's
  * own and follows the finger. At rest the pages not shown are collapsed and invisible:
@@ -30,13 +33,28 @@ const ARRIVE_MS = 1500;
  * is right whichever address was opened.
  */
 export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial?: number }) {
+  // `active` is the page the scroller rests on; `shown` is the one nearest right now, mid-swipe.
   const [active, setActive] = useState(initial);
+  const [shown, setShown] = useState(initial);
   const [resting, setResting] = useState(true);
   const [ready, setReady] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const names = useRef<HTMLDivElement>(null);
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  const line = useRef<HTMLSpanElement>(null);
   // What the listeners read: they are attached once and outlive any one render.
   const live = useRef({ active, resting, touching: false, target: null as number | null, timer: 0, deadline: 0 });
   live.current.active = active;
+
+  /** Puts the underline under page `at`, which is a fraction while the row is between two. */
+  const underline = useCallback((at: number) => {
+    const from = tabs.current[Math.floor(at)];
+    const to = tabs.current[Math.ceil(at)] ?? from;
+    if (!line.current || !from || !to) return;
+    const part = at - Math.floor(at);
+    line.current.style.width = `${from.offsetWidth + (to.offsetWidth - from.offsetWidth) * part}px`;
+    line.current.style.translate = `${from.offsetLeft + (to.offsetLeft - from.offsetLeft) * part}px 0`;
+  }, []);
   live.current.resting = resting;
 
   const settle = useCallback(() => {
@@ -57,11 +75,14 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
     now.target = null;
     flushSync(() => {
       setActive(index);
+      setShown(index);
       setResting(true);
     });
+    underline(index);
     if (changed) {
-      // The new page starts at its top; the old page's scroll position means nothing on it.
-      window.scrollTo({ top: 0 });
+      // The new page starts at its top: if the names have scrolled away, bring them back.
+      const row = names.current;
+      if (row && row.getBoundingClientRect().top < 0) row.scrollIntoView({ block: "start" });
       window.history.replaceState(null, "", pages[index].href);
     }
   }, [pages]);
@@ -76,7 +97,18 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
   useLayoutEffect(() => {
     const el = scroller.current;
     if (ready && el) el.scrollLeft = live.current.active * el.clientWidth;
-  }, [ready]);
+    underline(live.current.active);
+  }, [ready, underline]);
+  // The names change width with the font and the window; the underline follows.
+  useEffect(() => {
+    if (!names.current) return;
+    const watch = new ResizeObserver(() => {
+      const el = scroller.current;
+      underline(el && !live.current.resting ? el.scrollLeft / (el.clientWidth || 1) : live.current.active);
+    });
+    watch.observe(names.current);
+    return () => watch.disconnect();
+  }, [underline]);
 
   const goTo = useCallback(
     (index: number) => {
@@ -105,6 +137,12 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
     // A trackpad or a keyboard scrolls the row without ever touching it.
     const scrolled = () => {
       if (Math.abs(el.scrollLeft - now.active * el.clientWidth) > 2) open();
+      // The names keep up with the finger: the underline every frame, the name at half way.
+      if (!now.resting) {
+        const at = Math.min(pages.length - 1, Math.max(0, el.scrollLeft / (el.clientWidth || 1)));
+        underline(at);
+        setShown(Math.round(at));
+      }
       wait();
     };
     const down = () => {
@@ -129,34 +167,40 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
       el.removeEventListener("touchcancel", up);
       el.removeEventListener("scroll", scrolled);
     };
-  }, [open, settle]);
-
-  const goToHref = useCallback((href: string) => goTo(pages.findIndex((page) => page.href === href)), [goTo, pages]);
+  }, [open, settle, underline, pages.length]);
 
   return (
-    <GoTo.Provider value={goToHref}>
-      <div className="mb-2 flex min-h-11 items-center justify-between gap-3">
-        <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight break-words">{pages[active].title}</h1>
-      </div>
-
-      <div role="tablist" aria-label="Bødekassens sider" className="mb-4 flex justify-center">
-        {pages.map((page, index) => (
-          <button
-            key={page.href}
-            type="button"
-            role="tab"
-            aria-selected={index === active}
-            aria-label={page.title}
-            onClick={() => goTo(index)}
-            className="px-1.5 py-2"
-          >
-            <span
-              className={`block h-1.5 rounded-full transition-all duration-200 ${
-                index === active ? "w-6 bg-[var(--accent)]" : "w-1.5 bg-slate-300"
-              }`}
-            />
-          </button>
-        ))}
+    <>
+      <div ref={names} className="mb-3 flex min-h-9 scroll-mt-24 items-center justify-between gap-3">
+        <div role="tablist" aria-label="Bødekassens sider" className="relative flex min-w-0 gap-4">
+          {pages.map((page, index) => (
+            <button
+              key={page.href}
+              type="button"
+              role="tab"
+              ref={(el) => {
+                tabs.current[index] = el;
+              }}
+              aria-selected={index === shown}
+              onClick={() => goTo(index)}
+              // Until the script has placed the moving underline, the name carries its own.
+              className={`border-b-2 py-1.5 text-xs font-semibold tracking-wider uppercase transition-colors duration-200 ${
+                index === shown ? "text-slate-900" : "text-slate-400"
+              } ${index === shown && !ready ? "border-[var(--accent)]" : "border-transparent"}`}
+            >
+              {page.title}
+            </button>
+          ))}
+          <span ref={line} hidden={!ready} className="absolute bottom-0 left-0 h-0.5 bg-[var(--accent)]" />
+        </div>
+        {pages.map(
+          (page, index) =>
+            page.action && (
+              <div key={page.href} hidden={index !== shown} className={index === shown ? "flex shrink-0 gap-2" : undefined}>
+                {page.action}
+              </div>
+            ),
+        )}
       </div>
 
       {/*
@@ -165,7 +209,7 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
       */}
       <div
         ref={scroller}
-        className={ready ? "scrollbar-hidden -mx-4 flex min-h-[calc(100dvh-20rem)] snap-x snap-mandatory overflow-x-auto overscroll-x-contain" : ""}
+        className={ready ? "scrollbar-hidden -mx-4 flex min-h-[calc(100dvh-30rem)] snap-x snap-mandatory overflow-x-auto overscroll-x-contain" : ""}
       >
         {pages.map((page, index) => {
           const away = resting && index !== active;
@@ -182,24 +226,6 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
           );
         })}
       </div>
-    </GoTo.Provider>
-  );
-}
-
-/** A link to one of the pages from inside another: slides there instead of loading it. */
-export function SwipeLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
-  const goTo = useContext(GoTo);
-  return (
-    <a
-      href={href}
-      className={className}
-      onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-        event.preventDefault();
-        goTo(href);
-      }}
-    >
-      {children}
-    </a>
+    </>
   );
 }

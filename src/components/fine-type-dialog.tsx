@@ -16,9 +16,10 @@ export function FineTypeDialog({
   const [units, setUnits] = useState(fineType?.units ?? 1);
   return (
     <FormDialog
-      trigger={fineType ? "Ret" : "Ny bøde i kataloget"}
-      triggerIcon={fineType ? undefined : "📜"}
-      triggerVariant={fineType ? "ghost" : "primary"}
+      trigger={fineType ? "Ret" : "+ Ny bøde"}
+      triggerVariant="ghost"
+      // A new one is made from the catalogue's last row, so its button is that whole row.
+      triggerClassName={fineType ? "" : "min-h-15 w-full rounded-none! text-[var(--accent-text)]!"}
       title={fineType ? "Ret bøde" : "Ny bøde i kataloget"}
       action={saveFineType}
       submitLabel="Gem"
