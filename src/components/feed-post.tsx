@@ -2,6 +2,7 @@ import { likersView, type feedPosts } from "@/lib/feed";
 import { stampLabel } from "@/lib/time";
 import { Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { PhotoCarousel } from "@/components/photo-carousel";
 import { PollView } from "@/components/poll-view";
 import { CommentsDrawer } from "@/components/comments-drawer";
@@ -22,9 +23,13 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
     <PostState>
       <Card padded={false} className="overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3">
-          <Avatar name={post.author.name} photoId={post.author.photoId} size="sm" />
+          <PlayerLink userId={post.author.id} className="shrink-0" aria-label={post.author.name}>
+            <Avatar name={post.author.name} photoId={post.author.photoId} size="sm" />
+          </PlayerLink>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{post.author.name}</p>
+            <p className="text-sm font-medium">
+              <PlayerLink userId={post.author.id}>{post.author.name}</PlayerLink>
+            </p>
             <p className="text-xs text-slate-500">{stampLabel(post.createdAt)}</p>
           </div>
           <PostMenu postId={post.id} canDelete={post.author.id === viewerId || admin} poll={post.poll} />
@@ -58,7 +63,7 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
                 id: comment.id,
                 body: comment.body,
                 stamp: stampLabel(comment.createdAt),
-                author: { name: comment.author.name, photoId: comment.author.photoId },
+                author: { id: comment.author.id, name: comment.author.name, photoId: comment.author.photoId },
                 canDelete: comment.author.id === viewerId || admin,
               }))}
             />

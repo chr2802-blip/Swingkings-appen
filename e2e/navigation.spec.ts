@@ -30,7 +30,7 @@ test("a player's page lists their fines with what each cost", async ({ page, log
   const { team, treasurer, anna } = await squad();
   await db.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "Glemt benskinner", units: 3, unitPriceKr: 10, issuedById: treasurer.id } });
   await loginAs(anna);
-  await page.goto(`/boder/spiller/${anna.id}`);
+  await page.goto(`/spiller/${anna.id}`);
   await expect(page.getByText("Glemt benskinner")).toBeVisible();
   await expect(page.getByText("30 kr").first()).toBeVisible();
 });
@@ -39,7 +39,7 @@ test("a player's page from another team is not found", async ({ page, loginAs })
   const { anna } = await squad();
   const other = await squad("Naboerne");
   await loginAs(anna);
-  const response = await page.goto(`/boder/spiller/${other.bo.id}`);
+  const response = await page.goto(`/spiller/${other.bo.id}`);
   expect(response?.status()).toBe(404);
 });
 

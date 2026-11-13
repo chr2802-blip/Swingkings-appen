@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ActivityKind } from "@prisma/client";
 import { Avatar } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { Badge } from "@/components/ui";
 import { ActionButton } from "@/components/action-button";
 import { setTaskDone, toggleTakeTask } from "@/app/actions/tasks";
@@ -55,9 +56,9 @@ export function TaskRow({ task, viewerId, showMatch = true }: { task: TaskView; 
       </Link>
       <div className="flex -space-x-1.5">
         {task.assignees.slice(0, 3).map((a) => (
-          <span key={a.user.id} title={a.user.name} className="rounded-full ring-2 ring-white">
+          <PlayerLink key={a.user.id} userId={a.user.id} title={a.user.name} aria-label={a.user.name} className="rounded-full ring-2 ring-white">
             <Avatar name={a.user.name} photoId={a.user.photoId} size="sm" />
-          </span>
+          </PlayerLink>
         ))}
       </div>
       {!done && task.assignees.length === 0 && !mine && (
