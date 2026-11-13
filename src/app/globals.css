@@ -169,6 +169,8 @@ h1,
   --ease-leave: cubic-bezier(0.4, 0, 1, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Gentler off the mark than `arrive`: a page's first frames are the ones a busy phone drops. */
+  --ease-page: cubic-bezier(0.33, 1, 0.68, 1);
 
   --dur-press: 70ms;
   --dur-release: 260ms;
@@ -177,8 +179,8 @@ h1,
   --dur-row: 200ms;
   --dur-sheet-in: 300ms;
   --dur-sheet-out: 200ms;
-  --dur-page: 340ms;
-  --dur-page-out: 160ms;
+  --dur-page: 300ms;
+  --dur-page-out: 140ms;
 }
 
 /*
@@ -342,10 +344,15 @@ h1,
  * The page under the header (`PageTransition`). It comes in from the side its tab is on,
  * and opens and closes inside a tab; `data-motion` says which, and "none" brings nothing
  * in (a swipe between the fine box's pages, back and forward). While a tapped tab's page
- * is on its way, the page on screen steps aside towards it (`data-leaving`).
+ * is on its way, the page on screen dims (`data-leaving`).
+ *
+ * The page coming in starts as dimmed as the one before it had got (`--page-from`), never
+ * from nothing: the browser is busy for a few frames when a page arrives, and a page
+ * starting from invisible showed as an empty screen for as long. Only `translate` and
+ * `opacity` move, which the browser can do without drawing the page again.
  *
  * None of these keep their last frame: once in, the page has no transform of its own, and
- * the stepping aside — an ordinary transition — is not held back by a finished animation.
+ * the dimming — an ordinary transition — is not held back by a finished animation.
  */
 .app-page {
   /*
@@ -355,63 +362,51 @@ h1,
    */
   position: relative;
   isolation: isolate;
-  transform-origin: 50% 0;
   animation: page-in var(--dur-base) var(--ease-arrive) backwards;
 }
 .app-page[data-motion="forward"] {
-  animation: page-forward var(--dur-page) var(--ease-arrive) backwards;
+  animation: page-forward var(--dur-page) var(--ease-page) backwards;
 }
 .app-page[data-motion="backward"] {
-  animation: page-backward var(--dur-page) var(--ease-arrive) backwards;
+  animation: page-backward var(--dur-page) var(--ease-page) backwards;
 }
 .app-page[data-motion="open"] {
-  animation: page-open var(--dur-page) var(--ease-arrive) backwards;
+  animation: page-open var(--dur-page) var(--ease-page) backwards;
 }
 .app-page[data-motion="close"] {
-  animation: page-close var(--dur-page) var(--ease-arrive) backwards;
+  animation: page-close var(--dur-page) var(--ease-page) backwards;
 }
 .app-page[data-motion="none"] {
   animation: none;
 }
 .app-page[data-leaving] {
-  opacity: 0.3;
-  transition:
-    opacity var(--dur-page-out) var(--ease-leave),
-    translate var(--dur-page-out) var(--ease-leave),
-    scale var(--dur-page-out) var(--ease-leave);
-}
-.app-page[data-leaving="forward"] {
-  translate: -18px 0;
-}
-.app-page[data-leaving="backward"] {
-  translate: 18px 0;
-}
-.app-page[data-leaving="close"] {
-  scale: 0.985;
+  opacity: 0.45;
+  /* Its own layer already, so the page coming in does not wait for one. */
+  will-change: opacity, translate;
+  transition: opacity var(--dur-page-out) ease-out;
 }
 @keyframes page-forward {
   from {
-    opacity: 0;
-    translate: 36px 0;
+    opacity: var(--page-from, 1);
+    translate: 24px 0;
   }
 }
 @keyframes page-backward {
   from {
-    opacity: 0;
-    translate: -36px 0;
+    opacity: var(--page-from, 1);
+    translate: -24px 0;
   }
 }
 @keyframes page-open {
   from {
-    opacity: 0;
+    opacity: var(--page-from, 1);
     translate: 0 14px;
-    scale: 0.975;
   }
 }
 @keyframes page-close {
   from {
-    opacity: 0;
-    scale: 1.02;
+    opacity: var(--page-from, 1);
+    translate: 0 -10px;
   }
 }
 
@@ -657,8 +652,6 @@ h1,
 
   .app-page[data-leaving] {
     opacity: 1;
-    translate: none;
-    scale: none;
     transition: none;
   }
 }
