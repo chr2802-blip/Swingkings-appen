@@ -14,8 +14,7 @@ import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card
 import { DetailSheet } from "@/components/detail-sheet";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { ActionButton } from "@/components/action-button";
-import { ActionMenu } from "@/components/action-menu";
-import { removeFineType, resetFines } from "@/app/actions/fines";
+import { resetFines } from "@/app/actions/fines";
 import { Crown } from "@/components/crest";
 
 /** How far back the history page goes. A team gives a few fines a week, so this is a year or two. */
@@ -242,31 +241,32 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
       {(types.length > 0 || manages) && (
         <Card padded={false} className={`overflow-hidden ${types.length === 0 ? "mt-3" : ""}`}>
           <ul className="divide-y divide-slate-100">
-            {types.map((type) => (
-              <li key={type.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{type.name}</p>
-                  {type.description && <p className="text-xs text-slate-500">{type.description}</p>}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold">{fineUnits(type.units)}</p>
-                  <p className="text-xs text-slate-500">{kr(type.units * board.finePriceKr)}</p>
-                </div>
-                {manages && (
-                  <ActionMenu icon label={`Handlinger for ${type.name}`} title={type.name}>
-                    <FineTypeDialog finePriceKr={board.finePriceKr} fineType={type} />
-                    <ActionButton
-                      action={removeFineType}
-                      fields={{ id: type.id }}
-                      label="Fjern fra kataloget"
-                      variant="danger"
-                      confirm={`Fjern “${type.name}” fra kataloget?`}
-                      confirmLabel="Fjern"
-                    />
-                  </ActionMenu>
-                )}
-              </li>
-            ))}
+            {types.map((type) => {
+              const row = (
+                <>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{type.name}</span>
+                    {type.description && <span className="block text-xs text-slate-500">{type.description}</span>}
+                  </span>
+                  <span className="text-right">
+                    <span className="block text-sm font-semibold">{fineUnits(type.units)}</span>
+                    <span className="block text-xs text-slate-500">{kr(type.units * board.finePriceKr)}</span>
+                  </span>
+                </>
+              );
+              // Only who manages the fines can open one: the row is then the button, as in the history.
+              return (
+                <li key={type.id}>
+                  {manages ? (
+                    <FineTypeDialog finePriceKr={board.finePriceKr} fineType={type}>
+                      {row}
+                    </FineTypeDialog>
+                  ) : (
+                    <div className="flex items-center gap-3 px-4 py-3">{row}</div>
+                  )}
+                </li>
+              );
+            })}
             {/* Making a new one is the list's last row, where the new one will land. */}
             {manages && (
               <li>

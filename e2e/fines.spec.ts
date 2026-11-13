@@ -65,7 +65,43 @@ test("a player sees the catalogue but cannot change it", async ({ page, loginAs 
   await page.goto("/boder/katalog");
   await expect(page.getByText("For sent")).toBeVisible();
   await expect(page.getByRole("button", { name: "Ny bøde" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Ret", exact: true })).toHaveCount(0);
+  // The fine is a row to read, not a button: nothing opens it.
+  await expect(page.getByRole("button", { name: /For sent/ })).toHaveCount(0);
+  await page.getByText("For sent").click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("a treasurer taps a fine in the catalogue to change it, and deletes it from the same dialog", async ({ page, loginAs }) => {
+  const { team, treasurer } = await squad();
+  const type = await db.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
+  await loginAs(treasurer);
+  await page.goto("/boder/katalog");
+  const panel = page.getByRole("tabpanel");
+  // The row is the only way in: no "⋯" beside it.
+  await expect(panel.getByRole("button", { name: /Handlinger/ })).toHaveCount(0);
+  await panel.getByRole("button", { name: /For sent/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Ret bøde" });
+  await expect(dialog.getByLabel("Navn")).toHaveValue("For sent");
+  await dialog.getByLabel("Navn").fill("Alt for sent");
+  await dialog.getByLabel("Antal bøder").fill("3");
+  await dialog.getByRole("button", { name: "Gem" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(panel.getByRole("button", { name: /Alt for sent.*3 bøder.*30 kr/ })).toBeVisible();
+  expect(await db.fineType.findUniqueOrThrow({ where: { id: type.id } })).toMatchObject({ name: "Alt for sent", units: 3 });
+
+  // Deleting asks first, and going ahead deletes — it does not also save what is in the form.
+  await panel.getByRole("button", { name: /Alt for sent/ }).click();
+  await dialog.getByLabel("Navn").fill("Må ikke gemmes");
+  await dialog.getByRole("button", { name: "Slet fra kataloget" }).click();
+  const confirm = page.getByRole("dialog", { name: "Slet “Alt for sent” fra kataloget?" });
+  await confirm.getByRole("button", { name: "Annuller" }).click();
+  await expect(confirm).toBeHidden();
+  expect(await db.fineType.findUniqueOrThrow({ where: { id: type.id } })).toMatchObject({ name: "Alt for sent" });
+  await dialog.getByRole("button", { name: "Slet fra kataloget" }).click();
+  await confirm.getByRole("button", { name: "Slet", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(panel.getByText("Alt for sent")).toHaveCount(0);
+  expect(await db.fineType.count({ where: { teamId: team.id } })).toBe(0);
 });
 
 test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
