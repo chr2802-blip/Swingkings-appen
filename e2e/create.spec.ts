@@ -29,6 +29,15 @@ test("each tab's + makes that tab's things: a post at home, a choice in the fine
   await page.goto("/chat");
   await expect(page.getByRole("heading", { name: "Chat" })).toBeVisible();
   await expect(page.locator(".app-create")).toHaveCount(0);
+  // The tab bar still shows a "+", greyed out, so it looks the same on every tab.
+  const idle = page.getByRole("navigation").getByRole("button", { name: "Opret" });
+  await expect(idle).toBeVisible();
+  await expect(idle).toBeDisabled();
+
+  // Where the page has its own "+", the greyed-out one gives way to it.
+  await page.goto("/aktiviteter");
+  await expect(page.getByRole("button", { name: "Ny aktivitet" })).toBeVisible();
+  await expect(idle).toBeHidden();
 });
 
 test("the + sits in the middle of the tab bar, and slides to the right corner when the bar goes", async ({ page, loginAs }) => {

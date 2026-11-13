@@ -9,7 +9,8 @@ import { NAV_ITEMS, isInTab } from "./nav-items";
 type Pill = { x: number; y: number; moved: boolean };
 
 /**
- * The phone's tab bar, with a gap in the middle for the page's "+" button. On a desktop
+ * The phone's tab bar, with the page's "+" button in the middle (greyed out where there is
+ * nothing to make). On a desktop
  * the same destinations are `NavLinks` in the header.
  *
  * A tab lights up the moment it is tapped, not when its page has arrived: the tapped tab
@@ -42,7 +43,7 @@ export function BottomNav() {
       setPill((last) => (last && last.x === x && last.y === y ? last : { x, y, moved: last !== null }));
     };
     measure();
-    // The tabs move when the gap for the "+" opens or closes, and when the screen turns.
+    // The tabs move when the screen turns.
     const observer = new ResizeObserver(measure);
     for (const li of ul.children) observer.observe(li);
     return () => observer.disconnect();
@@ -64,8 +65,25 @@ export function BottomNav() {
           const Icon = item.icon;
           return (
             <Fragment key={item.href}>
-              {/* The middle, kept free for the page's "+" (`CreateFab`), only while it has one. */}
-              {index === NAV_ITEMS.length / 2 && <li aria-hidden className="app-create-gap w-16 shrink-0" />}
+              {/*
+               * The middle, kept for the page's "+" (`CreateFab`). A page with nothing to
+               * make shows the "+" greyed out here, so the bar looks the same on every tab.
+               */}
+              {index === NAV_ITEMS.length / 2 && (
+                <li className="relative w-16 shrink-0">
+                  <button
+                    type="button"
+                    disabled
+                    aria-label="Opret"
+                    title="Intet at oprette her"
+                    className="app-create-idle absolute bottom-3 left-1/2 flex h-15 w-15 -translate-x-1/2 cursor-not-allowed items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--band-muted)_28%,var(--band))] text-[var(--band-muted)] ring-4 ring-[var(--band)]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden>
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                </li>
+              )}
               <li className="relative min-w-0 flex-1">
                 <Link
                   href={item.href}
