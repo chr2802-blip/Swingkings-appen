@@ -16,7 +16,7 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
 
-  await expect(page.getByRole("link", { name: /Anna .*2 bøder udestående · 20 kr i alt 20 kr/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
   expect(await db.fine.count({ where: { playerId: { in: [anna.id, bo.id] }, units: 2, unitPriceKr: 10 } })).toBe(2);
 
   await loginAs(anna);
@@ -99,8 +99,8 @@ test("a challenge is reported, approved by a third player, and the stake moves t
   await expect(page.getByText(/3 bøder flyttet fra Anna til Bo · godkendt af/)).toBeVisible();
 
   await page.goto("/boder");
-  await expect(page.getByRole("link", { name: /Bo .*3 bøder udestående · 30 kr i alt 30 kr/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Anna .*2 bøder udestående · 50 kr i alt 20 kr/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Bo .*30 kr/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
 });
 
 test("a treasurer resets a player, and a player cannot", async ({ page, loginAs }) => {
@@ -118,4 +118,65 @@ test("a treasurer resets a player, and a player cannot", async ({ page, loginAs 
   await expect(page.getByText(/· nulstillet /)).toBeVisible();
   await expect(page.getByRole("button", { name: "Nulstil bøder" })).toHaveCount(0);
   expect(await db.fine.count({ where: { playerId: anna.id, clearedAt: null } })).toBe(0);
+});
+
+test("the front page leads with what you owe and what is in the box, and keeps the long history on its own page", async ({ page, loginAs }) => {
+  const { team, treasurer, anna, bo } = await squad();
+  const other = await squad("Andre");
+  const give = (teamId: string, playerId: string, issuedById: string, reason: string, minutesAgo: number, clearedAt?: Date) =>
+    db.fine.create({
+      data: { teamId, playerId, issuedById, reason, units: 1, unitPriceKr: 10, clearedAt, createdAt: new Date(Date.now() - minutesAgo * 60_000) },
+    });
+  await give(team.id, anna.id, treasurer.id, "Ældste bøde", 60, new Date());
+  for (let n = 1; n <= 4; n++) await give(team.id, bo.id, treasurer.id, `Bøde nummer ${n}`, 10 * n);
+  await give(team.id, anna.id, bo.id, "Glemte bolde", 1);
+  await give(other.team.id, other.anna.id, other.treasurer.id, "De andres bøde", 0);
+
+  await loginAs(anna);
+  await page.goto("/boder");
+  // Six fines given, one of them reset: 60 kr in all, 50 kr still owed, 10 of them Anna's.
+  const mine = page.getByRole("link", { name: /Du skylder/ });
+  await expect(mine).toContainText("10 kr");
+  await expect(mine).toContainText("1 bøde");
+  const box = page.getByText("I kassen").locator("..");
+  await expect(box).toContainText("60 kr");
+  await expect(box).toContainText("50 kr udestående");
+  await expect(page.getByRole("link", { name: /Bo .*40 kr/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "⚔️ Udfordr dig ud af dem ›" })).toHaveAttribute("href", "/boder/udfordringer");
+
+  // Only the newest five here; the oldest waits behind the link.
+  await expect(page.getByText("Glemte bolde")).toBeVisible();
+  await expect(page.getByText("Bøde nummer 4")).toBeVisible();
+  await expect(page.getByText("Ældste bøde")).toHaveCount(0);
+  await page.getByRole("link", { name: "Se hele historikken" }).click();
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await expect(page.getByRole("heading", { name: "Historik" })).toBeVisible();
+  await expect(page.getByText("Ældste bøde")).toBeVisible();
+  await expect(page.getByText(/· nulstillet/)).toBeVisible();
+  await expect(page.getByText("De andres bøde")).toHaveCount(0);
+  // A player deletes nothing here: none of these were given by Anna.
+  await expect(page.getByRole("button", { name: "Slet" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Bødekassen" }).click();
+  await expect(page).toHaveURL(/\/boder$/);
+  await page.getByRole("link", { name: /Du skylder/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/boder/spiller/${anna.id}$`));
+});
+
+test("the history page lets whoever gave a fine take it back, and is empty before the first fine", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  await loginAs(anna);
+  await page.goto("/boder/historik");
+  await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
+  await page.goto("/boder");
+  await expect(page.getByRole("link", { name: /Du skylder/ })).toContainText("Ren tavle");
+  await expect(page.getByRole("link", { name: "Se hele historikken" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Udfordr dig ud af dem/ })).toHaveCount(0);
+
+  await db.fine.create({ data: { teamId: team.id, playerId: bo.id, issuedById: anna.id, reason: "Glemte bolde", units: 1, unitPriceKr: 10 } });
+  await page.goto("/boder/historik");
+  await page.getByRole("button", { name: "Slet" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Slet bøden" }).click();
+  await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
+  expect(await db.fine.count({ where: { teamId: team.id } })).toBe(0);
 });

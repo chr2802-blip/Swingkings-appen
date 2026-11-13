@@ -1,39 +1,27 @@
 import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
-import { canDeleteFine, canManageFines } from "@/lib/access";
-import { teamDb } from "@/lib/team-db";
-import { fineBoard, matchOptions, monthKings } from "@/lib/fine-data";
-import { fineAmount, fineUnits, kr } from "@/lib/money";
-import { relativeDay } from "@/lib/time";
+import { canManageFines } from "@/lib/access";
+import { fineBoard, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
+import { fineUnits, kr } from "@/lib/money";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { FinesTabs } from "@/components/fines-tabs";
+import { FineHistory } from "@/components/fine-history";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { ActionButton } from "@/components/action-button";
-import { deleteFine, resetFines } from "@/app/actions/fines";
-import { Crown, Star } from "@/components/crest";
+import { resetFines } from "@/app/actions/fines";
+import { Crown } from "@/components/crest";
+
+/** How many fines the front page shows; the rest are on /boder/historik. */
+const RECENT = 5;
 
 export default async function FinesPage() {
   const user = await requireTeamUser();
-  const db = teamDb(user.teamId);
+  // One more than shown, so the page knows whether there is a history worth linking to.
   const [board, kings, recent, matches] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
-    db.fine.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 25,
-      select: {
-        id: true,
-        reason: true,
-        units: true,
-        unitPriceKr: true,
-        createdAt: true,
-        challengeId: true,
-        clearedAt: true,
-        issuedById: true,
-        player: { select: { id: true, name: true, photoId: true } },
-      },
-    }),
+    fineHistory(user.teamId, RECENT + 1),
     matchOptions(user.teamId),
   ]);
 
@@ -48,7 +36,6 @@ export default async function FinesPage() {
     <div>
       <PageHeader
         title="Bødekassen"
-        description={`1 bøde = ${kr(board.finePriceKr)}`}
         action={
           <GiveFineDialog
             members={board.roster}
@@ -60,34 +47,33 @@ export default async function FinesPage() {
       />
       <FinesTabs current="/boder" />
 
-      <div className="mb-8 grid grid-cols-2 gap-3">
-        <Stat label="Udestående" value={kr(totals.owed)} tone={totals.owed > 0 ? "red" : undefined} />
-        <Stat label="Bøder i alt" value={kr(totals.fined)} />
-      </div>
-
-      {mine && (
-        <Card className="mb-8">
-          <SectionTitle>Din konto</SectionTitle>
-          <div className="flex items-end justify-between gap-4">
-            <div>
+      {/* The two numbers people come for, side by side, so the board starts on the first screen. */}
+      <Card padded={false} className="mb-6 overflow-hidden">
+        <div className={`grid divide-x divide-slate-100 ${mine ? "grid-cols-2" : ""}`}>
+          {mine && (
+            <Link href={`/boder/spiller/${user.id}`} className="press-card px-4 py-3">
+              <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Du skylder</p>
               <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
-              <p className="text-sm text-slate-500">
-                {mine.units > 0 ? `${fineUnits(mine.units)} udestående` : "Ren tavle 🙌"}
+              <p className="text-xs text-slate-500">
+                {mine.units > 0 ? `${fineUnits(mine.units)} · se dem ›` : "Ren tavle 🙌"}
               </p>
-            </div>
-            <div className="flex flex-col items-end gap-1 text-sm font-medium text-[var(--accent-text)]">
-              <Link href={`/boder/spiller/${user.id}`} className="underline">
-                Se dine bøder
-              </Link>
-              {mine.units > 0 && (
-                <Link href="/boder/udfordringer" className="underline">
-                  Udfordr dig ud af dem
-                </Link>
-              )}
-            </div>
+            </Link>
+          )}
+          <div className="px-4 py-3">
+            <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">I kassen</p>
+            <p className="text-3xl font-semibold">{kr(totals.fined)}</p>
+            <p className="text-xs text-slate-500">{kr(totals.owed)} udestående</p>
           </div>
-        </Card>
-      )}
+        </div>
+        {mine && mine.units > 0 && (
+          <Link
+            href="/boder/udfordringer"
+            className="press-card block border-t border-slate-100 px-4 py-2.5 text-sm font-medium text-[var(--accent-text)]"
+          >
+            ⚔️ Udfordr dig ud af dem ›
+          </Link>
+        )}
+      </Card>
 
       <section className="mb-8">
         <SectionTitle
@@ -118,7 +104,7 @@ export default async function FinesPage() {
                   <Link
                     href={`/boder/spiller/${row.userId}`}
                     aria-current={isMe ? "true" : undefined}
-                    className={`press-card flex items-center gap-3 px-4 py-3 ${
+                    className={`press-card flex items-center gap-3 px-4 py-2.5 ${
                       isMe ? "border-l-4 border-[var(--gold)] bg-[var(--gold-tint)] pl-3" : ""
                     }`}
                   >
@@ -136,9 +122,6 @@ export default async function FinesPage() {
                         {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
                         {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
                       </span>
-                      <span className="text-xs text-slate-500">
-                        {fineUnits(row.units)} udestående · {kr(row.finedKr)} i alt
-                      </span>
                     </span>
                     {row.owesKr > 0 ? <Badge tone="red">{kr(row.owesKr)}</Badge> : <Badge tone="green">ren tavle</Badge>}
                   </Link>
@@ -154,51 +137,18 @@ export default async function FinesPage() {
         {recent.length === 0 ? (
           <EmptyState icon="😇">Ingen bøder endnu. Det varer nok ikke længe.</EmptyState>
         ) : (
-          <Card padded={false}>
-            <ul className="divide-y divide-slate-100">
-              {recent.map((fine) => (
-                <li key={fine.id} className="flex items-center gap-3 px-4 py-3">
-                  <Star className="h-3.5 w-3.5" />
-                  <Avatar name={fine.player.name} photoId={fine.player.photoId} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {fine.player.name} <span className="font-normal text-slate-500">· {fine.reason}</span>
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {fineUnits(fine.units)} · {kr(fineAmount(fine))} · {relativeDay(fine.createdAt)}
-                      {fine.challengeId && " · ⚔️ udfordring"}
-                      {fine.clearedAt && " · nulstillet"}
-                    </p>
-                  </div>
-                  {canDeleteFine(user, user.teamId, fine) && (
-                    <ActionButton
-                      action={deleteFine}
-                      fields={{ id: fine.id }}
-                      label="Slet"
-                      variant="ghost"
-                      confirm={
-                        fine.challengeId
-                          ? "Slet bøden? Hele udfordringen bliver trukket tilbage, også vinderens del."
-                          : `Slet bøden til ${fine.player.name}?`
-                      }
-                      confirmLabel="Slet bøden"
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <>
+            <FineHistory fines={recent.slice(0, RECENT)} user={user} />
+            {recent.length > RECENT && (
+              <p className="mt-3 text-center">
+                <Link href="/boder/historik" className="text-sm font-medium text-[var(--accent-text)] underline">
+                  Se hele historikken
+                </Link>
+              </p>
+            )}
+          </>
         )}
       </section>
     </div>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "red" }) {
-  return (
-    <Card className="px-3 py-3 text-center sm:px-5">
-      <p className={`text-lg font-semibold sm:text-2xl ${tone === "red" ? "text-red-600" : ""}`}>{value}</p>
-      <p className="text-xs text-slate-500">{label}</p>
-    </Card>
   );
 }
