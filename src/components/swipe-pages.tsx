@@ -93,7 +93,9 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
   }, []);
 
   // Before the first paint with the row: stand on the page that was asked for.
-  useLayoutEffect(() => setReady(true), []);
+  useLayoutEffect(() => {
+    setReady(true);
+  }, []);
   useLayoutEffect(() => {
     const el = scroller.current;
     if (ready && el) el.scrollLeft = live.current.active * el.clientWidth;

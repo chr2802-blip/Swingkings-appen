@@ -330,7 +330,9 @@ const GUIDES: Record<Guide, { title: string; intro?: string; steps: Step[] }> = 
 function CopyLink() {
   const [copied, setCopied] = useState(false);
   const [url, setUrl] = useState("");
-  useEffect(() => setUrl(window.location.origin), []);
+  useEffect(() => {
+    setUrl(window.location.origin);
+  }, []);
   return (
     <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1.5 pl-3">
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{url.replace(/^https?:\/\//, "")}</span>
