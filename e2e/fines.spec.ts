@@ -78,6 +78,12 @@ test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText("Rødt kort");
   await expect(rows.last().getByRole("button", { name: "Ny bøde" })).toBeVisible();
+  // It is a row like the others: as tall and as wide, with its words in the middle.
+  const [fine, add] = [(await rows.first().boundingBox())!, (await rows.last().boundingBox())!];
+  expect(Math.abs(add.height - fine.height)).toBeLessThanOrEqual(1);
+  const button = rows.last().getByRole("button", { name: "Ny bøde" });
+  expect((await button.boundingBox())!.width).toBe(add.width);
+  await expect(button).toHaveCSS("justify-content", "center");
   expect(await db.fineType.count({ where: { teamId: team.id } })).toBe(1);
 });
 

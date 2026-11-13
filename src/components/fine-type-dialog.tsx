@@ -19,7 +19,7 @@ export function FineTypeDialog({
       trigger={fineType ? "Ret" : "+ Ny bøde"}
       triggerVariant="ghost"
       // A new one is made from the catalogue's last row, so its button is that whole row.
-      triggerClassName={fineType ? "" : "w-full justify-start! rounded-none! px-4! py-3! text-[var(--accent-text)]!"}
+      triggerClassName={fineType ? "" : "min-h-15 w-full rounded-none! text-[var(--accent-text)]!"}
       title={fineType ? "Ret bøde" : "Ny bøde i kataloget"}
       action={saveFineType}
       submitLabel="Gem"
