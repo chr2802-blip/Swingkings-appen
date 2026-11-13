@@ -117,8 +117,8 @@ describe("GET /api/photos/<id>", () => {
     expect(full.headers.get("content-type")).toBe("image/png");
     expect(full.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
     expect(full.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(new Uint8Array(await full.arrayBuffer())).toEqual(new Uint8Array(photo.bytes));
-    expect(new Uint8Array(await (await fetchPhoto(photo.id, true)).arrayBuffer())).toEqual(new Uint8Array(photo.thumbBytes));
+    expect(new Uint8Array(await full.arrayBuffer())).toEqual(new Uint8Array(photo.bytes!));
+    expect(new Uint8Array(await (await fetchPhoto(photo.id, true)).arrayBuffer())).toEqual(new Uint8Array(photo.thumbBytes!));
   });
 
   it("answers 404 to the signed-out, to another team and to an id that never was", async () => {

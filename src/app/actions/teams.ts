@@ -11,7 +11,7 @@ import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { readForm, requiredText, wholeNumber } from "@/lib/form";
 import { generateLinkToken, hashLinkToken, joinPath } from "@/lib/invite-links";
 import { LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
-import { discardReplaced, readPhotoChoice } from "@/lib/photos";
+import { discardReplaced, readPhotoChoice, removeStored } from "@/lib/photos";
 import { normalizeCalendarUrl } from "@/lib/ical";
 import { THEMES } from "@/lib/theme";
 import { createDemoTeam, removeDemoTeam } from "@/lib/demo-team";
@@ -201,7 +201,11 @@ export async function createTeam(_prev: ActionResult, formData: FormData): Promi
 
 export async function deleteTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSuperAdmin();
-  await prisma.team.deleteMany({ where: { id: String(formData.get("teamId") ?? "") } });
+  const id = String(formData.get("teamId") ?? "");
+  // The rows go with the team; the objects in storage do not, so their names are read first.
+  const stored = await prisma.photo.findMany({ where: { teamId: id, storageKey: { not: null } }, select: { storageKey: true } });
+  await prisma.team.deleteMany({ where: { id } });
+  await removeStored(stored.map((photo) => photo.storageKey));
   revalidatePath("/", "layout");
   return ok();
 }
