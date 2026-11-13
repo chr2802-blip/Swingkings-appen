@@ -9,12 +9,18 @@ const DISTANCE = 90;
 const TOP = 64;
 /** How long the page must be still before the bars settle all the way in or out. */
 const SETTLE_MS = 140;
+/** This close to the end of the page counts as the end. */
+const END = 4;
 
 /**
  * Moves the header, the tab bar and the "+" with the scroll: down a page they slide out as
  * far as the page has moved, back up they slide in, and when the scrolling stops they
- * settle the rest of the way, whichever way is nearer. They come back on a new page and at
- * the top of one.
+ * settle the rest of the way, whichever way is nearer. They come back on a new page, at
+ * the top of one, and at the end of one, where there is nothing left to read.
+ *
+ * Only scrolling moves them. A phone's browser shows and hides its own toolbar near the
+ * end of a page, which changes the window's height and so where the end is; read as a
+ * scroll, that jerked the bars half-way and back. A change of height moves nothing.
  *
  * It writes `--bars` on <html> (0 shown, 1 gone; the CSS is in globals.css), and
  * `data-bars`: "hidden" once all the way out, "live" while following the finger, when
@@ -27,6 +33,7 @@ export function ScrollBars() {
     const root = document.documentElement;
     let shown = 0; // how far out the bars are, 0..1
     let last = window.scrollY;
+    let height = window.innerHeight;
     let frame = 0;
     let timer = 0;
 
@@ -47,8 +54,14 @@ export function ScrollBars() {
       const y = Math.min(Math.max(window.scrollY, 0), max);
       const moved = y - last;
       last = y;
+      if (window.innerHeight !== height) {
+        // The window changed size, not the scroll: start counting again from here, and
+        // leave any settling that is under way to finish.
+        height = window.innerHeight;
+        return;
+      }
       window.clearTimeout(timer);
-      if (y < TOP) {
+      if (y < TOP || y >= max - END) {
         write(0, false);
         return;
       }
@@ -62,8 +75,10 @@ export function ScrollBars() {
 
     write(0, false);
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
       if (frame) cancelAnimationFrame(frame);
       window.clearTimeout(timer);
       root.style.removeProperty("--bars");

@@ -133,3 +133,38 @@ test("the fine box's + becomes the drawer's ×, and closes it again", async ({ p
   await expect(menu).toBeHidden();
   await expect(plus).toHaveAttribute("aria-expanded", "false");
 });
+
+test("at the end of a page the bars come back, and a window changing height moves nothing", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.match.createMany({
+    data: Array.from({ length: 30 }, (_, i) => ({
+      teamId: team.id,
+      kind: "OTHER" as const,
+      title: `Aktivitet ${i + 1}`,
+      startsAt: new Date(Date.now() + (i + 1) * 86_400_000),
+    })),
+  });
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  const html = page.locator("html");
+  await expect(page.getByRole("button", { name: "Ny aktivitet" })).toBeVisible();
+  const end = () => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+
+  // Well down the page, short of the end: gone.
+  await page.evaluate((y) => window.scrollTo(0, y), (await end()) - 300);
+  await expect(html).toHaveAttribute("data-bars", "hidden");
+
+  // The browser's own toolbar going away makes the window taller, and the end nearer —
+  // the page is pulled back, though nobody scrolled. The bars stay where they are.
+  const { width, height } = page.viewportSize()!;
+  await page.setViewportSize({ width, height: height + 400 });
+  await expect.poll(() => page.evaluate(() => window.innerHeight)).toBe(height + 400);
+  await expect(html).toHaveAttribute("data-bars", "hidden");
+
+  // Scrolled down to the end: nothing left to read, so the menu is there. (The taller
+  // window already stands at the end, so go up a little first, as a finger would.)
+  await page.evaluate(() => window.scrollBy(0, -150));
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(html).not.toHaveAttribute("data-bars");
+  await expect(page.getByRole("link", { name: "Chat" })).toBeInViewport({ ratio: 1 });
+});
