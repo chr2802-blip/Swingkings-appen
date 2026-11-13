@@ -11,6 +11,14 @@ const PAGE_ID = "app-page";
 /** An address that was written by the page itself (a swipe), not arrived at: nothing comes in. */
 let inPlace: string | null = null;
 
+/**
+ * How dimmed the page was when it stopped stepping aside, and when: the page that comes in
+ * starts from there, so the screen never jumps to empty and back.
+ */
+let leftAt: { opacity: string; at: number } | null = null;
+/** A page that let go longer ago than this did not let go for the page now coming in. */
+const LEFT_JUST_NOW_MS = 100;
+
 /** Called just before a page rewrites its own address, so the change is not read as a new page. */
 export function stayOnPage(href: string) {
   inPlace = href;
@@ -49,7 +57,10 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
     inPlace = null;
     const motion = quiet ? null : pageMotion(from, pathname, TAB_PATHS);
     el.dataset.motion = motion ?? "none";
+    const left = leftAt && performance.now() - leftAt.at < LEFT_JUST_NOW_MS ? leftAt.opacity : "1";
+    leftAt = null;
     if (!motion) return;
+    el.style.setProperty("--page-from", left);
     // The same way twice in a row is the same animation: stop it and let it start over.
     el.style.animation = "none";
     void el.offsetWidth;
@@ -64,8 +75,9 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Inside a menu link: while the link's page is on its way, the page on screen steps aside
- * towards where it is going, so a tap answers at once and not when the server has.
+ * Inside a menu link: while the link's page is on its way, the page on screen dims, so a
+ * tap answers at once and not when the server has. It only dims: a page that also moved
+ * was cut off mid-move when the new one arrived, which read as a stutter.
  * It hangs on the link's own pending state, so it lets go whenever the navigation ends —
  * also one that ends where it began.
  */
@@ -76,6 +88,7 @@ export function PageLeaving({ motion }: { motion: PageMotion | null }) {
     if (!pending || !motion || !el) return;
     el.dataset.leaving = motion;
     return () => {
+      leftAt = { opacity: getComputedStyle(el).opacity, at: performance.now() };
       delete el.dataset.leaving;
     };
   }, [pending, motion]);

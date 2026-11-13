@@ -212,7 +212,7 @@ test("back, and a swipe between the fine box's pages, bring nothing in", async (
   await expect(shown).toHaveAttribute("data-motion", "forward");
 });
 
-test("the page on screen steps aside while a tapped tab's page is on its way", async ({ page, loginAs }) => {
+test("the page on screen dims while a tapped tab's page is on its way, and the new one starts from there", async ({ page, loginAs }) => {
   const { anna } = await squad();
   await loginAs(anna);
   await page.goto("/boder");
@@ -229,11 +229,16 @@ test("the page on screen steps aside while a tapped tab's page is on its way", a
   await page.getByRole("navigation").last().getByRole("link", { name: "Chat" }).click();
   await expect(shown).toHaveAttribute("data-leaving", "forward");
   await expect(page).toHaveURL(/\/boder$/);
+  // It dims where it stands; it does not move.
+  await expect.poll(() => shown.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.45");
+  expect(await shown.evaluate((el) => getComputedStyle(el).translate)).toBe("none");
 
   release();
   await expect(page).toHaveURL(/\/chat$/);
   await expect(shown).not.toHaveAttribute("data-leaving");
   await expect(shown).toHaveAttribute("data-motion", "forward");
+  // The new page starts as dimmed as the old one was: the screen is never empty in between.
+  expect(await shown.evaluate((el) => el.style.getPropertyValue("--page-from"))).toBe("0.45");
 });
 
 test("with reduced motion a page neither comes in nor steps aside", async ({ page, loginAs }) => {
