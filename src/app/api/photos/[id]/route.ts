@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { fullKey, getObject, storageConfig, thumbKey } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const thumb = new URL(request.url).searchParams.get("size") === "thumb";
   const photo = thumb
-    ? await prisma.photo.findUnique({ where: { id }, select: { teamId: true, contentType: true, thumbBytes: true } })
-    : await prisma.photo.findUnique({ where: { id }, select: { teamId: true, contentType: true, bytes: true } });
+    ? await prisma.photo.findUnique({ where: { id }, select: { teamId: true, contentType: true, storageKey: true, thumbBytes: true } })
+    : await prisma.photo.findUnique({ where: { id }, select: { teamId: true, contentType: true, storageKey: true, bytes: true } });
   if (!photo) return new Response("Not found", { status: 404 });
 
   const teamIds = user.teams.map((team) => team.id);
@@ -29,14 +30,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     })) > 0;
   if (!reachable && !teammatesOwn) return new Response("Not found", { status: 404 });
 
+  const headers: Record<string, string> = {
+    "content-type": photo.contentType,
+    // A picture is never edited in place: replacing one stores a new row.
+    "cache-control": "private, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+  };
+
+  if (photo.storageKey) {
+    // The session has been checked above; the bucket itself is private, so this is the only way in.
+    const storage = storageConfig();
+    if (!storage) return new Response("Storage is not configured", { status: 503 });
+    let object: Response | null;
+    try {
+      object = await getObject(storage, thumb ? thumbKey(photo.storageKey) : fullKey(photo.storageKey));
+    } catch {
+      return new Response("Storage failed", { status: 502, headers: { "cache-control": "no-store" } });
+    }
+    if (!object?.body) return new Response("Not found", { status: 404 });
+    const length = object.headers.get("content-length");
+    if (length) headers["content-length"] = length;
+    return new Response(object.body, { headers });
+  }
+
   const bytes = "thumbBytes" in photo ? photo.thumbBytes : photo.bytes;
-  return new Response(new Uint8Array(bytes), {
-    headers: {
-      "content-type": photo.contentType,
-      "content-length": String(bytes.length),
-      // A picture is never edited in place: replacing one stores a new row.
-      "cache-control": "private, max-age=31536000, immutable",
-      "x-content-type-options": "nosniff",
-    },
-  });
+  if (!bytes) return new Response("Not found", { status: 404 });
+  headers["content-length"] = String(bytes.length);
+  return new Response(new Uint8Array(bytes), { headers });
 }

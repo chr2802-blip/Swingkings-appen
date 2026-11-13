@@ -21,6 +21,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:demo": "tsx scripts/demo-seed.mts",
+    "db:photos": "tsx scripts/move-photos-to-storage.mts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

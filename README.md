@@ -109,3 +109,9 @@ Integrationstestene bruger deres egen database (`<db>_test`) og rører aldrig ud
 5. `vercel.json` kører `/api/cron/daily` hver morgen (KampKlar-synk + påmindelser).
    Sæt `CRON_SECRET`.
 6. Valgfrit: Supabase Realtime til live chat — sæt de fire `SUPABASE_*`-variabler.
+7. Valgfrit: billeder i Supabase Storage i stedet for Postgres. Opret en **privat** bucket
+   (Public bucket slået fra) med navnet `photos`, uden politikker, og sæt `SUPABASE_URL` og
+   `SUPABASE_SECRET_KEY`. Nye billeder gemmes så i bucketen; de gamle flyttes med
+   `npm run db:photos` (kør den mod produktion med produktionens variabler;
+   `-- --dry-run` tæller kun). Uden de to variabler bliver billederne i Postgres. Et hold kan
+   have højst 2000 billeder.
