@@ -37,7 +37,9 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
     }
   }, []);
 
-  useEffect(() => followTeamSignal(CHAT_POSTED, refresh, setLive), [refresh]);
+  useEffect(() => {
+    return followTeamSignal(CHAT_POSTED, refresh, setLive);
+  }, [refresh]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -59,7 +61,11 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
       bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [messages]);
-  useEffect(() => bottom.current?.scrollIntoView({ block: "end" }), []);
+  // A body, not an arrow's value: newer browsers return a Promise from scrollIntoView, and
+  // React would call it as the effect's clean-up when the chat is left.
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "end" });
+  }, []);
 
   async function attach(file: File | undefined) {
     if (!file) return;

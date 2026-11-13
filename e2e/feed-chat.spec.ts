@@ -235,3 +235,24 @@ test("the chat's message box goes down with the tab bar, leaving no empty strip 
   await expect.poll(gapBelow).toBeGreaterThan(60);
   await expect(page.getByRole("link", { name: "Chat" })).toBeInViewport({ ratio: 1 });
 });
+
+test("leaving the chat keeps the app running", async ({ page, loginAs }) => {
+  // Chrome's scrollIntoView now returns a Promise; an effect that handed it back to React
+  // was called as its clean-up on the way out, and the whole app fell over. React reports
+  // that on the console, and the error screen reloads the page once by itself — so the
+  // test listens to the console and checks the page was never reloaded.
+  const { anna } = await squad();
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error" && !/Failed to load resource|_vercel\/insights/.test(message.text())) errors.push(message.text());
+  });
+  await loginAs(anna);
+  await page.goto("/chat");
+  await expect(page.getByRole("textbox", { name: "Besked" })).toBeVisible();
+  await page.evaluate(() => Object.assign(window, { stillTheSamePage: true }));
+  await page.getByRole("navigation").getByRole("link", { name: "Aktiviteter" }).click();
+  await expect(page.getByRole("heading", { name: "Aktiviteter", level: 1 })).toBeVisible();
+  expect(await page.evaluate(() => "stillTheSamePage" in window)).toBe(true);
+  expect(errors).toEqual([]);
+});
