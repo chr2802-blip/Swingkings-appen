@@ -19,8 +19,10 @@ const ARRIVE_MS = 1500;
 
 /**
  * Pages side by side that a finger swipes between, under a row of their names: the one
- * shown is underlined, and its button sits beside them. The names are the tabs: tap one,
- * or use them from a keyboard, where there is nothing to swipe with.
+ * shown is underlined, and its button sits beside them. The underline moves with the
+ * finger, and the name and the button change when the swipe is half way — not when it
+ * has ended. The names are the tabs: tap one, or use them from a keyboard, where there
+ * is nothing to swipe with.
  *
  * The pages sit in a row that scrolls sideways and snaps, so the swipe is the browser's
  * own and follows the finger. At rest the pages not shown are collapsed and invisible:
@@ -31,14 +33,28 @@ const ARRIVE_MS = 1500;
  * is right whichever address was opened.
  */
 export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial?: number }) {
+  // `active` is the page the scroller rests on; `shown` is the one nearest right now, mid-swipe.
   const [active, setActive] = useState(initial);
+  const [shown, setShown] = useState(initial);
   const [resting, setResting] = useState(true);
   const [ready, setReady] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const names = useRef<HTMLDivElement>(null);
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  const line = useRef<HTMLSpanElement>(null);
   // What the listeners read: they are attached once and outlive any one render.
   const live = useRef({ active, resting, touching: false, target: null as number | null, timer: 0, deadline: 0 });
   live.current.active = active;
+
+  /** Puts the underline under page `at`, which is a fraction while the row is between two. */
+  const underline = useCallback((at: number) => {
+    const from = tabs.current[Math.floor(at)];
+    const to = tabs.current[Math.ceil(at)] ?? from;
+    if (!line.current || !from || !to) return;
+    const part = at - Math.floor(at);
+    line.current.style.width = `${from.offsetWidth + (to.offsetWidth - from.offsetWidth) * part}px`;
+    line.current.style.translate = `${from.offsetLeft + (to.offsetLeft - from.offsetLeft) * part}px 0`;
+  }, []);
   live.current.resting = resting;
 
   const settle = useCallback(() => {
@@ -59,8 +75,10 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
     now.target = null;
     flushSync(() => {
       setActive(index);
+      setShown(index);
       setResting(true);
     });
+    underline(index);
     if (changed) {
       // The new page starts at its top: if the names have scrolled away, bring them back.
       const row = names.current;
@@ -79,7 +97,18 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
   useLayoutEffect(() => {
     const el = scroller.current;
     if (ready && el) el.scrollLeft = live.current.active * el.clientWidth;
-  }, [ready]);
+    underline(live.current.active);
+  }, [ready, underline]);
+  // The names change width with the font and the window; the underline follows.
+  useEffect(() => {
+    if (!names.current) return;
+    const watch = new ResizeObserver(() => {
+      const el = scroller.current;
+      underline(el && !live.current.resting ? el.scrollLeft / (el.clientWidth || 1) : live.current.active);
+    });
+    watch.observe(names.current);
+    return () => watch.disconnect();
+  }, [underline]);
 
   const goTo = useCallback(
     (index: number) => {
@@ -108,6 +137,12 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
     // A trackpad or a keyboard scrolls the row without ever touching it.
     const scrolled = () => {
       if (Math.abs(el.scrollLeft - now.active * el.clientWidth) > 2) open();
+      // The names keep up with the finger: the underline every frame, the name at half way.
+      if (!now.resting) {
+        const at = Math.min(pages.length - 1, Math.max(0, el.scrollLeft / (el.clientWidth || 1)));
+        underline(at);
+        setShown(Math.round(at));
+      }
       wait();
     };
     const down = () => {
@@ -132,31 +167,36 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
       el.removeEventListener("touchcancel", up);
       el.removeEventListener("scroll", scrolled);
     };
-  }, [open, settle]);
+  }, [open, settle, underline, pages.length]);
 
   return (
     <>
       <div ref={names} className="mb-3 flex min-h-9 scroll-mt-24 items-center justify-between gap-3">
-        <div role="tablist" aria-label="Bødekassens sider" className="flex min-w-0 gap-4">
+        <div role="tablist" aria-label="Bødekassens sider" className="relative flex min-w-0 gap-4">
           {pages.map((page, index) => (
             <button
               key={page.href}
               type="button"
               role="tab"
-              aria-selected={index === active}
+              ref={(el) => {
+                tabs.current[index] = el;
+              }}
+              aria-selected={index === shown}
               onClick={() => goTo(index)}
+              // Until the script has placed the moving underline, the name carries its own.
               className={`border-b-2 py-1.5 text-xs font-semibold tracking-wider uppercase transition-colors duration-200 ${
-                index === active ? "border-[var(--accent)] text-slate-900" : "border-transparent text-slate-400"
-              }`}
+                index === shown ? "text-slate-900" : "text-slate-400"
+              } ${index === shown && !ready ? "border-[var(--accent)]" : "border-transparent"}`}
             >
               {page.title}
             </button>
           ))}
+          <span ref={line} hidden={!ready} className="absolute bottom-0 left-0 h-0.5 bg-[var(--accent)]" />
         </div>
         {pages.map(
           (page, index) =>
             page.action && (
-              <div key={page.href} hidden={index !== active} className={index === active ? "flex shrink-0 gap-2" : undefined}>
+              <div key={page.href} hidden={index !== shown} className={index === shown ? "flex shrink-0 gap-2" : undefined}>
                 {page.action}
               </div>
             ),

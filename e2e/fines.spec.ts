@@ -228,9 +228,24 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(page.getByRole("link", { name: /Anna .*10 kr/ })).toBeInViewport();
   await expect(tab("Bødetavlen")).toHaveAttribute("aria-selected", "true");
 
-  await swipe(-290);
+  // The names keep up with the finger: past half way, with the finger still down, the
+  // name and the button have changed and the underline is on its way.
+  const underline = page.getByRole("tablist").locator("span");
+  const from = (await underline.boundingBox())!.x;
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y: 600 }] });
+  await touch("touchStart", 380);
+  for (let x = 360; x >= 100; x -= 20) await touch("touchMove", x);
   await expect(tab("Historik")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Nulstil alle" })).toHaveCount(0);
+  expect((await underline.boundingBox())!.x).toBeGreaterThan(from);
+  expect((await underline.boundingBox())!.x).toBeLessThan((await tab("Historik").boundingBox())!.x);
+  await expect(page).toHaveURL(/\/boder$/);
+  await touch("touchEnd");
   await expect(page).toHaveURL(/\/boder\/historik$/);
+  const under = (await tab("Historik").boundingBox())!;
+  await expect.poll(async () => (await underline.boundingBox())!.x).toBeCloseTo(under.x, 0);
+  expect((await underline.boundingBox())!.width).toBeCloseTo(under.width, 0);
   await expect(shown).toHaveAccessibleName("Historik");
   await expect(page.getByText("Glemte bolde")).toBeVisible();
   await expect(page.getByRole("button", { name: "Nulstil alle" })).toHaveCount(0);
@@ -257,7 +272,7 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(tab("Bødetavlen")).toHaveAttribute("aria-selected", "true");
   await expect(page).toHaveURL(/\/boder$/);
   await tab("Katalog").click();
-  await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(/\/boder\/katalog$/);
   await expect(shown).toHaveAccessibleName("Katalog");
 
   // A reload stays on the page it was left on.
