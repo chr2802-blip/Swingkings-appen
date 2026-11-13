@@ -9,7 +9,7 @@ import {
   resetFines,
   saveFineType,
 } from "@/app/actions/fines";
-import { fineBoard, matchOptions, monthKings } from "@/lib/fine-data";
+import { fineBoard, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
 import { formData, makeMatch, makeMember, makeSquad, signIn } from "../helpers/factories";
 import { expectDenied, expectRedirectToLogin } from "../helpers/expect";
 
@@ -339,5 +339,25 @@ describe("fine data", () => {
     const board = await fineBoard(team.id);
     expect(board.balances).toHaveLength(5);
     expect(board.finePriceKr).toBe(10);
+  });
+
+  it("lists the team's newest fines first, cleared ones too, and never another team's", async () => {
+    const { team, treasurer, anna, bo } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const fine = (teamId: string, playerId: string, issuedById: string, reason: string, minutesAgo: number, clearedAt?: Date) =>
+      prisma.fine.create({
+        data: { teamId, playerId, issuedById, reason, units: 1, unitPriceKr: 10, clearedAt, createdAt: new Date(Date.now() - minutesAgo * 60_000) },
+      });
+    await fine(team.id, anna.id, treasurer.id, "Ældst", 30, new Date());
+    await fine(team.id, bo.id, treasurer.id, "Midt", 20);
+    await fine(team.id, anna.id, bo.id, "Nyest", 10);
+    await fine(other.team.id, other.anna.id, other.treasurer.id, "De andres", 0);
+
+    const all = await fineHistory(team.id, 10);
+    expect(all.map((f) => f.reason)).toEqual(["Nyest", "Midt", "Ældst"]);
+    expect(all[0]).toMatchObject({ issuedById: bo.id, player: { id: anna.id, name: "Anna" }, clearedAt: null });
+    expect(all[2].clearedAt).toBeInstanceOf(Date);
+    expect((await fineHistory(team.id, 2)).map((f) => f.reason)).toEqual(["Nyest", "Midt"]);
+    expect(await fineHistory(other.team.id, 10)).toHaveLength(1);
   });
 });

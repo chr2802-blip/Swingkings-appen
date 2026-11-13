@@ -49,3 +49,22 @@ export async function monthKings(teamId: string) {
   });
   return fineKings(fines);
 }
+
+/** The team's newest fines, cleared ones included — the history under the board and on its own page. */
+export function fineHistory(teamId: string, take: number) {
+  return teamDb(teamId).fine.findMany({
+    orderBy: { createdAt: "desc" },
+    take,
+    select: {
+      id: true,
+      reason: true,
+      units: true,
+      unitPriceKr: true,
+      createdAt: true,
+      challengeId: true,
+      clearedAt: true,
+      issuedById: true,
+      player: { select: { id: true, name: true, photoId: true } },
+    },
+  });
+}
