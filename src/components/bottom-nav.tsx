@@ -4,7 +4,9 @@ import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLeaveHome } from "./home-banner";
-import { NAV_ITEMS, isInTab } from "./nav-items";
+import { NAV_ITEMS, TAB_PATHS, isInTab } from "./nav-items";
+import { PageLeaving } from "./page-transition";
+import { pageMotion } from "@/lib/page-motion";
 
 type Pill = { x: number; y: number; moved: boolean };
 
@@ -111,6 +113,7 @@ export function BottomNav() {
                   >
                     {item.label}
                   </span>
+                  <PageLeaving motion={pageMotion(pathname, item.href, TAB_PATHS)} />
                 </Link>
               </li>
             </Fragment>

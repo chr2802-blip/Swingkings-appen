@@ -177,6 +177,8 @@ h1,
   --dur-row: 200ms;
   --dur-sheet-in: 300ms;
   --dur-sheet-out: 200ms;
+  --dur-page: 340ms;
+  --dur-page-out: 160ms;
 }
 
 /*
@@ -336,6 +338,83 @@ h1,
   animation-fill-mode: both;
 }
 
+/*
+ * The page under the header (`PageTransition`). It comes in from the side its tab is on,
+ * and opens and closes inside a tab; `data-motion` says which, and "none" brings nothing
+ * in (a swipe between the fine box's pages, back and forward). While a tapped tab's page
+ * is on its way, the page on screen steps aside towards it (`data-leaving`).
+ *
+ * None of these keep their last frame: once in, the page has no transform of its own, and
+ * the stepping aside — an ordinary transition — is not held back by a finished animation.
+ */
+.app-page {
+  /*
+   * What is placed absolutely inside a page (the fine box's pages waiting beside the one
+   * shown) is placed against the page, so the screen's sideways clip holds it; and what
+   * a page stacks stays under the header and the tab bar.
+   */
+  position: relative;
+  isolation: isolate;
+  transform-origin: 50% 0;
+  animation: page-in var(--dur-base) var(--ease-arrive) backwards;
+}
+.app-page[data-motion="forward"] {
+  animation: page-forward var(--dur-page) var(--ease-arrive) backwards;
+}
+.app-page[data-motion="backward"] {
+  animation: page-backward var(--dur-page) var(--ease-arrive) backwards;
+}
+.app-page[data-motion="open"] {
+  animation: page-open var(--dur-page) var(--ease-arrive) backwards;
+}
+.app-page[data-motion="close"] {
+  animation: page-close var(--dur-page) var(--ease-arrive) backwards;
+}
+.app-page[data-motion="none"] {
+  animation: none;
+}
+.app-page[data-leaving] {
+  opacity: 0.3;
+  transition:
+    opacity var(--dur-page-out) var(--ease-leave),
+    translate var(--dur-page-out) var(--ease-leave),
+    scale var(--dur-page-out) var(--ease-leave);
+}
+.app-page[data-leaving="forward"] {
+  translate: -18px 0;
+}
+.app-page[data-leaving="backward"] {
+  translate: 18px 0;
+}
+.app-page[data-leaving="close"] {
+  scale: 0.985;
+}
+@keyframes page-forward {
+  from {
+    opacity: 0;
+    translate: 36px 0;
+  }
+}
+@keyframes page-backward {
+  from {
+    opacity: 0;
+    translate: -36px 0;
+  }
+}
+@keyframes page-open {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+    scale: 0.975;
+  }
+}
+@keyframes page-close {
+  from {
+    opacity: 0;
+    scale: 1.02;
+  }
+}
+
 .animate-sheet-in {
   animation: sheet-in var(--dur-sheet-in) var(--ease-sheet) both;
 }
@@ -397,7 +476,7 @@ h1,
   animation: banner-content-out 160ms var(--ease-leave) both;
 }
 /* The banner is the page's arrival; the page's own slide would lift it off the band. */
-.animate-page-in:has(> * > .home-banner, > .home-banner) {
+.app-page:has(> * > .home-banner, > .home-banner) {
   animation: none;
 }
 @keyframes banner-down {
@@ -567,6 +646,19 @@ h1,
   .app-create svg,
   .app-composer,
   .app-pill {
+    transition: none;
+  }
+
+  /* A page neither comes in nor steps aside. */
+  .app-page,
+  .app-page[data-motion] {
+    animation: none;
+  }
+
+  .app-page[data-leaving] {
+    opacity: 1;
+    translate: none;
+    scale: none;
     transition: none;
   }
 }

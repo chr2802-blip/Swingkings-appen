@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { stayOnPage } from "./page-transition";
 
 export type SwipePage = {
   /** Where this page lives; the address bar follows the swipe, so a reload stays put. */
@@ -85,6 +86,8 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
       // The new page starts at its top: if the names have scrolled away, bring them back.
       const row = names.current;
       if (row && row.getBoundingClientRect().top < 0) row.scrollIntoView({ block: "start" });
+      // The page is already here, swiped to: it does not come in a second time.
+      stayOnPage(pages[index].href);
       window.history.replaceState(null, "", pages[index].href);
     }
   }, [pages]);

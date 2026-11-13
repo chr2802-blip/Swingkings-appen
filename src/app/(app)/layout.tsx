@@ -8,6 +8,7 @@ import Link from "next/link";
 import { playerHref } from "@/components/player-link";
 import { StripeBand } from "@/components/crest";
 import { ScrollBars } from "@/components/scroll-bars";
+import { PageTransition } from "@/components/page-transition";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -38,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main className="mx-auto max-w-5xl pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:pb-10">
-        <div className="animate-page-in">{children}</div>
+        <PageTransition>{children}</PageTransition>
       </main>
 
       <ScrollBars />
