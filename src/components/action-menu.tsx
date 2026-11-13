@@ -21,14 +21,17 @@ export function ActionMenu({
   title,
   icon = false,
   trigger,
+  roomBelow = false,
   children,
 }: {
   label?: string;
   /** The drawer's heading; the button's label when not given. */
   title?: string;
   icon?: boolean;
-  /** Draws the button that opens the drawer, in place of the default ones. */
-  trigger?: (open: () => void) => React.ReactNode;
+  /** Draws the button that opens (and closes) the drawer, in place of the default ones. */
+  trigger?: (state: { open: boolean; toggle: () => void }) => React.ReactNode;
+  /** Leaves the drawer's foot free on a phone, for a button that stays above it. */
+  roomBelow?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -37,7 +40,7 @@ export function ActionMenu({
   return (
     <>
       {trigger ? (
-        trigger(() => setOpen(true))
+        trigger({ open, toggle: () => setOpen((was) => !was) })
       ) : icon ? (
         <button
           type="button"
@@ -61,8 +64,10 @@ export function ActionMenu({
         </Button>
       )}
       <Modal open={open} onClose={close} title={title ?? label} size="drawer">
-        <ModalBody className="pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <ul ref={setSlot} className="-mx-2 flex flex-col" />
+        <ModalBody
+          className={roomBelow ? "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-5" : "pb-[max(1.25rem,env(safe-area-inset-bottom))]"}
+        >
+          <ul ref={setSlot} className="menu-rows -mx-2 flex flex-col" />
         </ModalBody>
       </Modal>
       <MenuContext.Provider value={{ slot: open ? slot : null, close }}>{children}</MenuContext.Provider>
@@ -87,11 +92,14 @@ const rowClass = (variant: Variant) =>
 export function MenuTrigger({
   variant = "primary",
   className = "",
+  icon,
   onClick,
   children,
 }: {
   variant?: Variant;
   className?: string;
+  /** Drawn before the words when the trigger is a row in a drawer. */
+  icon?: string;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -116,6 +124,11 @@ export function MenuTrigger({
           onClick();
         }}
       >
+        {icon && (
+          <span aria-hidden className="accent-tint-bg mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl">
+            {icon}
+          </span>
+        )}
         {children}
       </button>
     </li>,

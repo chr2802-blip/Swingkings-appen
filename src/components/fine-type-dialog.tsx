@@ -17,6 +17,7 @@ export function FineTypeDialog({
   return (
     <FormDialog
       trigger={fineType ? "Ret" : "Ny bøde i kataloget"}
+      triggerIcon={fineType ? undefined : "📜"}
       triggerVariant={fineType ? "ghost" : "primary"}
       title={fineType ? "Ret bøde" : "Ny bøde i kataloget"}
       action={saveFineType}

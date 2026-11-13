@@ -53,6 +53,7 @@ export function FormDialog({
   trigger,
   triggerVariant = "primary",
   triggerClassName = "",
+  triggerIcon,
   title,
   action,
   submitLabel,
@@ -62,6 +63,8 @@ export function FormDialog({
   trigger: React.ReactNode;
   triggerVariant?: Variant;
   triggerClassName?: string;
+  /** Shown beside the words when the button is a row in a drawer. */
+  triggerIcon?: string;
   title: string;
   action: FormAction;
   submitLabel: string;
@@ -71,7 +74,7 @@ export function FormDialog({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <MenuTrigger variant={triggerVariant} className={triggerClassName} onClick={() => setOpen(true)}>
+      <MenuTrigger variant={triggerVariant} className={triggerClassName} icon={triggerIcon} onClick={() => setOpen(true)}>
         {trigger}
       </MenuTrigger>
       <Modal open={open} onClose={() => setOpen(false)} title={title} size={size}>
