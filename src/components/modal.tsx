@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { holdHistoryEntry } from "@/components/modal-history";
 
 const EXIT_MS = 200;
 
@@ -55,6 +56,12 @@ export function Modal({
     setClosing(true);
     const timer = setTimeout(() => setMounted(false), EXIT_MS);
     return () => clearTimeout(timer);
+  }, [open]);
+
+  // Browser back closes the sheet rather than leaving the page behind it.
+  useEffect(() => {
+    if (!open) return;
+    return holdHistoryEntry(() => onCloseRef.current());
   }, [open]);
 
   useEffect(() => {
