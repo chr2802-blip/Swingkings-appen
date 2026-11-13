@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { sendChatMessage, deleteChatMessage } from "@/app/actions/social";
 import { Avatar, Photo, photoUrl } from "@/components/photo";
 import { uploadPhoto } from "@/components/photo-field";
@@ -25,6 +25,15 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
   const bottom = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const lastId = useRef(initial.at(-1)?.id);
+  const box = useRef<HTMLTextAreaElement>(null);
+
+  // The box is as tall as its text (up to max-h-32, then it scrolls), and shrinks back when sent.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
 
   const refresh = useCallback(async () => {
     try {
@@ -190,6 +199,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
             )}
           </button>
           <textarea
+            ref={box}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

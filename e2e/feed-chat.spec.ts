@@ -183,6 +183,32 @@ test("a poll's answers are ticked on the roster, with several answers allowed an
   expect(poll.options.map((o) => o.playerId)).toEqual([anna.id, bo.id]);
 });
 
+test("the chat box grows with its lines, stops at its cap and shrinks back when sent", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/chat");
+  const box = page.getByRole("textbox", { name: "Besked" });
+  const height = () => box.evaluate((el) => el.getBoundingClientRect().height);
+  const oneLine = await height();
+
+  await box.fill("Første linje\nAnden linje\nTredje linje");
+  await expect.poll(height).toBeGreaterThan(oneLine + 20);
+  // Nothing is hidden: the box shows every line without scrolling.
+  expect(await box.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+
+  // A very long message stops at the cap (max-h-32) and scrolls inside the box.
+  await box.fill(Array.from({ length: 30 }, (_, i) => `Linje ${i + 1}`).join("\n"));
+  await expect.poll(height).toBe(128);
+
+  await box.fill("Kort");
+  await expect.poll(height).toBe(oneLine);
+
+  await box.fill("En\nTo\nTre");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(box).toHaveValue("");
+  await expect.poll(height).toBe(oneLine);
+});
+
 test("the chat sends a message that a teammate sees", async ({ page, loginAs }) => {
   const { anna, bo } = await squad();
   await loginAs(anna);
