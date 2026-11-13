@@ -1,3 +1,4 @@
+import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 
@@ -50,6 +51,71 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
 
   await page.goto("/aktiviteter");
   await expect(page.getByText("1 kommer")).toBeVisible();
+});
+
+/** Whether a row has scrolled up behind the header: the header sticks, so "in viewport" cannot tell. */
+async function hiddenAboveHeader(page: Page, row: Locator) {
+  const [box, header] = await Promise.all([row.boundingBox(), page.getByRole("banner").boundingBox()]);
+  return !!box && !!header && box.y + box.height <= header.y + header.height;
+}
+
+test("the list shows every kind and opens at today, with the earlier ones a scroll up", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.match.createMany({
+    data: [
+      { teamId: team.id, kind: "MATCH", title: "Swingkings - B93", opponent: "B93", startsAt: inDays(-20) },
+      { teamId: team.id, kind: "TRAINING", title: "Gammel træning", startsAt: inDays(-3) },
+      { teamId: team.id, kind: "TRAINING", title: "Tirsdagstræning", startsAt: inDays(2) },
+      { teamId: team.id, kind: "MATCH", title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3) },
+      { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: inDays(10) },
+    ],
+  });
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+
+  // No filters: matches, trainings and the rest are one list, with no chips over it.
+  await expect(page.getByRole("link", { name: "Med træninger" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Tidligere" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Aktiviteter", level: 1 })).toBeInViewport();
+  for (const name of ["Tirsdagstræning", "AB", "Afslutningsfest"]) {
+    await expect(page.getByRole("link", { name: new RegExp(name) })).toBeInViewport();
+  }
+
+  // The earlier ones are on the page, in the order they were played, above the screen.
+  const earlier = page.getByRole("region", { name: "Tidligere aktiviteter" });
+  await expect(earlier.getByRole("link")).toHaveText([/B93/, /Gammel træning/]);
+  await expect.poll(() => hiddenAboveHeader(page, earlier.getByRole("link", { name: /Gammel træning/ }))).toBe(true);
+  // Nothing has slid away: the header is where a page that opens at its top has it.
+  await expect(page.getByRole("link", { name: "Min profil" })).toBeInViewport();
+
+  await page.mouse.wheel(0, -2000);
+  await expect(earlier.getByRole("link", { name: /B93/ })).toBeInViewport();
+  await earlier.getByRole("link", { name: /Gammel træning/ }).click();
+  await expect(page.getByRole("heading", { name: "Gammel træning", level: 1 })).toBeVisible();
+});
+
+test("coming to the list from another tab also opens it at today", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.match.createMany({
+    data: [
+      ...Array.from({ length: 12 }, (_, i) => ({ teamId: team.id, kind: "TRAINING" as const, title: `Træning ${i}`, startsAt: inDays(-30 + i) })),
+      { teamId: team.id, kind: "MATCH", title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3) },
+    ],
+  });
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await page.getByRole("navigation").last().getByRole("link", { name: "Aktiviteter" }).click();
+  await expect(page.getByRole("heading", { name: "Aktiviteter", level: 1 })).toBeInViewport();
+  await expect(page.getByRole("link", { name: /AB/ })).toBeInViewport();
+  await expect.poll(() => hiddenAboveHeader(page, page.getByRole("link", { name: /Træning 11/ }))).toBe(true);
+});
+
+test("a team with nothing behind it and nothing ahead sees an empty calendar", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  await expect(page.getByText("Ingen kommende aktiviteter i kalenderen.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Tidligere aktiviteter" })).toHaveCount(0);
 });
 
 test("an activity from KampKlar takes no sign-ups", async ({ page, loginAs }) => {

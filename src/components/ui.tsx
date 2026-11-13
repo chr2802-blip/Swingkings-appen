@@ -141,23 +141,3 @@ export function Badge({
   } as const;
   return <span className={`inline-block rounded-full whitespace-nowrap px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
-
-/** A row of section links at the top of a tab. */
-export function Tabs({ items, current }: { items: { href: string; label: string }[]; current: string }) {
-  return (
-    <nav className="scrollbar-hidden -mx-1 mb-6 flex gap-1 overflow-x-auto px-1">
-      {items.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          aria-current={item.href === current ? "page" : undefined}
-          className={`press-button shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium ${
-            item.href === current ? "bg-[var(--accent)] text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
-          }`}
-        >
-          {item.label}
-        </Link>
-      ))}
-    </nav>
-  );
-}
