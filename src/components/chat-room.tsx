@@ -149,7 +149,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
 
       <form
         onSubmit={send}
-        className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] -mx-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg md:bottom-4"
+        className="app-composer sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] -mx-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg md:bottom-4"
       >
         {photoId && (
           <div className="mb-2 flex items-center gap-2">
