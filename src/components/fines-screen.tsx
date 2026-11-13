@@ -26,17 +26,16 @@ export const FINE_PAGES = ["/boder", "/boder/historik", "/boder/katalog"] as con
 /** `/boder?udfordringer` opens the fine box with the challenges' sheet open (a notification's link). */
 export const CHALLENGES_PARAM = "udfordringer";
 
-/** How many settled or withdrawn challenges the sheet shows under the pending ones. */
-const CLOSED_SHOWN = 5;
-
 type Board = Awaited<ReturnType<typeof fineBoard>>;
 
 /**
  * The fine box: the overview stays put at the top — what you owe, what is in the box, and
  * the challenges — and under it the board, the history and the catalogue are swiped
  * between. Each has its own address (`show`), and all three are read at once, so a swipe
- * never waits on the server. Challenges have no page of their own: the overview says how
- * many wait for approval, and a tap opens them in a sheet (`openChallenges` on arrival).
+ * never waits on the server. Challenges have no page of their own: while any wait for
+ * approval the overview says how many, and a tap opens them in a sheet (`openChallenges`
+ * on arrival). With none waiting the overview says nothing of them; settled ones are in
+ * the history, with the fines they moved.
  */
 export async function FinesScreen({
   user,
@@ -48,18 +47,12 @@ export async function FinesScreen({
   openChallenges?: boolean;
 }) {
   const db = teamDb(user.teamId);
-  const [board, kings, history, matches, pending, closed] = await Promise.all([
+  const [board, kings, history, matches, pending] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     fineHistory(user.teamId, HISTORY),
     matchOptions(user.teamId),
     db.challenge.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude }),
-    db.challenge.findMany({
-      where: { status: { in: ["SETTLED", "CANCELLED"] } },
-      orderBy: { createdAt: "desc" },
-      take: CLOSED_SHOWN,
-      include: challengeCardInclude,
-    }),
   ]);
   const manages = canManageFines(user, user.teamId);
   const totals = board.balances.reduce(
@@ -102,6 +95,9 @@ export async function FinesScreen({
         </div>
         <DetailSheet
           title="Udfordringer"
+          // Gone when none wait — but a sheet already open stays, so approving the last one
+          // in it does not snatch it away.
+          hidden={pending.length === 0}
           initialOpen={openChallenges}
           clearParam={CHALLENGES_PARAM}
           triggerClassName="press-card flex w-full items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-left text-sm"
@@ -109,11 +105,7 @@ export async function FinesScreen({
             <>
               <span className="font-medium">⚔️ Udfordringer</span>
               <span className="flex items-center gap-2 text-xs text-slate-500">
-                {pending.length > 0
-                  ? `${pending.length} venter på godkendelse`
-                  : mine && mine.units > 0
-                    ? "Udfordr dig ud af dine bøder"
-                    : "Se dem"}
+                {pending.length} venter på godkendelse
                 {waiting.length > 0 && <Badge tone="amber">{waiting.length} på dig</Badge>}
                 <span aria-hidden>›</span>
               </span>
@@ -121,7 +113,7 @@ export async function FinesScreen({
           }
         >
           <p className="mb-6 text-sm text-slate-500">
-            Udfordr dig ud af dine bøder. Meld resultatet under +, en anden godkender, og taberen overtager indsatsen.
+            Meld resultatet under +, en anden godkender, og taberen overtager indsatsen. Afgjorte udfordringer står i historikken.
           </p>
           {waiting.length > 0 && (
             <section className="mb-8">
@@ -135,17 +127,7 @@ export async function FinesScreen({
               <div className="space-y-3">{others.map(card)}</div>
             </section>
           )}
-          {pending.length === 0 && (
-            <div className="mb-8">
-              <EmptyState icon="⚔️">Ingen udfordringer venter. Hvem tør?</EmptyState>
-            </div>
-          )}
-          {closed.length > 0 && (
-            <section>
-              <SectionTitle>Senest afgjort</SectionTitle>
-              <div className="space-y-3">{closed.map(card)}</div>
-            </section>
-          )}
+          {pending.length === 0 && <EmptyState icon="⚔️">Ingen udfordringer venter. Hvem tør?</EmptyState>}
         </DetailSheet>
       </Card>
 
@@ -219,6 +201,9 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
                   {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
                 </span>
                 {row.owesKr > 0 ? <Badge tone="red">{kr(row.owesKr)}</Badge> : <Badge tone="green">ren tavle</Badge>}
+                <span aria-hidden className="text-slate-300">
+                  ›
+                </span>
               </Link>
             </li>
           );

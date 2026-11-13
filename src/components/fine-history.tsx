@@ -28,7 +28,18 @@ export function FineHistory({ fines, user }: { fines: HistoryFine[]; user: TeamU
               triggerClassName="press-card flex w-full items-center gap-3 px-4 py-3 text-left"
               trigger={
                 <>
-                  <Star className="h-3.5 w-3.5" />
+                  {/* The icon says which it is: a fine given (star) or a challenge's (swords). */}
+                  {fine.challengeId ? (
+                    <span className="w-3.5 text-center text-sm">
+                      <span aria-hidden>⚔️</span>
+                      <span className="sr-only">Udfordring</span>
+                    </span>
+                  ) : (
+                    <span className="flex">
+                      <Star className="h-3.5 w-3.5" />
+                      <span className="sr-only">Bøde</span>
+                    </span>
+                  )}
                   <Avatar name={fine.player.name} photoId={fine.player.photoId} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">
@@ -36,7 +47,6 @@ export function FineHistory({ fines, user }: { fines: HistoryFine[]; user: TeamU
                     </span>
                     <span className="block text-xs text-slate-500">
                       {fineUnits(fine.units)} · {kr(fineAmount(fine))} · {relativeDay(fine.createdAt)}
-                      {fine.challengeId && " · ⚔️ udfordring"}
                       {fine.clearedAt && " · nulstillet"}
                     </span>
                   </span>

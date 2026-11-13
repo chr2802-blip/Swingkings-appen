@@ -158,16 +158,23 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
   await expect(page).toHaveURL(/\/boder\?udfordringer$/);
   await expect(sheet.getByRole("heading", { name: "Venter på din godkendelse" })).toBeVisible();
   await sheet.getByRole("button", { name: "Godkend" }).click();
-  // The sheet stays open, and the challenge moves down among the settled ones.
-  await expect(sheet.getByText(/3 bøder flyttet fra Anna til Bo · godkendt af/)).toBeVisible();
+  // The sheet stays open, but holds only what waits: the settled one has left it.
   await expect(sheet.getByText("Ingen udfordringer venter.")).toBeVisible();
+  await expect(sheet.getByText(/flyttet fra Anna til Bo/)).toHaveCount(0);
   await sheet.getByRole("button", { name: "Luk" }).click();
-  // Closed, it does not open again on a reload.
+  // Closed, it does not open again on a reload, and with none waiting the overview says nothing of challenges.
   await expect(page).toHaveURL(/\/boder$/);
-  await expect(page.getByRole("button", { name: /venter på godkendelse/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Bo .*30 kr/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
   expect(await db.fine.count({ where: { playerId: bo.id, units: 3, challengeId: { not: null } } })).toBe(1);
+
+  // The settled challenge is found in the history, marked as one.
+  await page.goto("/boder/historik");
+  const lost = page.getByRole("button", { name: /Bo · Tabt udfordring/ });
+  await expect(lost.getByText("Udfordring", { exact: true })).toHaveCount(1);
+  await lost.click();
+  await expect(page.getByRole("dialog", { name: "Udfordring" }).getByText(/3 bøder flyttet fra Anna til Bo · godkendt af/)).toBeVisible();
 });
 
 test("a fine in the history opens with what it was for, who gave it and when, and a challenge's fine shows the challenge", async ({ page, loginAs }) => {
@@ -183,6 +190,12 @@ test("a fine in the history opens with what it was for, who gave it and when, an
   });
   await loginAs(anna);
   await page.goto("/boder/historik");
+
+  // Every row's icon says which it is: a fine given, or a challenge's — and names it for a screen reader.
+  await expect(page.getByRole("button", { name: /Anna · For sent/ }).getByText("Bøde", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Anna · For sent/ }).getByText("Udfordring", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Bo · Udfordring tabt/ }).getByText("Udfordring", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Bo · Udfordring tabt/ }).getByText("Bøde", { exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: /Anna · For sent/ }).click();
   const fine = page.getByRole("dialog", { name: "Bøde" });
@@ -234,9 +247,12 @@ test("the overview stays on top: what you owe, what is in the box and the way to
   const box = page.getByText("I kassen").locator("..");
   await expect(box).toContainText("60 kr");
   await expect(box).toContainText("50 kr udestående");
+  // A row on the board opens the player's page, and says so at its end as the history's rows do.
   await expect(page.getByRole("link", { name: /Bo .*40 kr/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Bo .*40 kr/ }).locator("[aria-hidden]").last()).toHaveText("›");
+  // With no challenge waiting, the overview says nothing of them.
   const challenges = page.getByRole("button", { name: /Udfordringer/ });
-  await expect(challenges).toContainText("Udfordr dig ud af dine bøder");
+  await expect(challenges).toHaveCount(0);
 
   // A challenge between two others waits on Anna, and the overview says so on every page under it.
   await db.challenge.create({
@@ -396,16 +412,20 @@ test("a finger scrolling up and down the board leaves the page its own height; o
   const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number, y?: number) =>
     cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y: y! }] });
 
-  // Up and down, held: the neighbours stay put away, so the page is no taller.
-  await touch("touchStart", 200, 600);
-  for (let step = 1; step <= 10; step++) await touch("touchMove", 200, 600 - step * 20);
+  // Up and down on the board, held: the neighbours stay put away, so the page is no taller.
+  const start = (await page.getByRole("tabpanel").boundingBox())!;
+  const top = Math.round(start.y + start.height - 10);
+  await touch("touchStart", 200, top);
+  for (let step = 1; step <= 10; step++) await touch("touchMove", 200, top - step * 20);
   await expect(page.getByRole("tabpanel")).toHaveCount(1);
   expect(await tall()).toBe(before);
   await touch("touchEnd");
 
-  // Sideways: the history comes along with the finger.
-  await touch("touchStart", 350, 600);
-  for (let step = 1; step <= 15; step++) await touch("touchMove", 350 - step * 20, 600);
+  // Sideways, on the board wherever the scroll left it: the history comes along with the finger.
+  const board = (await page.getByRole("tabpanel").boundingBox())!;
+  const y = Math.round(board.y + board.height / 2);
+  await touch("touchStart", 350, y);
+  for (let step = 1; step <= 15; step++) await touch("touchMove", 350 - step * 20, y);
   await touch("touchEnd");
   await expect(page).toHaveURL(/\/boder\/historik$/);
   await expect(page.getByText("Bøde 40")).toBeVisible();
