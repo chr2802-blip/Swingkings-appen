@@ -287,3 +287,41 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("For sent")).toBeVisible();
 });
+
+test("a finger scrolling up and down the board leaves the page its own height; one going sideways still swipes", async ({ page, loginAs }) => {
+  const { team, treasurer, anna } = await squad();
+  // A long history beside a short board: shown, it would make the page much taller.
+  await db.fine.createMany({
+    data: Array.from({ length: 40 }, (_, i) => ({
+      teamId: team.id,
+      playerId: anna.id,
+      reason: `Bøde ${i + 1}`,
+      units: 1,
+      unitPriceKr: 10,
+      issuedById: treasurer.id,
+    })),
+  });
+  await loginAs(anna);
+  await page.goto("/boder");
+  await expect(page.getByRole("button", { name: "Opret" })).toBeVisible();
+  const tall = () => page.evaluate(() => document.documentElement.scrollHeight);
+  const before = await tall();
+
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number, y?: number) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y: y! }] });
+
+  // Up and down, held: the neighbours stay put away, so the page is no taller.
+  await touch("touchStart", 200, 600);
+  for (let step = 1; step <= 10; step++) await touch("touchMove", 200, 600 - step * 20);
+  await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  expect(await tall()).toBe(before);
+  await touch("touchEnd");
+
+  // Sideways: the history comes along with the finger.
+  await touch("touchStart", 350, 600);
+  for (let step = 1; step <= 15; step++) await touch("touchMove", 350 - step * 20, 600);
+  await touch("touchEnd");
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await expect(page.getByText("Bøde 40")).toBeVisible();
+});

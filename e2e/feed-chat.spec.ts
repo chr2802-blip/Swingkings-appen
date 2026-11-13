@@ -198,6 +198,44 @@ test("the chat sends a message that a teammate sees", async ({ page, loginAs }) 
   expect(await db.chatMessage.count({ where: { authorId: anna.id } })).toBe(1);
 });
 
+test("the chat's message box goes down with the tab bar, leaving no empty strip under it", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  await db.chatMessage.createMany({
+    data: Array.from({ length: 30 }, (_, i) => ({
+      teamId: team.id,
+      authorId: i % 2 ? anna.id : bo.id,
+      body: `Besked ${i + 1}`,
+      createdAt: new Date(Date.now() - (30 - i) * 60_000),
+    })),
+  });
+  await loginAs(anna);
+  await page.goto("/chat");
+  await expect(page.getByText("Besked 30")).toBeVisible();
+  // The tab bar's highlight is placed once the page has hydrated and is listening to the scroll.
+  await expect(page.getByTestId("tab-pill")).toBeAttached();
+  const box = page.locator("form").filter({ has: page.getByRole("textbox", { name: "Besked" }) });
+  const { height } = page.viewportSize()!;
+  const gapBelow = async () => {
+    const b = (await box.boundingBox())!;
+    return Math.round(height - (b.y + b.height));
+  };
+
+  // Back up the conversation, then down again towards the newest: the bar goes on the
+  // way down, and the box sits at the foot of the screen.
+  const frame = () => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await page.evaluate(() => window.scrollBy(0, -900));
+  await frame();
+  await page.evaluate(() => window.scrollBy(0, 300));
+  await expect(page.locator("html")).toHaveAttribute("data-bars", "hidden");
+  await expect.poll(gapBelow).toBeLessThan(30);
+
+  // At the newest message again: the bar is back, and the box sits just above it.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(page.locator("html")).not.toHaveAttribute("data-bars");
+  await expect.poll(gapBelow).toBeGreaterThan(60);
+  await expect(page.getByRole("link", { name: "Chat" })).toBeInViewport({ ratio: 1 });
+});
+
 test("leaving the chat keeps the app running", async ({ page, loginAs }) => {
   // Chrome's scrollIntoView now returns a Promise; an effect that handed it back to React
   // was called as its clean-up on the way out, and the whole app fell over. React reports

@@ -12,6 +12,8 @@ export type SwipePage = {
   children: React.ReactNode;
 };
 
+/** How far a finger moves before it counts as going one way or the other. */
+const INTENT_PX = 6;
 /** How long the scroller must be still before the page it stopped on is the page. */
 const SETTLE_MS = 120;
 /** A tap on a dot scrolls there; if the browser never arrives, it is put there. */
@@ -27,7 +29,7 @@ const ARRIVE_MS = 1500;
  * The pages sit in a row that scrolls sideways and snaps, so the swipe is the browser's
  * own and follows the finger. At rest the pages not shown are collapsed and invisible:
  * the document is as tall as the page shown, and the others are out of the tab order.
- * They are shown again when a finger lands, and put away when the scroller has stopped.
+ * They are shown again when a finger moves sideways, and put away when the scroller has stopped.
  *
  * Until the script has run there is no row, only the page asked for — so the first paint
  * is right whichever address was opened.
@@ -147,11 +149,26 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
       }
       wait();
     };
-    const down = () => {
+    // Where the finger landed, until it has shown which way it is going (then null).
+    let start: { x: number; y: number } | null = null;
+    const down = (event: TouchEvent) => {
       now.touching = true;
       now.target = null;
       window.clearTimeout(now.timer);
-      open();
+      const touch = event.touches[0];
+      start = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    };
+    // The neighbours are shown only for a finger going sideways. Shown, they make the page
+    // as tall as the tallest of them; a finger scrolling up and down could then run on
+    // into empty space below the page, which jumped back when they were put away.
+    const move = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!start || !touch) return;
+      const dx = Math.abs(touch.clientX - start.x);
+      const dy = Math.abs(touch.clientY - start.y);
+      if (Math.max(dx, dy) < INTENT_PX) return;
+      start = null;
+      if (dx > dy) open();
     };
     const up = () => {
       now.touching = false;
@@ -159,12 +176,14 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
     };
     // Native listeners on purpose: a dialog is a portal, and React would bubble its touches here.
     el.addEventListener("touchstart", down, { passive: true });
+    el.addEventListener("touchmove", move, { passive: true });
     el.addEventListener("touchend", up, { passive: true });
     el.addEventListener("touchcancel", up, { passive: true });
     el.addEventListener("scroll", scrolled, { passive: true });
     return () => {
       window.clearTimeout(now.timer);
       el.removeEventListener("touchstart", down);
+      el.removeEventListener("touchmove", move);
       el.removeEventListener("touchend", up);
       el.removeEventListener("touchcancel", up);
       el.removeEventListener("scroll", scrolled);
