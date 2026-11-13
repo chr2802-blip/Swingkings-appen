@@ -8,15 +8,16 @@ import { matchOptions } from "@/lib/fine-data";
 import { waitsOn } from "@/lib/challenges";
 import { EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
-import { ChallengeDialog } from "@/components/challenge-dialog";
+import { FineCreateMenu } from "@/components/fine-create-menu";
 
 export default async function ChallengesPage() {
   const user = await requireTeamUser();
   const manages = canManageFines(user, user.teamId);
   const db = teamDb(user.teamId);
-  const [team, roster, matches, open, closed] = await Promise.all([
+  const [team, roster, fineTypes, matches, open, closed] = await Promise.all([
     prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true } }),
     teamRoster(user.teamId),
+    db.fineType.findMany({ where: { archivedAt: null }, orderBy: [{ units: "asc" }, { name: "asc" }] }),
     matchOptions(user.teamId),
     db.challenge.findMany({
       where: { status: "PENDING" },
@@ -46,14 +47,8 @@ export default async function ChallengesPage() {
       <PageHeader
         title="Udfordringer"
         description="Udfordr dig ud af dine bøder. Meld resultatet, en anden godkender, og taberen overtager indsatsen."
-        action={
-          <ChallengeDialog
-            opponents={roster.filter((m) => m.userId !== user.id)}
-            finePriceKr={team.finePriceKr}
-            matches={matches}
-          />
-        }
       />
+      <FineCreateMenu viewerId={user.id} members={roster} fineTypes={fineTypes} finePriceKr={team.finePriceKr} matches={matches} />
 
       {waiting.length > 0 && (
         <section className="mb-8">

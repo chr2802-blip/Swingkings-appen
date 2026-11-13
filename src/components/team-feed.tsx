@@ -4,6 +4,7 @@ import { FEED_PAGE, feedPosts, nextFeedCursor } from "@/lib/feed";
 import { teamRoster } from "@/lib/roster";
 import { EmptyState, SectionTitle } from "@/components/ui";
 import { PostDialog } from "@/components/post-dialog";
+import { CreateAction } from "@/components/create-button";
 import { FeedSeen } from "@/components/feed-seen";
 import { FeedPostCard } from "@/components/feed-post";
 import { FeedMore } from "@/components/feed-more";
@@ -28,15 +29,12 @@ export async function TeamFeed({ user }: { user: TeamUser }) {
   return (
     <section id="feed" className="mx-auto max-w-xl scroll-mt-24">
       <FeedSeen />
-      <SectionTitle
-        action={
-          <PostDialog
-            members={roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId, shirtNumber: m.shirtNumber }))}
-          />
-        }
-      >
-        Feed
-      </SectionTitle>
+      <CreateAction>
+        <PostDialog
+          members={roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId, shirtNumber: m.shirtNumber }))}
+        />
+      </CreateAction>
+      <SectionTitle>Feed</SectionTitle>
       {posts.length === 0 ? (
         <EmptyState icon="📸">Ingen opslag endnu. Del det første billede fra omklædningsrummet!</EmptyState>
       ) : (

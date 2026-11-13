@@ -9,7 +9,7 @@ import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { SwipePages } from "@/components/swipe-pages";
 import { FineHistory } from "@/components/fine-history";
-import { GiveFineDialog } from "@/components/give-fine-dialog";
+import { FineCreateMenu } from "@/components/fine-create-menu";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
@@ -48,9 +48,13 @@ export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeo
 
   return (
     <div>
-      <PageHeader
-        title="Bødekassen"
-        action={<GiveFineDialog members={board.roster} fineTypes={board.fineTypes} finePriceKr={board.finePriceKr} matches={matches} />}
+      <PageHeader title="Bødekassen" />
+      <FineCreateMenu
+        viewerId={user.id}
+        members={board.roster}
+        fineTypes={board.fineTypes}
+        finePriceKr={board.finePriceKr}
+        matches={matches}
       />
 
       <Card padded={false} className="mb-5 overflow-hidden">

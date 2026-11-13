@@ -86,6 +86,10 @@ h1,
   --band-active: var(--accent);
   --band-active-text: var(--color-white);
   --band-active-label: var(--accent-text);
+  /* The "+" (`CreateFab`): it must stand out on the tab bar and on the page alike. */
+  --create: var(--accent);
+  --create-hover: var(--accent-hover);
+  --create-text: var(--color-white);
   --stripe-a: var(--accent-line);
   --stripe-b: var(--color-white);
 }
@@ -110,6 +114,10 @@ h1,
   --band-active: var(--gold);
   --band-active-text: var(--color-slate-900);
   --band-active-label: var(--color-white);
+  /* The bar is the accent's blue, so the "+" wears the crest's gold. */
+  --create: var(--gold);
+  --create-hover: #e5b800;
+  --create-text: var(--color-slate-900);
   --stripe-a: #a4d7f6;
   --stripe-b: var(--color-white);
 }
@@ -435,27 +443,129 @@ h1,
 }
 
 /*
- * The header and the tab bar slide away while scrolling down and come back on the way up
- * (`ScrollBars` sets the attribute). The header keeps the strip under the phone's status
- * bar, so the clock never sits on top of the page.
+ * The header, the tab bar and the "+" move with the scroll. `ScrollBars` writes `--bars`
+ * (0 shown, 1 gone) as the page moves and settles it when the page stops; while it follows
+ * the finger (`data-bars="live"`) the easing is off, so nothing lags behind the finger.
+ * The header keeps the strip under the phone's status bar, so the clock never sits on top
+ * of the page.
  */
 .app-topbar,
 .app-bottombar {
   transition: translate var(--dur-base) var(--ease-arrive);
 }
 
-:root[data-bars="hidden"] .app-topbar {
-  translate: 0 calc(-100% + env(safe-area-inset-top));
+.app-topbar {
+  translate: 0 calc(var(--bars, 0) * (-100% + env(safe-area-inset-top)));
 }
 
-:root[data-bars="hidden"] .app-bottombar {
+.app-bottombar {
   /* Past its own height, so the shadow above it goes too. */
-  translate: 0 calc(100% + 32px);
+  translate: 0 calc(var(--bars, 0) * (100% + 32px));
+}
+
+:root[data-bars="live"] .app-topbar,
+:root[data-bars="live"] .app-bottombar {
+  transition: none;
+}
+
+/*
+ * Frosted glass: the page shows faintly through the bars as it scrolls beneath them.
+ * Without backdrop-filter the bars are simply solid.
+ */
+.app-glass {
+  background-color: var(--band);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .app-glass {
+    background-color: color-mix(in srgb, var(--band) 88%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(1.8);
+    backdrop-filter: blur(18px) saturate(1.8);
+  }
+}
+
+/* The tab bar's one highlight, gliding to the tab tapped with a little overshoot. */
+.app-pill {
+  transition: translate var(--dur-slow, 380ms) var(--ease-spring);
+}
+
+/*
+ * The page's "+" (`CreateFab`). On a phone it sits in the gap in the middle of the tab bar,
+ * standing a little proud of it; as the bar goes it travels to the bottom right corner,
+ * as far as the bar has gone, and stays. From `md` up there is no tab bar, and it lives
+ * in that corner. While its drawer is open it is the ×, above the drawer.
+ */
+.app-create {
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+  translate: calc(-50% + var(--bars, 0) * (50vw - 50% - max(1rem, env(safe-area-inset-right)))) 0;
+  transition:
+    translate var(--dur-base) var(--ease-arrive),
+    scale var(--dur-release) var(--ease-spring),
+    background-color var(--dur-base);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root[data-bars="live"] .app-create {
+  transition:
+    scale var(--dur-release) var(--ease-spring),
+    background-color var(--dur-base);
+}
+
+.app-create:active {
+  scale: 0.92;
+  transition-duration: var(--dur-press);
+}
+
+.app-create svg {
+  transition: rotate var(--dur-slow, 380ms) var(--ease-spring);
+}
+
+.app-create[aria-expanded="true"] svg {
+  rotate: 135deg;
+}
+
+.app-create-gap {
+  display: none;
+}
+
+:root:has(.app-create) .app-create-gap {
+  display: block;
+}
+
+@media (min-width: 48rem) {
+  .app-create {
+    left: auto;
+    right: max(1.5rem, env(safe-area-inset-right));
+    bottom: 1.5rem;
+    translate: none;
+  }
+}
+
+/* The rows of an action drawer come in one after another. */
+.menu-rows > li {
+  animation: row-in var(--dur-base) var(--ease-arrive) both;
+}
+
+.menu-rows > li:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.menu-rows > li:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.menu-rows > li:nth-child(n + 4) {
+  animation-delay: 120ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .app-topbar,
-  .app-bottombar {
+  .app-bottombar,
+  .app-create,
+  .app-create svg,
+  .app-pill {
     transition: none;
   }
 }

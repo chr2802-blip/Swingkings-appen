@@ -1,5 +1,12 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
+import type { Page } from "@playwright/test";
+
+/** The fine box's "+": a drawer of what can be made there, and then one of them. */
+async function create(page: Page, name: string) {
+  await page.getByRole("button", { name: "Opret" }).click();
+  await page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name }).click();
+}
 
 test("a treasurer gives two players a catalogue fine, and the board and their accounts show it", async ({ page, loginAs }) => {
   const { team, treasurer, anna, bo } = await squad();
@@ -7,7 +14,7 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
   await loginAs(treasurer);
   await page.goto("/boder");
 
-  await page.getByRole("button", { name: "Giv bøde" }).click();
+  await create(page, "Giv bøde");
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
   await dialog.getByRole("checkbox", { name: "Anna" }).check();
   await dialog.getByRole("checkbox", { name: "Bo" }).check();
@@ -31,7 +38,7 @@ test("a refused fine keeps the dialog open and says why", async ({ page, loginAs
   const { treasurer } = await squad();
   await loginAs(treasurer);
   await page.goto("/boder");
-  await page.getByRole("button", { name: "Giv bøde" }).click();
+  await create(page, "Giv bøde");
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog.getByText("Vælg mindst én spiller.")).toBeVisible();
@@ -42,7 +49,7 @@ test("a player gives a teammate a fine", async ({ page, loginAs }) => {
   const { anna, bo } = await squad();
   await loginAs(anna);
   await page.goto("/boder");
-  await page.getByRole("button", { name: "Giv bøde" }).click();
+  await create(page, "Giv bøde");
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
   await dialog.getByRole("checkbox", { name: "Bo" }).check();
   await dialog.getByLabel("Hvad er bøden for?").fill("Glemte benskinner");
@@ -58,7 +65,7 @@ test("a player sees the catalogue but cannot change it", async ({ page, loginAs 
   await page.goto("/boder/katalog");
   await expect(page.getByText("For sent")).toBeVisible();
   await expect(page.getByRole("button", { name: "Ny bøde" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Ret" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ret", exact: true })).toHaveCount(0);
 });
 
 test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
@@ -92,7 +99,7 @@ test("a challenge is reported, approved by a third player, and the stake moves t
   await db.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "For sent", units: 5, unitPriceKr: 10, issuedById: admin.id } });
   await loginAs(anna);
   await page.goto("/boder/udfordringer");
-  await page.getByRole("button", { name: "Udfordring" }).click();
+  await create(page, "Meld udfordring");
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Hvem spillede du mod?").selectOption({ label: "Bo" });
   await dialog.getByLabel("Hvem vandt?").selectOption({ label: "Jeg vandt" });
@@ -251,7 +258,7 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(page.getByRole("button", { name: "Nulstil alle" })).toHaveCount(0);
   // The title, the button and the overview stay where they were.
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Bødekassen");
-  await expect(page.getByRole("button", { name: "Giv bøde" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Opret" })).toBeVisible();
   await expect(overview).toBeInViewport();
 
   await swipe(-290);

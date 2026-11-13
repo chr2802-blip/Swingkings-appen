@@ -38,7 +38,7 @@ export function GiveFineDialog({
   const effective = units ? Number(units) : (chosen?.units ?? 0);
 
   return (
-    <FormDialog trigger={triggerLabel} title="Giv bøde" action={giveFine} submitLabel="Giv bøde">
+    <FormDialog trigger={triggerLabel} triggerIcon="🟨" title="Giv bøde" action={giveFine} submitLabel="Giv bøde">
       <Field label="Hvem?">
         <PlayerChecklist members={members} name="playerId" defaultChecked={defaultPlayerId ? [defaultPlayerId] : []} />
       </Field>
