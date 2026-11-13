@@ -73,6 +73,11 @@ test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Rødt kort")).toBeVisible();
   await expect(page.getByText("100 kr")).toBeVisible();
+  // The new fine lands in the list, and the row that made it stays last, ready for the next.
+  const rows = page.getByRole("tabpanel").getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Rødt kort");
+  await expect(rows.last().getByRole("button", { name: "Ny bøde" })).toBeVisible();
   expect(await db.fineType.count({ where: { teamId: team.id } })).toBe(1);
 });
 
@@ -232,7 +237,8 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
   await expect(page).toHaveURL(/\/boder\/katalog$/);
   await expect(page.getByText("For sent")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ny bøde" })).toBeVisible();
+  // Making a new one is the last row of the list, not a button beside the names.
+  await expect(page.getByRole("tabpanel").getByRole("listitem").last().getByRole("button", { name: "Ny bøde" })).toBeVisible();
   // The last page: there is nothing further to the right.
   await swipe(-290);
   await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");

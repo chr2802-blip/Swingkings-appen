@@ -114,7 +114,6 @@ export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeo
           {
             href: "/boder/katalog",
             title: "Katalog",
-            action: manages && <FineTypeDialog finePriceKr={board.finePriceKr} />,
             children: <CataloguePage board={board} manages={manages} />,
           },
         ]}
@@ -168,12 +167,13 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
   return (
     <>
       <p className="mb-3 text-sm text-slate-500">Hvad koster hvad. 1 bøde = {kr(board.finePriceKr)}.</p>
-      {types.length === 0 ? (
+      {types.length === 0 && (
         <EmptyState icon="📜">
           {manages ? "Kataloget er tomt. Opret holdets bøder, så er de klar, når der skal deles ud." : "Kataloget er tomt endnu."}
         </EmptyState>
-      ) : (
-        <Card padded={false}>
+      )}
+      {(types.length > 0 || manages) && (
+        <Card padded={false} className={`overflow-hidden ${types.length === 0 ? "mt-3" : ""}`}>
           <ul className="divide-y divide-slate-100">
             {types.map((type) => (
               <li key={type.id} className="flex items-center gap-3 px-4 py-3">
@@ -200,6 +200,12 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
                 )}
               </li>
             ))}
+            {/* Making a new one is the list's last row, where the new one will land. */}
+            {manages && (
+              <li>
+                <FineTypeDialog finePriceKr={board.finePriceKr} />
+              </li>
+            )}
           </ul>
         </Card>
       )}
