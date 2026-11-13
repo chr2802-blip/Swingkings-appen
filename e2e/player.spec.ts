@@ -18,14 +18,16 @@ test("a player's page shows their fines, challenges and jobs, and no way to edit
   await page.goto(`/spiller/${bo.id}`);
   await expect(page.getByRole("heading", { name: "Bo", level: 1 })).toBeVisible();
   await expect(page.getByText("Glemt trøje")).toBeVisible();
-  await expect(page.getByText("“Flest straffe”")).toBeVisible();
+  await expect(page.getByText(/“Flest straffe”/)).toBeVisible();
   await expect(page.getByText("Vaske trøjer")).toBeVisible();
   await expect(page.getByText("Kridte banen")).toHaveCount(0);
   await expect(page.getByText("Naboens bøde")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Rediger" })).toHaveCount(0);
 
-  // From the challenge, a name leads on to that player's page.
-  await page.getByRole("link", { name: /^Anna/ }).first().click();
+  // The challenge is a short row; tapped, it opens in full, and a name there leads on.
+  await page.getByRole("button", { name: /Anna 🏆 slog Bo/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Udfordring" });
+  await sheet.getByRole("link", { name: /^Anna/ }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
   await expect(page.getByRole("heading", { name: "Anna", level: 1 })).toBeVisible();
   await expect(page.getByText("Kridte banen")).toBeVisible();
@@ -82,4 +84,19 @@ test("an old link to a player's fines lands on their page", async ({ page, login
   await page.goto(`/boder/spiller/${bo.id}`);
   await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}$`));
   await expect(page.getByRole("heading", { name: "Bo", level: 1 })).toBeVisible();
+});
+
+test("a long list shows the newest few and the rest behind Vis alle", async ({ page, loginAs }) => {
+  const { team, treasurer, anna } = await squad();
+  for (let n = 1; n <= 7; n++) {
+    await db.fine.create({
+      data: { teamId: team.id, playerId: anna.id, reason: `Bøde nummer ${n}`, units: 1, unitPriceKr: 10, issuedById: treasurer.id, createdAt: new Date(Date.now() - n * 60_000) },
+    });
+  }
+  await loginAs(anna);
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByText("Bøde nummer 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Bøde nummer 7")).toBeHidden();
+  await page.getByText("Vis alle 7").click();
+  await expect(page.getByText("Bøde nummer 7")).toBeVisible();
 });
