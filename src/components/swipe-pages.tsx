@@ -1,18 +1,16 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 export type SwipePage = {
   /** Where this page lives; the address bar follows the swipe, so a reload stays put. */
   href: string;
   title: string;
-  /** The header's button while this page is the one shown. */
+  /** The button beside the names while this page is the one shown. */
   action?: React.ReactNode;
   children: React.ReactNode;
 };
-
-const GoTo = createContext<(href: string) => void>(() => {});
 
 /** How long the scroller must be still before the page it stopped on is the page. */
 const SETTLE_MS = 120;
@@ -20,9 +18,9 @@ const SETTLE_MS = 120;
 const ARRIVE_MS = 1500;
 
 /**
- * Pages side by side that a finger swipes between, with the title, the header's button
- * and a row of dots following along. The dots are the tabs: tap one, or use them from a
- * keyboard, where there is nothing to swipe with.
+ * Pages side by side that a finger swipes between, under a row of their names: the one
+ * shown is underlined, and its button sits beside them. The names are the tabs: tap one,
+ * or use them from a keyboard, where there is nothing to swipe with.
  *
  * The pages sit in a row that scrolls sideways and snaps, so the swipe is the browser's
  * own and follows the finger. At rest the pages not shown are collapsed and invisible:
@@ -37,6 +35,7 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
   const [resting, setResting] = useState(true);
   const [ready, setReady] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const names = useRef<HTMLDivElement>(null);
   // What the listeners read: they are attached once and outlive any one render.
   const live = useRef({ active, resting, touching: false, target: null as number | null, timer: 0, deadline: 0 });
   live.current.active = active;
@@ -63,8 +62,9 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
       setResting(true);
     });
     if (changed) {
-      // The new page starts at its top; the old page's scroll position means nothing on it.
-      window.scrollTo({ top: 0 });
+      // The new page starts at its top: if the names have scrolled away, bring them back.
+      const row = names.current;
+      if (row && row.getBoundingClientRect().top < 0) row.scrollIntoView({ block: "start" });
       window.history.replaceState(null, "", pages[index].href);
     }
   }, [pages]);
@@ -134,12 +134,25 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
     };
   }, [open, settle]);
 
-  const goToHref = useCallback((href: string) => goTo(pages.findIndex((page) => page.href === href)), [goTo, pages]);
-
   return (
-    <GoTo.Provider value={goToHref}>
-      <div className="mb-2 flex min-h-11 items-center justify-between gap-3">
-        <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight break-words">{pages[active].title}</h1>
+    <>
+      <div ref={names} className="mb-3 flex min-h-9 scroll-mt-24 items-center justify-between gap-3">
+        <div role="tablist" aria-label="Bødekassens sider" className="flex min-w-0 gap-4">
+          {pages.map((page, index) => (
+            <button
+              key={page.href}
+              type="button"
+              role="tab"
+              aria-selected={index === active}
+              onClick={() => goTo(index)}
+              className={`border-b-2 py-1.5 text-xs font-semibold tracking-wider uppercase transition-colors duration-200 ${
+                index === active ? "border-[var(--accent)] text-slate-900" : "border-transparent text-slate-400"
+              }`}
+            >
+              {page.title}
+            </button>
+          ))}
+        </div>
         {pages.map(
           (page, index) =>
             page.action && (
@@ -150,33 +163,13 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
         )}
       </div>
 
-      <div role="tablist" aria-label="Bødekassens sider" className="mb-4 flex justify-center">
-        {pages.map((page, index) => (
-          <button
-            key={page.href}
-            type="button"
-            role="tab"
-            aria-selected={index === active}
-            aria-label={page.title}
-            onClick={() => goTo(index)}
-            className="px-1.5 py-2"
-          >
-            <span
-              className={`block h-1.5 rounded-full transition-all duration-200 ${
-                index === active ? "w-6 bg-[var(--accent)]" : "w-1.5 bg-slate-300"
-              }`}
-            />
-          </button>
-        ))}
-      </div>
-
       {/*
         The gutter between two pages mid-swipe is the page's own margin, pulled in and put back.
         The row reaches the bottom of the screen, so a short page can be swiped below its content.
       */}
       <div
         ref={scroller}
-        className={ready ? "scrollbar-hidden -mx-4 flex min-h-[calc(100dvh-20rem)] snap-x snap-mandatory overflow-x-auto overscroll-x-contain" : ""}
+        className={ready ? "scrollbar-hidden -mx-4 flex min-h-[calc(100dvh-30rem)] snap-x snap-mandatory overflow-x-auto overscroll-x-contain" : ""}
       >
         {pages.map((page, index) => {
           const away = resting && index !== active;
@@ -193,24 +186,6 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
           );
         })}
       </div>
-    </GoTo.Provider>
-  );
-}
-
-/** A link to one of the pages from inside another: slides there instead of loading it. */
-export function SwipeLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
-  const goTo = useContext(GoTo);
-  return (
-    <a
-      href={href}
-      className={className}
-      onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-        event.preventDefault();
-        goTo(href);
-      }}
-    >
-      {children}
-    </a>
+    </>
   );
 }
