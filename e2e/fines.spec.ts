@@ -180,3 +180,63 @@ test("the history page lets whoever gave a fine take it back, and is empty befor
   await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
   expect(await db.fine.count({ where: { teamId: team.id } })).toBe(0);
 });
+
+test("the board, the challenges and the catalogue are swiped between, and the dots say where you are", async ({ page, loginAs }) => {
+  const { team, treasurer, anna } = await squad();
+  await db.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
+  await db.fine.create({ data: { teamId: team.id, playerId: anna.id, issuedById: treasurer.id, reason: "Glemte bolde", units: 1, unitPriceKr: 10 } });
+  await loginAs(anna);
+  await page.goto("/boder");
+  const title = page.getByRole("heading", { level: 1 });
+  const dot = (name: string) => page.getByRole("tab", { name });
+  await expect(title).toHaveText("Bødekassen");
+  await expect(dot("Bødekassen")).toHaveAttribute("aria-selected", "true");
+  // Only the page shown is there to read and to tab through.
+  await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  await expect(page.getByText("Hvad koster hvad.")).toBeHidden();
+
+  // A finger dragged across the screen: real touch input, so the browser does the scrolling.
+  const cdp = await page.context().newCDPSession(page);
+  const swipe = async (dx: number) => {
+    const from = dx < 0 ? 350 : 60;
+    const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number) =>
+      cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y: 500 }] });
+    await touch("touchStart", from);
+    for (let step = 1; step <= 15; step++) await touch("touchMove", from + (dx * step) / 15);
+    await touch("touchEnd");
+  };
+
+  await swipe(-290);
+  await expect(title).toHaveText("Udfordringer");
+  await expect(page).toHaveURL(/\/boder\/udfordringer$/);
+  await expect(dot("Udfordringer")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Udfordring" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Giv bøde" })).toHaveCount(0);
+
+  await swipe(-290);
+  await expect(title).toHaveText("Bødekatalog");
+  await expect(page).toHaveURL(/\/boder\/katalog$/);
+  await expect(page.getByText("For sent")).toBeVisible();
+  // The last page: there is nothing further to the right.
+  await swipe(-290);
+  await expect(title).toHaveText("Bødekatalog");
+
+  await swipe(290);
+  await expect(title).toHaveText("Udfordringer");
+
+  // Without a finger: the dots, and the link on the board.
+  await dot("Bødekassen").click();
+  await expect(title).toHaveText("Bødekassen");
+  await expect(page).toHaveURL(/\/boder$/);
+  await page.getByRole("link", { name: /Udfordr dig ud af dem/ }).click();
+  await expect(title).toHaveText("Udfordringer");
+  await expect(page).toHaveURL(/\/boder\/udfordringer$/);
+  await dot("Bødekatalog").click();
+  await expect(title).toHaveText("Bødekatalog");
+
+  // A reload stays on the page it was left on.
+  await page.reload();
+  await expect(title).toHaveText("Bødekatalog");
+  await expect(dot("Bødekatalog")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("For sent")).toBeVisible();
+});

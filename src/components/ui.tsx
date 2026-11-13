@@ -142,7 +142,7 @@ export function Badge({
   return <span className={`inline-block rounded-full whitespace-nowrap px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
 
-/** A row of section links at the top of a tab (Bøder · Udfordringer · Bødekatalog). */
+/** A row of section links at the top of a tab. */
 export function Tabs({ items, current }: { items: { href: string; label: string }[]; current: string }) {
   return (
     <nav className="scrollbar-hidden -mx-1 mb-6 flex gap-1 overflow-x-auto px-1">

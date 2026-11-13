@@ -1,7 +1,7 @@
+import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
 import { fineHistory } from "@/lib/fine-data";
 import { EmptyState, PageHeader } from "@/components/ui";
-import { FinesTabs } from "@/components/fines-tabs";
 import { FineHistory } from "@/components/fine-history";
 
 /** As far back as the page goes. A team gives a few fines a week, so this is years. */
@@ -13,8 +13,10 @@ export default async function FineHistoryPage() {
 
   return (
     <div>
+      <Link href="/boder" className="mb-2 inline-block text-sm font-medium text-[var(--accent-text)]">
+        ‹ Bødekassen
+      </Link>
       <PageHeader title="Historik" description="Alle holdets bøder, de nyeste først." />
-      <FinesTabs current="/boder" />
       {fines.length === 0 ? (
         <EmptyState icon="😇">Ingen bøder endnu. Det varer nok ikke længe.</EmptyState>
       ) : (
