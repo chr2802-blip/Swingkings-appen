@@ -24,8 +24,9 @@ export default async function AdminPage() {
         <SectionTitle>Testdata</SectionTitle>
         <Card>
           <p className="mb-3 text-sm text-slate-600">
-            Holdet &quot;{DEMO_TEAM_NAME}&quot; med otte opdigtede spillere, bøder, aktiviteter, opgaver, chat og
-            afstemninger, så appen kan prøves af. Du bliver admin på det. Spillerne kan ikke logge ind.
+            Holdet &quot;{DEMO_TEAM_NAME}&quot; midt i en sæson: 18 opdigtede spillere, fire måneders bøder og
+            udfordringer, omkring 40 aktiviteter med opgaver, en chat og et feed med billeder og afstemninger, så
+            appen kan prøves af. Du bliver admin på det. Spillerne kan ikke logge ind.
           </p>
           <div className="flex flex-wrap gap-2">
             <ActionButton
