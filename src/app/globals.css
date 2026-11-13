@@ -529,12 +529,9 @@ h1,
   rotate: 135deg;
 }
 
-.app-create-gap {
+/* The greyed-out "+" in the tab bar, for a page with nothing to make; the real one takes its place. */
+:root:has(.app-create) .app-create-idle {
   display: none;
-}
-
-:root:has(.app-create) .app-create-gap {
-  display: block;
 }
 
 @media (min-width: 48rem) {

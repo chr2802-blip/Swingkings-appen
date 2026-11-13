@@ -8,7 +8,7 @@ import { ActionMenu } from "@/components/action-menu";
  * The tab's "+" button. On a phone it sits in the middle of the tab bar and, when the bar
  * slides away on the way down a page, slides to the bottom right corner instead and stays
  * (the CSS is `.app-create` in globals.css); from `md` up it is in that corner all along.
- * The nav keeps a gap for it only while a page has one.
+ * Where a page has none, the tab bar shows a greyed-out "+" in its place.
  *
  * `CreateMenu` holds several ways to make something and opens a drawer of them;
  * `CreateAction` holds one dialog and opens it straight away.
