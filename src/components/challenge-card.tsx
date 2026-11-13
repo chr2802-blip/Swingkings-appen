@@ -1,6 +1,7 @@
 import type { ChallengeStatus } from "@prisma/client";
 import { Badge, Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
 import { moveChallenge } from "@/app/actions/fines";
 import { CHALLENGE_STATUS_LABEL, movesFor } from "@/lib/challenges";
@@ -95,12 +96,12 @@ export function ChallengeCard({
 
 function Side({ person, won }: { person: Person; won: boolean }) {
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <PlayerLink userId={person.id} className="flex min-w-0 items-center gap-1.5">
       <Avatar name={person.name} photoId={person.photoId} size="xs" />
       <span className={`truncate text-sm ${won ? "font-semibold" : ""}`}>
         {person.name}
         {won && " 🏆"}
       </span>
-    </span>
+    </PlayerLink>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { sendChatMessage, deleteChatMessage } from "@/app/actions/social";
 import { Avatar, Photo, photoUrl } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { uploadPhoto } from "@/components/photo-field";
 import { PhotoError } from "@/lib/downscale";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
@@ -131,10 +132,18 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
           return (
             <li key={message.id} className={`group flex items-end gap-2 ${own ? "flex-row-reverse" : ""}`}>
               <span className={`w-8 ${grouped ? "invisible" : ""}`}>
-                {!own && <Avatar name={message.author.name} photoId={message.author.photoId} size="sm" />}
+                {!own && (
+                  <PlayerLink userId={message.author.id} aria-label={message.author.name} tabIndex={grouped ? -1 : undefined}>
+                    <Avatar name={message.author.name} photoId={message.author.photoId} size="sm" />
+                  </PlayerLink>
+                )}
               </span>
               <div className={`flex max-w-[78%] flex-col ${own ? "items-end" : "items-start"}`}>
-                {!grouped && !own && <span className="mb-0.5 px-1 text-xs text-slate-500">{message.author.name}</span>}
+                {!grouped && !own && (
+                  <PlayerLink userId={message.author.id} className="mb-0.5 px-1 text-xs text-slate-500">
+                    {message.author.name}
+                  </PlayerLink>
+                )}
                 <div
                   className={`overflow-hidden rounded-2xl ${
                     own ? "bg-[var(--accent)] text-white" : "border border-slate-200 bg-white"

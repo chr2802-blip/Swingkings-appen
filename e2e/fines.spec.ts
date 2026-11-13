@@ -204,12 +204,12 @@ test("a treasurer resets a player, and a player cannot", async ({ page, loginAs 
   const { team, treasurer, anna } = await squad();
   await db.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "For sent", units: 4, unitPriceKr: 10, issuedById: treasurer.id } });
   await loginAs(anna);
-  await page.goto(`/boder/spiller/${anna.id}`);
+  await page.goto(`/spiller/${anna.id}`);
   await expect(page.getByText("For sent")).toBeVisible();
   await expect(page.getByRole("button", { name: "Nulstil bøder" })).toHaveCount(0);
 
   await loginAs(treasurer);
-  await page.goto(`/boder/spiller/${anna.id}`);
+  await page.goto(`/spiller/${anna.id}`);
   await page.getByRole("button", { name: "Nulstil bøder" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Nulstil" }).click();
   await expect(page.getByText(/· nulstillet /)).toBeVisible();
@@ -254,7 +254,7 @@ test("the overview stays on top: what you owe, what is in the box and the way to
   await expect(sheet).toBeHidden();
 
   await mine.click();
-  await expect(page).toHaveURL(new RegExp(`/boder/spiller/${anna.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
 });
 
 test("the history lists the team's fines and lets whoever gave one take it back", async ({ page, loginAs }) => {

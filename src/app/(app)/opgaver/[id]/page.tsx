@@ -8,6 +8,7 @@ import { deadlineLabel, formatInZone, kickoffLabel, readInZone } from "@/lib/tim
 import { activityName } from "@/lib/activity";
 import { Badge, Card, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
@@ -21,8 +22,8 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       where: { id },
       include: {
         match: { select: { id: true, kind: true, title: true, opponent: true, startsAt: true } },
-        createdBy: { select: { name: true } },
-        doneBy: { select: { name: true } },
+        createdBy: { select: { id: true, name: true } },
+        doneBy: { select: { id: true, name: true } },
         assignees: { select: { user: { select: { id: true, name: true, photoId: true } } } },
       },
     }),
@@ -77,7 +78,12 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           {task.doneAt ? (
             <Badge tone="green">
               Udført {readInZone(task.doneAt, "d. MMM")}
-              {task.doneBy && ` af ${task.doneBy.name}`}
+              {task.doneBy && (
+                <>
+                  {" af "}
+                  <PlayerLink userId={task.doneBy.id}>{task.doneBy.name}</PlayerLink>
+                </>
+              )}
             </Badge>
           ) : (
             due && <Badge tone={due.overdue ? "amber" : "neutral"}>{due.text}</Badge>
@@ -90,7 +96,13 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
         )}
         {task.description && <p className="text-sm whitespace-pre-line text-slate-700">{task.description}</p>}
         <p className="text-xs text-slate-500">
-          Oprettet {readInZone(task.createdAt, "d. MMM")} {task.createdBy ? `af ${task.createdBy.name}` : "automatisk"}
+          Oprettet {readInZone(task.createdAt, "d. MMM")} {task.createdBy ? (
+            <>
+              af <PlayerLink userId={task.createdBy.id}>{task.createdBy.name}</PlayerLink>
+            </>
+          ) : (
+            "automatisk"
+          )}
         </p>
       </Card>
 
@@ -101,9 +113,11 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
         ) : (
           <ul className="space-y-2">
             {task.assignees.map((a) => (
-              <li key={a.user.id} className="flex items-center gap-2 text-sm">
-                <Avatar name={a.user.name} photoId={a.user.photoId} size="sm" />
-                {a.user.name}
+              <li key={a.user.id}>
+                <PlayerLink userId={a.user.id} className="flex w-fit items-center gap-2 text-sm">
+                  <Avatar name={a.user.name} photoId={a.user.photoId} size="sm" />
+                  {a.user.name}
+                </PlayerLink>
               </li>
             ))}
           </ul>

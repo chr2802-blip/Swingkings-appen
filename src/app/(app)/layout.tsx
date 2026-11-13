@@ -5,12 +5,15 @@ import { BottomNav } from "@/components/bottom-nav";
 import { TeamMenu } from "@/components/team-menu";
 import { Avatar } from "@/components/photo";
 import Link from "next/link";
+import { playerHref } from "@/components/player-link";
 import { StripeBand } from "@/components/crest";
 import { ScrollBars } from "@/components/scroll-bars";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const showAdmin = user.role === "SUPER_ADMIN";
+  // Your own page is your profile; somebody on no team has only the settings.
+  const profileHref = user.teamId ? playerHref(user.id) : "/profil";
 
   return (
     <div className="min-h-screen overflow-x-clip">
@@ -23,9 +26,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             photoId={user.teamPhotoId}
             canAdminister={user.teamId !== null && canAdministerTeam(user, user.teamId)}
             showAdmin={showAdmin}
+            profileHref={profileHref}
           />
           <NavLinks showAdmin={showAdmin} />
-          <Link href="/profil" className="press-icon ml-auto flex items-center gap-2 text-sm text-[var(--band-soft)]" aria-label="Min profil">
+          <Link href={profileHref} className="press-icon ml-auto flex items-center gap-2 text-sm text-[var(--band-soft)]" aria-label="Min profil">
             <span className="hidden sm:inline">{user.name}</span>
             <Avatar name={user.name} photoId={user.photoId} size="sm" />
           </Link>

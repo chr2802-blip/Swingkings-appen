@@ -26,6 +26,7 @@ export const config = {
     "/chat/:path*",
     "/hold/:path*",
     "/profil/:path*",
+    "/spiller/:path*",
     "/admin/:path*",
     "/hent-appen",
   ],

@@ -7,6 +7,7 @@ import { waitsOn } from "@/lib/challenges";
 import { fineUnits, kr } from "@/lib/money";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { playerHref } from "@/components/player-link";
 import { SwipePages } from "@/components/swipe-pages";
 import { FineHistory } from "@/components/fine-history";
 import { FineCreateMenu } from "@/components/fine-create-menu";
@@ -88,7 +89,7 @@ export async function FinesScreen({
       <Card padded={false} className="mb-5 overflow-hidden">
         <div className={`grid divide-x divide-slate-100 ${mine ? "grid-cols-2" : ""}`}>
           {mine && (
-            <Link href={`/boder/spiller/${user.id}`} className="press-card px-4 py-3">
+            <Link href={playerHref(user.id)} className="press-card px-4 py-3">
               <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Du skylder</p>
               <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
               <p className="text-xs text-slate-500">{mine.units > 0 ? `${fineUnits(mine.units)} · se dem ›` : "Ren tavle 🙌"}</p>
@@ -199,7 +200,7 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
           return (
             <li key={row.userId}>
               <Link
-                href={`/boder/spiller/${row.userId}`}
+                href={playerHref(row.userId)}
                 aria-current={isMe ? "true" : undefined}
                 className={`press-card flex items-center gap-3 px-4 py-2.5 ${
                   isMe ? "border-l-4 border-[var(--gold)] bg-[var(--gold-tint)] pl-3" : ""

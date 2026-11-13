@@ -66,7 +66,7 @@ export function fineHistory(teamId: string, take: number) {
       issuedById: true,
       note: true,
       player: { select: { id: true, name: true, photoId: true } },
-      issuedBy: { select: { name: true } },
+      issuedBy: { select: { id: true, name: true } },
       match: { select: { opponent: true, title: true, startsAt: true } },
       // What the history's sheet shows about the challenge a fine came from.
       challenge: {

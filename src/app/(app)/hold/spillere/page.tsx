@@ -3,6 +3,8 @@ import { canAdministerTeam, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamRoster } from "@/lib/roster";
 import { Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { playerHref } from "@/components/player-link";
+import Link from "next/link";
 
 export default async function RosterPage() {
   const user = await requireTeamUser();
@@ -24,7 +26,8 @@ export default async function RosterPage() {
       <Card padded={false}>
         <ul className="divide-y divide-slate-100">
           {roster.map((member) => (
-            <li key={member.userId} className="flex items-center gap-3 px-4 py-3">
+            <li key={member.userId}>
+              <Link href={playerHref(member.userId)} className="press-card flex items-center gap-3 px-4 py-3">
               <Avatar name={member.name} photoId={member.photoId} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">
@@ -37,6 +40,10 @@ export default async function RosterPage() {
                   {!member.takesTasks && <Badge>Ingen opgaver</Badge>}
                 </div>
               </div>
+              <span aria-hidden className="text-slate-300">
+                ›
+              </span>
+              </Link>
             </li>
           ))}
         </ul>

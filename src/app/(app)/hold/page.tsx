@@ -8,6 +8,7 @@ import { teamRoster } from "@/lib/roster";
 import { taskCandidates } from "@/lib/tasks";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { TemplateDialog } from "@/components/template-dialog";
 import { SyncButton } from "@/components/sync-button";
 import { TeamSettingsForm } from "@/components/team-settings-form";
@@ -64,7 +65,9 @@ export default async function TeamSettingsPage() {
               <li key={member.userId} className="flex items-center gap-3 px-4 py-3">
                 <Avatar name={member.name} photoId={member.photoId} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{member.name}</p>
+                  <p className="truncate text-sm font-medium">
+                    <PlayerLink userId={member.userId}>{member.name}</PlayerLink>
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge tone={member.role === "PLAYER" ? undefined : "accent"}>{ROLE_LABEL[member.role]}</Badge>
                     {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
@@ -147,7 +150,9 @@ export default async function TeamSettingsPage() {
             {loads.map((m) => (
               <div key={m.userId} className="flex items-center gap-3 text-sm">
                 <Avatar name={m.name} photoId={m.photoId} size="xs" />
-                <span className="w-32 truncate">{m.name}</span>
+                <PlayerLink userId={m.userId} className="w-32 truncate">
+                  {m.name}
+                </PlayerLink>
                 <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                   <span className="block h-full rounded-full bg-[var(--accent)]" style={{ width: `${(m.load / maxLoad) * 100}%` }} />
                 </span>

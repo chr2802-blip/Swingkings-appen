@@ -22,6 +22,7 @@ export function TeamMenu({
   photoId,
   canAdminister,
   showAdmin,
+  profileHref,
 }: {
   teams: TeamChoice[];
   currentId: string | null;
@@ -29,6 +30,7 @@ export function TeamMenu({
   photoId: string | null;
   canAdminister: boolean;
   showAdmin: boolean;
+  profileHref: string;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -73,7 +75,7 @@ export function TeamMenu({
           <Link href="/hold/spillere" className={item} onClick={() => setOpen(false)}>
             Spillere
           </Link>
-          <Link href="/profil" className={item} onClick={() => setOpen(false)}>
+          <Link href={profileHref} className={item} onClick={() => setOpen(false)}>
             Min profil
           </Link>
           {showAdmin && (

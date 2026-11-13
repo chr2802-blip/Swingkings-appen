@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Avatar } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
 import { CommentForm } from "@/components/comment-form";
 import { deleteComment } from "@/app/actions/social";
@@ -12,7 +13,7 @@ export type CommentView = {
   body: string;
   /** Already written out on the server, in Copenhagen time. */
   stamp: string;
-  author: { name: string; photoId: string | null };
+  author: { id: string; name: string; photoId: string | null };
   canDelete: boolean;
 };
 
@@ -46,10 +47,14 @@ export function CommentsDrawer({ postId, comments }: { postId: string; comments:
             <ul aria-label="Kommentarer" className="space-y-4">
               {comments.map((comment) => (
                 <li key={comment.id} className="flex items-start gap-2.5">
-                  <Avatar name={comment.author.name} photoId={comment.author.photoId} size="sm" />
+                  <PlayerLink userId={comment.author.id} className="shrink-0" aria-label={comment.author.name}>
+                    <Avatar name={comment.author.name} photoId={comment.author.photoId} size="sm" />
+                  </PlayerLink>
                   <div className="min-w-0 flex-1">
                     <div className="w-fit max-w-full rounded-2xl rounded-tl-md bg-slate-100 px-3.5 py-2">
-                      <p className="text-[13px] font-semibold">{comment.author.name}</p>
+                      <p className="text-[13px] font-semibold">
+                        <PlayerLink userId={comment.author.id}>{comment.author.name}</PlayerLink>
+                      </p>
                       <p className="text-sm break-words whitespace-pre-line">{comment.body}</p>
                     </div>
                     <div className="mt-1 flex items-center gap-3 px-3 text-xs text-slate-500">

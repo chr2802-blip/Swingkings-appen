@@ -37,7 +37,7 @@ test("says so when the password is wrong, without saying which half was", async 
 });
 
 test("sends a signed-out visitor from every section to the login page", async ({ page }) => {
-  for (const path of ["/oversigt", "/boder", "/aktiviteter", "/kampe", "/opgaver", "/chat", "/hold", "/profil", "/admin", "/hent-appen"]) {
+  for (const path of ["/oversigt", "/boder", "/aktiviteter", "/kampe", "/opgaver", "/chat", "/hold", "/profil", "/spiller/x", "/admin", "/hent-appen"]) {
     await page.goto(path);
     await expect(page, path).toHaveURL(/\/login$/);
   }

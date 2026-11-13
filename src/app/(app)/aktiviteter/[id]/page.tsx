@@ -13,6 +13,7 @@ import { TaskDialog } from "@/components/task-dialog";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { CopyTasksDialog, StandardTasksDialog } from "@/components/activity-task-dialogs";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
+import { PlayerLink } from "@/components/player-link";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
 import { ActionMenu } from "@/components/action-menu";
 import { ActionButton } from "@/components/action-button";
@@ -33,7 +34,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         tasks: { orderBy: { createdAt: "asc" }, select: TASK_SELECT },
         fines: {
           orderBy: { createdAt: "desc" },
-          select: { id: true, reason: true, units: true, unitPriceKr: true, player: { select: { name: true } } },
+          select: { id: true, reason: true, units: true, unitPriceKr: true, player: { select: { id: true, name: true } } },
         },
         challenges: {
           orderBy: { createdAt: "desc" },
@@ -166,7 +167,10 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
               {match.fines.map((fine) => (
                 <li key={fine.id} className="flex justify-between gap-3 px-4 py-3 text-sm">
                   <span>
-                    <strong>{fine.player.name}</strong> · {fine.reason}
+                    <PlayerLink userId={fine.player.id} className="font-semibold">
+                      {fine.player.name}
+                    </PlayerLink>{" "}
+                    · {fine.reason}
                   </span>
                   <span className="shrink-0 text-slate-500">
                     {fineUnits(fine.units)} · {kr(fineAmount(fine))}
@@ -206,7 +210,14 @@ function SignupGroup({ title, people }: { title: string; people: { userId: strin
       <h3 className="text-xs font-semibold text-slate-500">
         {title} ({people.length})
       </h3>
-      <p className="text-sm">{people.map((p) => p.name).join(", ")}</p>
+      <p className="text-sm">
+        {people.map((p, index) => (
+          <span key={p.userId}>
+            {index > 0 && ", "}
+            <PlayerLink userId={p.userId}>{p.name}</PlayerLink>
+          </span>
+        ))}
+      </p>
     </div>
   );
 }

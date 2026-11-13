@@ -1,7 +1,8 @@
 import Image from "next/image";
 import { requireUser } from "@/lib/auth";
 import { Bolt } from "@/components/crest";
-import { Card, PageHeader, SectionTitle } from "@/components/ui";
+import { ButtonLink, Card, PageHeader, SectionTitle } from "@/components/ui";
+import { playerHref } from "@/components/player-link";
 import { ProfileForm, PasswordForm } from "@/components/profile-forms";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallSection } from "@/components/install-app";
@@ -11,7 +12,18 @@ export default async function ProfilePage() {
   const user = await requireUser();
   return (
     <div className="mx-auto max-w-xl space-y-8">
-      <PageHeader title="Min profil" description={user.email} />
+      {/* Your own page (fines, challenges, jobs) is the profile; this is where it is changed. */}
+      <PageHeader
+        title="Rediger profil"
+        description={user.email}
+        action={
+          user.teamId && (
+            <ButtonLink href={playerHref(user.id)} variant="secondary">
+              Se min side
+            </ButtonLink>
+          )
+        }
+      />
       <Card>
         <ProfileForm name={user.name} photoId={user.photoId} canUpload={user.teamId !== null} />
       </Card>

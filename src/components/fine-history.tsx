@@ -5,6 +5,7 @@ import { fineAmount, fineUnits, kr } from "@/lib/money";
 import { readInZone, relativeDay } from "@/lib/time";
 import { Badge, Card, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
 import { ChallengeCard } from "@/components/challenge-card";
 import { DetailSheet } from "@/components/detail-sheet";
@@ -61,7 +62,7 @@ function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
     ["For", fine.reason],
     ["Antal", fineUnits(fine.units)],
     ["Pris pr. bøde", kr(fine.unitPriceKr)],
-    ["Givet af", fine.issuedBy.name],
+    ["Givet af", <PlayerLink key="giver" userId={fine.issuedBy.id}>{fine.issuedBy.name}</PlayerLink>],
     ["Hvornår", readInZone(fine.createdAt, "EEEE d. MMMM yyyy 'kl.' HH:mm")],
   ];
   if (fine.match) rows.push(["Aktivitet", `${fine.match.opponent ?? fine.match.title} · ${readInZone(fine.match.startsAt, "d. MMM yyyy")}`]);
@@ -74,9 +75,13 @@ function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Avatar name={fine.player.name} photoId={fine.player.photoId} size="lg" />
+        <PlayerLink userId={fine.player.id} className="shrink-0" aria-label={fine.player.name}>
+          <Avatar name={fine.player.name} photoId={fine.player.photoId} size="lg" />
+        </PlayerLink>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-lg font-semibold">{fine.player.name}</p>
+          <p className="truncate text-lg font-semibold">
+            <PlayerLink userId={fine.player.id}>{fine.player.name}</PlayerLink>
+          </p>
           <p className={`text-2xl font-semibold ${fine.clearedAt ? "text-slate-400 line-through" : amount < 0 ? "text-emerald-700" : "text-red-600"}`}>
             {kr(amount)}
           </p>
