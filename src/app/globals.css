@@ -86,6 +86,10 @@ h1,
   --band-active: var(--accent);
   --band-active-text: var(--color-white);
   --band-active-label: var(--accent-text);
+  /* The "+" (`CreateFab`): it must stand out on the tab bar and on the page alike. */
+  --create: var(--accent);
+  --create-hover: var(--accent-hover);
+  --create-text: var(--color-white);
   --stripe-a: var(--accent-line);
   --stripe-b: var(--color-white);
 }
@@ -110,6 +114,10 @@ h1,
   --band-active: var(--gold);
   --band-active-text: var(--color-slate-900);
   --band-active-label: var(--color-white);
+  /* The bar is the accent's blue, so the "+" wears the crest's gold. */
+  --create: var(--gold);
+  --create-hover: #e5b800;
+  --create-text: var(--color-slate-900);
   --stripe-a: #a4d7f6;
   --stripe-b: var(--color-white);
 }
