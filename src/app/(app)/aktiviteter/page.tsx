@@ -7,7 +7,7 @@ import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle, Tabs } from "@/components/ui";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { SyncButton } from "@/components/sync-button";
-import { ActionMenu } from "@/components/action-menu";
+import { CreateAction } from "@/components/create-button";
 import { copyableActivities, LISTED_ACTIVITY, templateOptions } from "@/lib/activity-data";
 import { activityName } from "@/lib/activity";
 
@@ -59,17 +59,11 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
               ? "Indsæt holdets kalenderlink fra KampKlar under Holdindstillinger, så kommer kampene automatisk."
               : undefined
         }
-        action={
-          team.calendarUrl ? (
-            <ActionMenu>
-              <ActivityDialog templates={templates} copyable={copyable} />
-              <SyncButton />
-            </ActionMenu>
-          ) : (
-            <ActivityDialog templates={templates} copyable={copyable} />
-          )
-        }
+        action={team.calendarUrl && <SyncButton />}
       />
+      <CreateAction>
+        <ActivityDialog templates={templates} copyable={copyable} />
+      </CreateAction>
       <Tabs
         current={`/aktiviteter${view === "kommende" ? "" : `?vis=${view}`}`}
         items={[

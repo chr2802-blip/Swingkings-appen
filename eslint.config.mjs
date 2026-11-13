@@ -28,14 +28,30 @@ const TENANCY = [
   },
 ];
 
+/**
+ * An effect's arrow must have a body. React calls whatever an effect returns when it
+ * cleans up, and DOM methods that returned nothing now return a Promise
+ * (`scrollIntoView` from Chrome 153), which crashed the whole app on leaving the chat.
+ */
+const EFFECTS = [
+  {
+    selector: "CallExpression[callee.name=/^use(Layout|Insertion)?Effect$/] > ArrowFunctionExpression[expression=true]",
+    message: "Give the effect a body: `useEffect(() => { … })`. Return only a clean-up function, written as `return …`.",
+  },
+];
+
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   { ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "playwright-report/**", "test-results/**"] },
   {
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    rules: { "no-restricted-syntax": ["error", ...EFFECTS] },
+  },
+  {
     // Pages and components are where a forgotten `where: { teamId }` would show one team
     // another's data. They read team-scoped models through `teamDb`.
     files: ["src/app/**/page.tsx", "src/app/**/layout.tsx", "src/components/**/*.tsx"],
-    rules: { "no-restricted-syntax": ["error", ...TENANCY] },
+    rules: { "no-restricted-syntax": ["error", ...TENANCY, ...EFFECTS] },
   },
 ];
 

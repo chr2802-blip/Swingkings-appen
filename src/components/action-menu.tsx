@@ -4,6 +4,7 @@ import { createContext, useContext, useState } from "react";
 import { createPortal } from "react-dom";
 import { Modal, ModalBody } from "@/components/modal";
 import { Button, type Variant } from "@/components/ui";
+import { CreateFab, useCreateFab } from "@/components/create-button";
 
 type MenuSlot = { slot: HTMLElement | null; close: () => void };
 
@@ -19,12 +20,18 @@ export function ActionMenu({
   label = "Handlinger",
   title,
   icon = false,
+  trigger,
+  roomBelow = false,
   children,
 }: {
   label?: string;
   /** The drawer's heading; the button's label when not given. */
   title?: string;
   icon?: boolean;
+  /** Draws the button that opens (and closes) the drawer, in place of the default ones. */
+  trigger?: (state: { open: boolean; toggle: () => void }) => React.ReactNode;
+  /** Leaves the drawer's foot free on a phone, for a button that stays above it. */
+  roomBelow?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -32,7 +39,9 @@ export function ActionMenu({
   const close = () => setOpen(false);
   return (
     <>
-      {icon ? (
+      {trigger ? (
+        trigger({ open, toggle: () => setOpen((was) => !was) })
+      ) : icon ? (
         <button
           type="button"
           aria-label={label}
@@ -55,8 +64,10 @@ export function ActionMenu({
         </Button>
       )}
       <Modal open={open} onClose={close} title={title ?? label} size="drawer">
-        <ModalBody className="pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <ul ref={setSlot} className="-mx-2 flex flex-col" />
+        <ModalBody
+          className={roomBelow ? "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-5" : "pb-[max(1.25rem,env(safe-area-inset-bottom))]"}
+        >
+          <ul ref={setSlot} className="menu-rows -mx-2 flex flex-col" />
         </ModalBody>
       </Modal>
       <MenuContext.Provider value={{ slot: open ? slot : null, close }}>{children}</MenuContext.Provider>
@@ -81,15 +92,20 @@ const rowClass = (variant: Variant) =>
 export function MenuTrigger({
   variant = "primary",
   className = "",
+  icon,
   onClick,
   children,
 }: {
   variant?: Variant;
   className?: string;
+  /** Drawn before the words when the trigger is a row in a drawer. */
+  icon?: string;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   const menu = useMenuSlot();
+  const fab = useCreateFab();
+  if (!menu && fab) return <CreateFab label={textOf(children)} onClick={onClick} />;
   if (!menu) {
     return (
       <Button type="button" variant={variant} className={className} onClick={onClick}>
@@ -108,11 +124,23 @@ export function MenuTrigger({
           onClick();
         }}
       >
+        {icon && (
+          <span aria-hidden className="accent-tint-bg mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl">
+            {icon}
+          </span>
+        )}
         {children}
       </button>
     </li>,
     menu.slot,
   );
+}
+
+/** A trigger's words, for the "+" button's name. */
+function textOf(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  return "Opret";
 }
 
 /**
