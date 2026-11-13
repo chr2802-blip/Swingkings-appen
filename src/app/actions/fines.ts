@@ -222,7 +222,7 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
   notifyLater([opponentId], user.id, {
     title: "Godkend udfordringen ⚔️",
     body: `${user.name} melder ${outcome === "won" ? `sig selv` : "dig"} som vinder: ${description} — ${fineUnits(units)}`,
-    url: "/boder/udfordringer",
+    url: "/boder?udfordringer",
     tag: "challenge",
   });
   refresh();
@@ -259,7 +259,7 @@ export async function moveChallenge(_prev: ActionResult, formData: FormData): Pr
     notifyLater([challenge.winnerId, challenge.loserId, challenge.reportedById], user.id, {
       title: "Udfordringen er godkendt 🏆",
       body: `${challenge.winner.name} sendte ${fineUnits(result.units)} videre til ${challenge.loser.name}: ${challenge.description}`,
-      url: "/boder/udfordringer",
+      url: "/boder?udfordringer",
     });
   }
   refresh();

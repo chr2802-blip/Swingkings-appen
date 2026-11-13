@@ -60,7 +60,7 @@ export default async function OverviewPage() {
   const waiting = [
     { kind: "count" as const, count: pollsWaiting, href: "#feed", title: pollsWaiting === 1 ? "Afstemning" : "Afstemninger", note: "mangler dit svar" },
     { kind: "count" as const, count: newPosts, href: "#feed", title: newPosts === 1 ? "Nyt opslag" : "Nye opslag", note: "i feedet" },
-    { kind: "count" as const, count: waitingOnMe, href: "/boder/udfordringer", title: waitingOnMe === 1 ? "Udfordring" : "Udfordringer", note: "venter på dig" },
+    { kind: "count" as const, count: waitingOnMe, href: "/boder?udfordringer", title: waitingOnMe === 1 ? "Udfordring" : "Udfordringer", note: "venter på dig" },
   ].filter((tile) => tile.count > 0);
   type Tile = (typeof waiting)[number] | { kind: "tasks" } | { kind: "next" } | { kind: "king" };
   const tiles: Tile[] = [

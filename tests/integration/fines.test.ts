@@ -360,4 +360,34 @@ describe("fine data", () => {
     expect((await fineHistory(team.id, 2)).map((f) => f.reason)).toEqual(["Nyest", "Midt"]);
     expect(await fineHistory(other.team.id, 10)).toHaveLength(1);
   });
+
+  it("carries what a fine's sheet shows: the giver, the note, the activity and the challenge it came from", async () => {
+    const { team, admin, treasurer, anna, bo } = await makeSquad();
+    const match = await makeMatch(team.id, { opponent: "FC Nabo" });
+    await prisma.fine.create({
+      data: { teamId: team.id, playerId: anna.id, issuedById: treasurer.id, reason: "For sent", note: "Ti minutter", units: 5, unitPriceKr: 10, matchId: match.id },
+    });
+    await signIn(anna);
+    await createChallenge(undefined, formData({ opponentId: bo.id, outcome: "won", description: "Flest mål", units: "2" }));
+    const challenge = await prisma.challenge.findFirstOrThrow({ where: { teamId: team.id } });
+    await signIn(admin);
+    expect(await moveChallenge(undefined, formData({ id: challenge.id, move: "approve" }))).toEqual({ ok: true });
+
+    const fines = await fineHistory(team.id, 10);
+    const plain = fines.find((f) => f.reason === "For sent")!;
+    expect(plain).toMatchObject({ note: "Ti minutter", issuedBy: { name: "Kasserer" }, match: { opponent: "FC Nabo" }, challenge: null });
+    const moved = fines.filter((f) => f.challengeId === challenge.id);
+    expect(moved.map((f) => f.units).sort()).toEqual([-2, 2]);
+    for (const fine of moved) {
+      expect(fine.challenge).toMatchObject({
+        description: "Flest mål",
+        units: 2,
+        status: "SETTLED",
+        winner: { id: anna.id },
+        loser: { id: bo.id },
+        reportedBy: { name: "Anna" },
+        approvedBy: { name: admin.name },
+      });
+    }
+  });
 });

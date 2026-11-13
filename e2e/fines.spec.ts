@@ -76,31 +76,77 @@ test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
   expect(await db.fineType.count({ where: { teamId: team.id } })).toBe(1);
 });
 
-test("a challenge is reported, approved by a third player, and the stake moves to the loser", async ({ page, loginAs }) => {
+test("a challenge is reported from the board, approved in its sheet by a third player, and the stake moves to the loser", async ({ page, loginAs }) => {
   const { team, admin, anna, bo } = await squad();
   await db.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "For sent", units: 5, unitPriceKr: 10, issuedById: admin.id } });
   await loginAs(anna);
-  await page.goto("/boder/udfordringer");
+  await page.goto("/boder");
+  // Nothing waits yet, so there is nothing to tap.
+  await expect(page.getByRole("button", { name: /venter på godkendelse/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Udfordring" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "Meld en udfordring" });
   await dialog.getByLabel("Hvem spillede du mod?").selectOption({ label: "Bo" });
   await dialog.getByLabel("Hvem vandt?").selectOption({ label: "Jeg vandt" });
   await dialog.getByLabel("Hvad gik udfordringen ud på?").fill("Flest mål på træning");
   await dialog.getByLabel("Indsats (antal bøder)").fill("3");
   await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Venter på at en anden på holdet godkender.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Godkend" })).toHaveCount(0);
 
+  // The reporter sees it waiting, but may not approve it.
+  await page.getByRole("button", { name: "1 udfordring venter på godkendelse" }).click();
+  const sheet = page.getByRole("dialog", { name: "Udfordringer" });
+  await expect(sheet.getByText("Venter på at en anden på holdet godkender.")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Godkend" })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Luk" }).click();
+  await expect(sheet).toBeHidden();
+
+  // The notification's old link lands on the board with the sheet already open.
   await loginAs(admin);
   await page.goto("/boder/udfordringer");
-  await expect(page.getByRole("heading", { name: "Venter på din godkendelse" })).toBeVisible();
-  await page.getByRole("button", { name: "Godkend" }).click();
-  await expect(page.getByText(/3 bøder flyttet fra Anna til Bo · godkendt af/)).toBeVisible();
-
-  await page.goto("/boder");
+  await expect(page).toHaveURL(/\/boder\?udfordringer$/);
+  await expect(sheet.getByRole("heading", { name: "Venter på din godkendelse" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /1 udfordring venter på godkendelse.*1 på dig/ })).toBeAttached();
+  await sheet.getByRole("button", { name: "Godkend" }).click();
+  // The sheet stays open, and the challenge moves down among the settled ones.
+  await expect(sheet.getByText(/3 bøder flyttet fra Anna til Bo · godkendt af/)).toBeVisible();
+  await expect(sheet.getByText("Ingen udfordringer venter.")).toBeVisible();
+  await sheet.getByRole("button", { name: "Luk" }).click();
+  // Closed, it does not open again on a reload, and the banner is gone with the last one.
+  await expect(page).toHaveURL(/\/boder$/);
+  await expect(page.getByRole("button", { name: /venter på godkendelse/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Bo .*30 kr/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
+  expect(await db.fine.count({ where: { playerId: bo.id, units: 3, challengeId: { not: null } } })).toBe(1);
+});
+
+test("a fine in the history opens with what it was for, who gave it and when, and a challenge's fine shows the challenge", async ({ page, loginAs }) => {
+  const { team, admin, treasurer, anna, bo } = await squad();
+  await db.fine.create({
+    data: { teamId: team.id, playerId: anna.id, reason: "For sent", note: "Ti minutter efter fløjt", units: 5, unitPriceKr: 10, issuedById: treasurer.id },
+  });
+  const challenge = await db.challenge.create({
+    data: { teamId: team.id, reportedById: anna.id, winnerId: anna.id, loserId: bo.id, description: "Flest mål", units: 2, status: "SETTLED", approvedById: admin.id, settledAt: new Date() },
+  });
+  await db.fine.create({
+    data: { teamId: team.id, playerId: bo.id, reason: "Udfordring tabt: Flest mål", units: 2, unitPriceKr: 10, issuedById: admin.id, challengeId: challenge.id },
+  });
+  await loginAs(anna);
+  await page.goto("/boder");
+
+  await page.getByRole("button", { name: /Anna · For sent/ }).click();
+  const fine = page.getByRole("dialog", { name: "Bøde" });
+  await expect(fine.getByText("Ti minutter efter fløjt")).toBeVisible();
+  await expect(fine.getByText("Kasserer Kim")).toBeVisible();
+  await expect(fine.getByText("Udestående")).toBeVisible();
+  // Anna gave neither fine, and is no treasurer.
+  await expect(fine.getByRole("button", { name: "Slet bøden" })).toHaveCount(0);
+  await fine.getByRole("button", { name: "Luk" }).click();
+  await expect(fine).toBeHidden();
+
+  await page.getByRole("button", { name: /Bo · Udfordring tabt/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Udfordring" });
+  await expect(sheet.getByText("“Flest mål”")).toBeVisible();
+  await expect(sheet.getByText(/2 bøder flyttet fra Anna til Bo · godkendt af Træner/)).toBeVisible();
 });
 
 test("a treasurer resets a player, and a player cannot", async ({ page, loginAs }) => {
@@ -142,7 +188,6 @@ test("the front page leads with what you owe and what is in the box, and keeps t
   await expect(box).toContainText("60 kr");
   await expect(box).toContainText("50 kr udestående");
   await expect(page.getByRole("link", { name: /Bo .*40 kr/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: "⚔️ Udfordr dig ud af dem ›" })).toHaveAttribute("href", "/boder/udfordringer");
 
   // Only the newest five here; the oldest waits behind the link.
   await expect(page.getByText("Glemte bolde")).toBeVisible();
@@ -155,7 +200,10 @@ test("the front page leads with what you owe and what is in the box, and keeps t
   await expect(page.getByText(/· nulstillet/)).toBeVisible();
   await expect(page.getByText("De andres bøde")).toHaveCount(0);
   // A player deletes nothing here: none of these were given by Anna.
-  await expect(page.getByRole("button", { name: "Slet" })).toHaveCount(0);
+  await page.getByRole("button", { name: /Anna · Ældste bøde/ }).click();
+  await expect(page.getByRole("dialog", { name: "Bøde" }).getByText(/^Nulstillet /)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Slet bøden" })).toHaveCount(0);
+  await page.getByRole("dialog", { name: "Bøde" }).getByRole("button", { name: "Luk" }).click();
 
   await page.getByRole("link", { name: "Bødekassen" }).click();
   await expect(page).toHaveURL(/\/boder$/);
@@ -171,17 +219,17 @@ test("the history page lets whoever gave a fine take it back, and is empty befor
   await page.goto("/boder");
   await expect(page.getByRole("link", { name: /Du skylder/ })).toContainText("Ren tavle");
   await expect(page.getByRole("link", { name: "Se hele historikken" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Udfordr dig ud af dem/ })).toHaveCount(0);
 
   await db.fine.create({ data: { teamId: team.id, playerId: bo.id, issuedById: anna.id, reason: "Glemte bolde", units: 1, unitPriceKr: 10 } });
   await page.goto("/boder/historik");
-  await page.getByRole("button", { name: "Slet" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Slet bøden" }).click();
+  await page.getByRole("button", { name: /Bo · Glemte bolde/ }).click();
+  await page.getByRole("dialog", { name: "Bøde" }).getByRole("button", { name: "Slet bøden" }).click();
+  await page.getByRole("dialog", { name: "Slet bøden til Bo?" }).getByRole("button", { name: "Slet bøden" }).click();
   await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
   expect(await db.fine.count({ where: { teamId: team.id } })).toBe(0);
 });
 
-test("the board, the challenges and the catalogue are swiped between, and the dots say where you are", async ({ page, loginAs }) => {
+test("the board and the catalogue are swiped between, and the dots say where you are", async ({ page, loginAs }) => {
   const { team, treasurer, anna } = await squad();
   await db.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
   await db.fine.create({ data: { teamId: team.id, playerId: anna.id, issuedById: treasurer.id, reason: "Glemte bolde", units: 1, unitPriceKr: 10 } });
@@ -191,6 +239,10 @@ test("the board, the challenges and the catalogue are swiped between, and the do
   const dot = (name: string) => page.getByRole("tab", { name });
   await expect(title).toHaveText("Bødekassen");
   await expect(dot("Bødekassen")).toHaveAttribute("aria-selected", "true");
+  // Challenges have no page of their own: two dots, and the board reports them.
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Udfordring" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Giv bøde" })).toBeVisible();
   // Only the page shown is there to read and to tab through.
   await expect(page.getByRole("tabpanel")).toHaveCount(1);
   await expect(page.getByText("Hvad koster hvad.")).toBeHidden();
@@ -207,30 +259,20 @@ test("the board, the challenges and the catalogue are swiped between, and the do
   };
 
   await swipe(-290);
-  await expect(title).toHaveText("Udfordringer");
-  await expect(page).toHaveURL(/\/boder\/udfordringer$/);
-  await expect(dot("Udfordringer")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("button", { name: "Udfordring" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Giv bøde" })).toHaveCount(0);
-
-  await swipe(-290);
   await expect(title).toHaveText("Bødekatalog");
   await expect(page).toHaveURL(/\/boder\/katalog$/);
+  await expect(dot("Bødekatalog")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("For sent")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Giv bøde" })).toHaveCount(0);
   // The last page: there is nothing further to the right.
   await swipe(-290);
   await expect(title).toHaveText("Bødekatalog");
 
   await swipe(290);
-  await expect(title).toHaveText("Udfordringer");
-
-  // Without a finger: the dots, and the link on the board.
-  await dot("Bødekassen").click();
   await expect(title).toHaveText("Bødekassen");
   await expect(page).toHaveURL(/\/boder$/);
-  await page.getByRole("link", { name: /Udfordr dig ud af dem/ }).click();
-  await expect(title).toHaveText("Udfordringer");
-  await expect(page).toHaveURL(/\/boder\/udfordringer$/);
+
+  // Without a finger: the dots.
   await dot("Bødekatalog").click();
   await expect(title).toHaveText("Bødekatalog");
 

@@ -7,7 +7,8 @@ import { waitsOn } from "@/lib/challenges";
 import { fineUnits, kr } from "@/lib/money";
 import { Badge, Card, EmptyState, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
-import { SwipeLink, SwipePages } from "@/components/swipe-pages";
+import { SwipePages } from "@/components/swipe-pages";
+import { DetailSheet } from "@/components/detail-sheet";
 import { FineHistory } from "@/components/fine-history";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
@@ -21,17 +22,32 @@ import { Crown } from "@/components/crest";
 /** How many fines the board's page shows; the rest are on /boder/historik. */
 const RECENT = 5;
 
-/** The three pages of the fine box, in the order they are swiped through. */
-export const FINE_PAGES = ["/boder", "/boder/udfordringer", "/boder/katalog"] as const;
+/** The pages of the fine box, in the order they are swiped through. */
+export const FINE_PAGES = ["/boder", "/boder/katalog"] as const;
+
+/** `/boder?udfordringer` opens the board with the pending challenges on top (a notification's link). */
+export const CHALLENGES_PARAM = "udfordringer";
+
+/** How many settled or withdrawn challenges the challenges' sheet shows under the pending ones. */
+const CLOSED_SHOWN = 5;
 
 type Board = Awaited<ReturnType<typeof fineBoard>>;
 
 /**
- * The fine box: the board, the challenges and the catalogue as one screen to swipe
- * across. Each has its own address (`show`), and all three are read at once, so a swipe
- * never waits on the server.
+ * The fine box: the board and the catalogue as one screen to swipe across. Each has its
+ * own address (`show`), and both are read at once, so a swipe never waits on the server.
+ * Challenges have no page of their own: the board says how many wait for approval, and a
+ * tap opens them in a sheet (`openChallenges` opens it on arrival).
  */
-export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeof FINE_PAGES)[number] }) {
+export async function FinesScreen({
+  user,
+  show,
+  openChallenges = false,
+}: {
+  user: TeamUser;
+  show: (typeof FINE_PAGES)[number];
+  openChallenges?: boolean;
+}) {
   const db = teamDb(user.teamId);
   // One fine more than shown, so the page knows whether there is a history worth linking to.
   const [board, kings, recent, matches, open, closed] = await Promise.all([
@@ -43,7 +59,7 @@ export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeo
     db.challenge.findMany({
       where: { status: { in: ["SETTLED", "CANCELLED"] } },
       orderBy: { createdAt: "desc" },
-      take: 20,
+      take: CLOSED_SHOWN,
       include: challengeCardInclude,
     }),
   ]);
@@ -64,46 +80,71 @@ export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeo
           href: "/boder",
           title: "Bødekassen",
           action: (
-            <GiveFineDialog members={board.roster} fineTypes={board.fineTypes} finePriceKr={board.finePriceKr} matches={matches} />
-          ),
-          children: <BoardPage user={user} board={board} kings={kings.userIds} recent={recent} manages={manages} />,
-        },
-        {
-          href: "/boder/udfordringer",
-          title: "Udfordringer",
-          action: (
-            <ChallengeDialog
-              opponents={board.roster.filter((m) => m.userId !== user.id)}
-              finePriceKr={board.finePriceKr}
-              matches={matches}
-            />
+            <>
+              <ChallengeDialog
+                opponents={board.roster.filter((m) => m.userId !== user.id)}
+                finePriceKr={board.finePriceKr}
+                matches={matches}
+              />
+              <GiveFineDialog members={board.roster} fineTypes={board.fineTypes} finePriceKr={board.finePriceKr} matches={matches} />
+            </>
           ),
           children: (
-            <>
-              <p className="mb-6 text-sm text-slate-500">
-                Udfordr dig ud af dine bøder. Meld resultatet, en anden godkender, og taberen overtager indsatsen.
-              </p>
-              {waiting.length > 0 && (
-                <section className="mb-8">
-                  <SectionTitle>Venter på din godkendelse</SectionTitle>
-                  <div className="space-y-3">{waiting.map(card)}</div>
-                </section>
-              )}
-              <section className="mb-8">
-                <SectionTitle>Dine meldinger</SectionTitle>
-                {others.length === 0 ? (
-                  <EmptyState icon="⚔️">Ingen udfordringer venter. Hvem tør?</EmptyState>
-                ) : (
-                  <div className="space-y-3">{others.map(card)}</div>
-                )}
-              </section>
-              {closed.length > 0 && (
-                <section>
-                  <SectionTitle>Afsluttede</SectionTitle>
-                  <div className="space-y-3">{closed.map(card)}</div>
-                </section>
-              )}
-            </>
+            <BoardPage
+              user={user}
+              board={board}
+              kings={kings.userIds}
+              recent={recent}
+              manages={manages}
+              challenges={
+                <DetailSheet
+                  title="Udfordringer"
+                  hidden={open.length === 0}
+                  initialOpen={openChallenges}
+                  clearParam={CHALLENGES_PARAM}
+                  triggerClassName="press-card mb-6 flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-amber-900"
+                  trigger={
+                    <>
+                      <span aria-hidden className="text-xl">
+                        ⚔️
+                      </span>
+                      <span className="min-w-0 flex-1 text-sm font-medium">
+                        {open.length} {open.length === 1 ? "udfordring venter" : "udfordringer venter"} på godkendelse
+                      </span>
+                      {waiting.length > 0 && <Badge tone="amber">{waiting.length} på dig</Badge>}
+                      <span aria-hidden>›</span>
+                    </>
+                  }
+                >
+                  <p className="mb-6 text-sm text-slate-500">
+                    Meld resultatet, en anden godkender, og taberen overtager indsatsen.
+                  </p>
+                  {waiting.length > 0 && (
+                    <section className="mb-8">
+                      <SectionTitle>Venter på din godkendelse</SectionTitle>
+                      <div className="space-y-3">{waiting.map(card)}</div>
+                    </section>
+                  )}
+                  {others.length > 0 && (
+                    <section className="mb-8">
+                      <SectionTitle>Venter på en anden</SectionTitle>
+                      <div className="space-y-3">{others.map(card)}</div>
+                    </section>
+                  )}
+                  {open.length === 0 && (
+                    <div className="mb-8">
+                      <EmptyState icon="⚔️">Ingen udfordringer venter.</EmptyState>
+                    </div>
+                  )}
+                  {closed.length > 0 && (
+                    <section>
+                      <SectionTitle>Senest afgjort</SectionTitle>
+                      <div className="space-y-3">{closed.map(card)}</div>
+                    </section>
+                  )}
+                </DetailSheet>
+              }
+            />
           ),
         },
         {
@@ -123,12 +164,15 @@ function BoardPage({
   kings,
   recent,
   manages,
+  challenges,
 }: {
   user: TeamUser;
   board: Board;
   kings: string[];
   recent: Awaited<ReturnType<typeof fineHistory>>;
   manages: boolean;
+  /** The pending challenges' banner and the sheet it opens. */
+  challenges: React.ReactNode;
 }) {
   const totals = board.balances.reduce(
     (sum, row) => ({ fined: sum.fined + row.finedKr, owed: sum.owed + row.owesKr }),
@@ -156,15 +200,9 @@ function BoardPage({
             <p className="text-xs text-slate-500">{kr(totals.owed)} udestående</p>
           </div>
         </div>
-        {mine && mine.units > 0 && (
-          <SwipeLink
-            href="/boder/udfordringer"
-            className="press-card block border-t border-slate-100 px-4 py-2.5 text-sm font-medium text-[var(--accent-text)]"
-          >
-            ⚔️ Udfordr dig ud af dem ›
-          </SwipeLink>
-        )}
       </Card>
+
+      {challenges}
 
       <section className="mb-8">
         <SectionTitle
