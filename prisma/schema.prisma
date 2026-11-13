@@ -599,8 +599,9 @@ model PostComment {
 }
 
 /**
- * A picture, its bytes in Postgres: a full size and a thumbnail, both already shrunk
- * in the browser and measured again on arrival (`src/lib/photo-file.ts`).
+ * A picture: a full size and a thumbnail, both already shrunk in the browser and measured
+ * again on arrival (`src/lib/photo-file.ts`). The bytes are in Supabase Storage when
+ * `storageKey` is set (`src/lib/storage.ts`), and in Postgres otherwise.
  */
 model Photo {
   id          String   @id @default(cuid())
@@ -608,10 +609,12 @@ model Photo {
   contentType String
   width       Int
   height      Int
-  bytes       Bytes
+  bytes       Bytes?
   thumbWidth  Int
   thumbHeight Int
-  thumbBytes  Bytes
+  thumbBytes  Bytes?
+  /// Where the bytes are when they are in storage: `<teamId>/<id>`, with `-thumb` on the small one.
+  storageKey  String?
   createdAt   DateTime @default(now())
 
   team Team @relation("PhotoTeam", fields: [teamId], references: [id], onDelete: Cascade)

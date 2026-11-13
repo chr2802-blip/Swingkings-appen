@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { applyCalendar } from "./kampklar";
 import { settleChallenge } from "./fines";
+import { removeStored } from "./photos";
 
 /**
  * A team worth looking at: "Swingkings Demo" with eight made-up players, a fine catalogue,
@@ -18,7 +19,9 @@ export const DEMO_EMAIL_DOMAIN = "@demo.swingkings.dk";
 
 /** Deletes every demo team and demo player; the counts say what went. */
 export async function removeDemoTeam() {
+  const stored = await prisma.photo.findMany({ where: { team: { isDemo: true }, storageKey: { not: null } }, select: { storageKey: true } });
   const teams = await prisma.team.deleteMany({ where: { isDemo: true } });
+  await removeStored(stored.map((photo) => photo.storageKey));
   const users = await prisma.user.deleteMany({ where: { isDemo: true } });
   return { teams: teams.count, users: users.count };
 }

@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "./prisma";
+import { fullKey, putObject, removeObjects, storageConfig, thumbKey } from "./storage";
 import { teamDb } from "./team-db";
 import { MAX_PHOTO_BYTES, MAX_THUMB_BYTES, PHOTO_FIELD, checkPhotoBytes } from "./photo-file";
 
@@ -10,6 +12,12 @@ import { MAX_PHOTO_BYTES, MAX_THUMB_BYTES, PHOTO_FIELD, checkPhotoBytes } from "
 const UNCLAIMED_MS = 60 * 60 * 1000;
 const SWEEP_LIMIT = 20;
 
+/**
+ * How many pictures one team may keep — a ceiling on what one team can fill the storage
+ * with, at a few hundred kilobytes each. Deleting posts and messages frees room.
+ */
+export const MAX_TEAM_PHOTOS = 2000;
+
 export type PhotoResult = { ok: true; id: string } | { ok: false; error: string };
 
 /** Checks an upload — measured from its own bytes — and files it under a team. */
@@ -19,19 +27,46 @@ export async function storePhoto(teamId: string, full: Uint8Array, thumb: Uint8A
   const checkedThumb = checkPhotoBytes(thumb, MAX_THUMB_BYTES);
   if (!checkedThumb.ok) return checkedThumb;
 
-  const photo = await prisma.photo.create({
-    data: {
-      teamId,
-      contentType: checkedFull.meta.contentType,
-      width: checkedFull.meta.width,
-      height: checkedFull.meta.height,
-      bytes: Buffer.from(full),
-      thumbWidth: checkedThumb.meta.width,
-      thumbHeight: checkedThumb.meta.height,
-      thumbBytes: Buffer.from(thumb),
-    },
-    select: { id: true },
-  });
+  if ((await prisma.photo.count({ where: { teamId } })) >= MAX_TEAM_PHOTOS) {
+    return { ok: false, error: "Holdet har nået grænsen for billeder. Slet gamle opslag eller beskeder med billeder." };
+  }
+
+  const meta = {
+    teamId,
+    contentType: checkedFull.meta.contentType,
+    width: checkedFull.meta.width,
+    height: checkedFull.meta.height,
+    thumbWidth: checkedThumb.meta.width,
+    thumbHeight: checkedThumb.meta.height,
+  };
+
+  const storage = storageConfig();
+  if (!storage) {
+    const photo = await prisma.photo.create({
+      data: { ...meta, bytes: Buffer.from(full), thumbBytes: Buffer.from(thumb) },
+      select: { id: true },
+    });
+    return { ok: true, id: photo.id };
+  }
+
+  // The objects first, the row second: a row never points at nothing. One that fails
+  // half-way leaves objects behind, which are taken away again.
+  const key = `${teamId}/${randomUUID()}`;
+  try {
+    await putObject(storage, fullKey(key), full, meta.contentType);
+    await putObject(storage, thumbKey(key), thumb, checkedThumb.meta.contentType);
+  } catch (error) {
+    await removeObjects(storage, [fullKey(key), thumbKey(key)]);
+    console.error(JSON.stringify({ event: "photo_store_failed", error: error instanceof Error ? error.message : String(error) }));
+    return { ok: false, error: "Billedet kunne ikke gemmes. Prøv igen." };
+  }
+  let photo;
+  try {
+    photo = await prisma.photo.create({ data: { ...meta, storageKey: key }, select: { id: true } });
+  } catch (error) {
+    await removeObjects(storage, [fullKey(key), thumbKey(key)]);
+    throw error;
+  }
   return { ok: true, id: photo.id };
 }
 
@@ -73,13 +108,40 @@ export async function readPhotoChoice(
 }
 
 /**
+ * Removes the objects of pictures whose rows are gone. `keys` were read before the rows
+ * were deleted; anything in them is no one's now.
+ */
+export async function removeStored(keys: (string | null)[]) {
+  const storage = storageConfig();
+  const named = keys.filter((key): key is string => Boolean(key));
+  if (!storage || named.length === 0) return;
+  await removeObjects(storage, named.flatMap((key) => [fullKey(key), thumbKey(key)]));
+}
+
+/**
+ * Deletes the pictures among `ids` that nothing points at, rows and objects both, and
+ * says how many went. One something still points at is left alone — it may have been
+ * claimed since we looked, so the delete asks again and only what is truly gone loses
+ * its objects.
+ */
+async function deleteUnclaimed(teamId: string, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const db = teamDb(teamId);
+  const rows = await db.photo.findMany({ where: { id: { in: ids }, ...UNCLAIMED }, select: { id: true, storageKey: true } });
+  if (rows.length === 0) return 0;
+  await db.photo.deleteMany({ where: { id: { in: rows.map((row) => row.id) }, ...UNCLAIMED } });
+  const left = new Set((await db.photo.findMany({ where: { id: { in: rows.map((row) => row.id) } }, select: { id: true } })).map((row) => row.id));
+  const gone = rows.filter((row) => !left.has(row.id));
+  await removeStored(gone.map((row) => row.storageKey));
+  return gone.length;
+}
+
+/**
  * Removes pictures nothing points at any more. Already gone is not an error, and one
  * something still points at is left alone.
  */
 export async function discardPhotos(teamId: string, photoIds: (string | null | undefined)[]) {
-  const ids = photoIds.filter((id): id is string => Boolean(id));
-  if (ids.length === 0) return;
-  await teamDb(teamId).photo.deleteMany({ where: { id: { in: ids }, ...UNCLAIMED } });
+  await deleteUnclaimed(teamId, photoIds.filter((id): id is string => Boolean(id)));
 }
 
 export async function discardPhoto(teamId: string, photoId: string | null | undefined) {
@@ -100,9 +162,7 @@ export async function sweepUnclaimedPhotos(teamId: string) {
     select: { id: true },
     take: SWEEP_LIMIT,
   });
-  if (unclaimed.length === 0) return 0;
-  await db.photo.deleteMany({ where: { id: { in: unclaimed.map((photo) => photo.id) } } });
-  return unclaimed.length;
+  return deleteUnclaimed(teamId, unclaimed.map((photo) => photo.id));
 }
 
 /**
