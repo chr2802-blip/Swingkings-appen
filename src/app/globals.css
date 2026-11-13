@@ -453,9 +453,54 @@ h1,
   translate: 0 calc(100% + 32px);
 }
 
+/*
+ * The page's "+" (`CreateFab`). On a phone it sits in the gap in the middle of the tab bar,
+ * standing a little proud of it; when the bar goes it slides to the bottom right corner
+ * and stays. From `md` up there is no tab bar, and it lives in that corner.
+ */
+.app-create {
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+  translate: -50% 0;
+  transition:
+    translate var(--dur-base) var(--ease-arrive),
+    scale var(--dur-release) var(--ease-spring),
+    background-color var(--dur-base);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-create:active {
+  scale: 0.92;
+  transition-duration: var(--dur-press);
+}
+
+:root[data-bars="hidden"] .app-create {
+  translate: calc(50vw - 100% - max(1rem, env(safe-area-inset-right))) 0;
+}
+
+.app-create-gap {
+  display: none;
+}
+
+:root:has(.app-create) .app-create-gap {
+  display: block;
+}
+
+@media (min-width: 48rem) {
+  .app-create,
+  :root[data-bars="hidden"] .app-create {
+    left: auto;
+    right: max(1.5rem, env(safe-area-inset-right));
+    bottom: 1.5rem;
+    translate: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-topbar,
-  .app-bottombar {
+  .app-bottombar,
+  .app-create {
     transition: none;
   }
 }

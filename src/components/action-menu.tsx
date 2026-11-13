@@ -4,6 +4,7 @@ import { createContext, useContext, useState } from "react";
 import { createPortal } from "react-dom";
 import { Modal, ModalBody } from "@/components/modal";
 import { Button, type Variant } from "@/components/ui";
+import { CreateFab, useCreateFab } from "@/components/create-button";
 
 type MenuSlot = { slot: HTMLElement | null; close: () => void };
 
@@ -19,12 +20,15 @@ export function ActionMenu({
   label = "Handlinger",
   title,
   icon = false,
+  trigger,
   children,
 }: {
   label?: string;
   /** The drawer's heading; the button's label when not given. */
   title?: string;
   icon?: boolean;
+  /** Draws the button that opens the drawer, in place of the default ones. */
+  trigger?: (open: () => void) => React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -32,7 +36,9 @@ export function ActionMenu({
   const close = () => setOpen(false);
   return (
     <>
-      {icon ? (
+      {trigger ? (
+        trigger(() => setOpen(true))
+      ) : icon ? (
         <button
           type="button"
           aria-label={label}
@@ -90,6 +96,8 @@ export function MenuTrigger({
   children: React.ReactNode;
 }) {
   const menu = useMenuSlot();
+  const fab = useCreateFab();
+  if (!menu && fab) return <CreateFab label={textOf(children)} onClick={onClick} />;
   if (!menu) {
     return (
       <Button type="button" variant={variant} className={className} onClick={onClick}>
@@ -113,6 +121,13 @@ export function MenuTrigger({
     </li>,
     menu.slot,
   );
+}
+
+/** A trigger's words, for the "+" button's name. */
+function textOf(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  return "Opret";
 }
 
 /**

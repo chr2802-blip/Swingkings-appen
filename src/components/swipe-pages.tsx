@@ -7,8 +7,6 @@ export type SwipePage = {
   /** Where this page lives; the address bar follows the swipe, so a reload stays put. */
   href: string;
   title: string;
-  /** The header's button while this page is the one shown. */
-  action?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -20,8 +18,7 @@ const SETTLE_MS = 120;
 const ARRIVE_MS = 1500;
 
 /**
- * Pages side by side that a finger swipes between, with the title, the header's button
- * and a row of dots following along. The dots are the tabs: tap one, or use them from a
+ * Pages side by side that a finger swipes between, with the title and a row of dots following along. The dots are the tabs: tap one, or use them from a
  * keyboard, where there is nothing to swipe with.
  *
  * The pages sit in a row that scrolls sideways and snaps, so the swipe is the browser's
@@ -140,14 +137,6 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
     <GoTo.Provider value={goToHref}>
       <div className="mb-2 flex min-h-11 items-center justify-between gap-3">
         <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight break-words">{pages[active].title}</h1>
-        {pages.map(
-          (page, index) =>
-            page.action && (
-              <div key={page.href} hidden={index !== active} className={index === active ? "flex shrink-0 gap-2" : undefined}>
-                {page.action}
-              </div>
-            ),
-        )}
       </div>
 
       <div role="tablist" aria-label="Bødekassens sider" className="mb-4 flex justify-center">

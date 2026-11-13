@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/modal";
 import { DialogForm } from "@/components/form-dialog";
 import { Button, Field, Input, Textarea } from "@/components/ui";
+import { MenuTrigger } from "@/components/action-menu";
 import { MultiPhotoField } from "@/components/multi-photo-field";
 import { PlayerChecklist } from "@/components/player-checklist";
 import { createPost } from "@/app/actions/social";
@@ -20,9 +21,7 @@ export function PostDialog({ members }: { members: Member[] }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button type="button" onClick={() => setOpen(true)}>
-        Nyt opslag
-      </Button>
+      <MenuTrigger onClick={() => setOpen(true)}>Nyt opslag</MenuTrigger>
       <Modal open={open} onClose={() => setOpen(false)} title="Del med holdet">
         {open && (
           <DialogForm action={createPost} submitLabel="Del" onDone={() => setOpen(false)} onCancel={() => setOpen(false)}>

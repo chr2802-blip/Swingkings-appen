@@ -23,7 +23,7 @@ export function ChallengeDialog({
 }) {
   const [units, setUnits] = useState(1);
   return (
-    <FormDialog trigger="Udfordring" title="Meld en udfordring" action={createChallenge} submitLabel="Send til godkendelse">
+    <FormDialog trigger="Meld udfordring" title="Meld en udfordring" action={createChallenge} submitLabel="Send til godkendelse">
       <Field label="Hvem spillede du mod?" htmlFor="opponentId">
         <Select id="opponentId" name="opponentId" defaultValue="" required>
           <option value="" disabled>

@@ -15,6 +15,7 @@ import { ChallengeDialog } from "@/components/challenge-dialog";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
+import { CreateMenu } from "@/components/create-button";
 import { removeFineType, resetFines } from "@/app/actions/fines";
 import { Crown } from "@/components/crest";
 
@@ -57,63 +58,60 @@ export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeo
   );
 
   return (
-    <SwipePages
-      initial={FINE_PAGES.indexOf(show)}
-      pages={[
-        {
-          href: "/boder",
-          title: "Bødekassen",
-          action: (
-            <GiveFineDialog members={board.roster} fineTypes={board.fineTypes} finePriceKr={board.finePriceKr} matches={matches} />
-          ),
-          children: <BoardPage user={user} board={board} kings={kings.userIds} recent={recent} manages={manages} />,
-        },
-        {
-          href: "/boder/udfordringer",
-          title: "Udfordringer",
-          action: (
-            <ChallengeDialog
-              opponents={board.roster.filter((m) => m.userId !== user.id)}
-              finePriceKr={board.finePriceKr}
-              matches={matches}
-            />
-          ),
-          children: (
-            <>
-              <p className="mb-6 text-sm text-slate-500">
-                Udfordr dig ud af dine bøder. Meld resultatet, en anden godkender, og taberen overtager indsatsen.
-              </p>
-              {waiting.length > 0 && (
-                <section className="mb-8">
-                  <SectionTitle>Venter på din godkendelse</SectionTitle>
-                  <div className="space-y-3">{waiting.map(card)}</div>
-                </section>
-              )}
-              <section className="mb-8">
-                <SectionTitle>Dine meldinger</SectionTitle>
-                {others.length === 0 ? (
-                  <EmptyState icon="⚔️">Ingen udfordringer venter. Hvem tør?</EmptyState>
-                ) : (
-                  <div className="space-y-3">{others.map(card)}</div>
+    <>
+      {/* The same "+" on all three pages: whichever is shown, these are what one makes here. */}
+      <CreateMenu>
+        <GiveFineDialog members={board.roster} fineTypes={board.fineTypes} finePriceKr={board.finePriceKr} matches={matches} />
+        <ChallengeDialog opponents={board.roster.filter((m) => m.userId !== user.id)} finePriceKr={board.finePriceKr} matches={matches} />
+        {manages && <FineTypeDialog finePriceKr={board.finePriceKr} />}
+      </CreateMenu>
+      <SwipePages
+        initial={FINE_PAGES.indexOf(show)}
+        pages={[
+          {
+            href: "/boder",
+            title: "Bødekassen",
+            children: <BoardPage user={user} board={board} kings={kings.userIds} recent={recent} manages={manages} />,
+          },
+          {
+            href: "/boder/udfordringer",
+            title: "Udfordringer",
+            children: (
+              <>
+                <p className="mb-6 text-sm text-slate-500">
+                  Udfordr dig ud af dine bøder. Meld resultatet, en anden godkender, og taberen overtager indsatsen.
+                </p>
+                {waiting.length > 0 && (
+                  <section className="mb-8">
+                    <SectionTitle>Venter på din godkendelse</SectionTitle>
+                    <div className="space-y-3">{waiting.map(card)}</div>
+                  </section>
                 )}
-              </section>
-              {closed.length > 0 && (
-                <section>
-                  <SectionTitle>Afsluttede</SectionTitle>
-                  <div className="space-y-3">{closed.map(card)}</div>
+                <section className="mb-8">
+                  <SectionTitle>Dine meldinger</SectionTitle>
+                  {others.length === 0 ? (
+                    <EmptyState icon="⚔️">Ingen udfordringer venter. Hvem tør?</EmptyState>
+                  ) : (
+                    <div className="space-y-3">{others.map(card)}</div>
+                  )}
                 </section>
-              )}
-            </>
-          ),
-        },
-        {
-          href: "/boder/katalog",
-          title: "Bødekatalog",
-          action: manages && <FineTypeDialog finePriceKr={board.finePriceKr} />,
-          children: <CataloguePage board={board} manages={manages} />,
-        },
-      ]}
-    />
+                {closed.length > 0 && (
+                  <section>
+                    <SectionTitle>Afsluttede</SectionTitle>
+                    <div className="space-y-3">{closed.map(card)}</div>
+                  </section>
+                )}
+              </>
+            ),
+          },
+          {
+            href: "/boder/katalog",
+            title: "Bødekatalog",
+            children: <CataloguePage board={board} manages={manages} />,
+          },
+        ]}
+      />
+    </>
   );
 }
 
@@ -131,7 +129,10 @@ function BoardPage({
   manages: boolean;
 }) {
   const totals = board.balances.reduce(
-    (sum, row) => ({ fined: sum.fined + row.finedKr, owed: sum.owed + row.owesKr }),
+    (sum, row) => ({
+      fined: sum.fined + row.finedKr,
+      owed: sum.owed + row.owesKr,
+    }),
     { fined: 0, owed: 0 },
   );
   const mine = board.balances.find((row) => row.userId === user.id);
@@ -145,9 +146,7 @@ function BoardPage({
             <Link href={`/boder/spiller/${user.id}`} className="press-card px-4 py-3">
               <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Du skylder</p>
               <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
-              <p className="text-xs text-slate-500">
-                {mine.units > 0 ? `${fineUnits(mine.units)} · se dem ›` : "Ren tavle 🙌"}
-              </p>
+              <p className="text-xs text-slate-500">{mine.units > 0 ? `${fineUnits(mine.units)} · se dem ›` : "Ren tavle 🙌"}</p>
             </Link>
           )}
           <div className="px-4 py-3">

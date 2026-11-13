@@ -16,7 +16,7 @@ export function FineTypeDialog({
   const [units, setUnits] = useState(fineType?.units ?? 1);
   return (
     <FormDialog
-      trigger={fineType ? "Ret" : "Ny bøde"}
+      trigger={fineType ? "Ret" : "Ny bøde i kataloget"}
       triggerVariant={fineType ? "ghost" : "primary"}
       title={fineType ? "Ret bøde" : "Ny bøde i kataloget"}
       action={saveFineType}
