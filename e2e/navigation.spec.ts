@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 
@@ -76,4 +77,87 @@ test("a super admin makes the test team, lands on it, and takes it away again", 
   await expect(page.getByRole("listitem").filter({ hasText: "Swingkings Demo" })).toBeHidden();
   expect(await db.team.count({ where: { name: "Swingkings Demo" } })).toBe(0);
   expect(await db.user.count({ where: { email: { endsWith: "@demo.swingkings.dk" } } })).toBe(0);
+});
+
+/** Where the tab stands in its history — Chromium's Navigation API, which the suite runs on. */
+const historyIndex = (page: Page) =>
+  page.evaluate(() => (window as unknown as { navigation: { currentEntry: { index: number } } }).navigation.currentEntry.index);
+
+test("browser back closes the dialog and stays on the page behind it", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await page.getByRole("link", { name: "Aktiviteter" }).first().click();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  const before = await historyIndex(page);
+
+  await page.getByRole("button", { name: "Ny aktivitet" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ny aktivitet" });
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => historyIndex(page)).toBe(before + 1);
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  expect(await historyIndex(page)).toBe(before);
+
+  expect(await page.evaluate(() => history.scrollRestoration)).toBe("auto");
+
+  // Closed by its own button, the dialog takes its history step with it: one back leaves the page.
+  await page.getByRole("button", { name: "Ny aktivitet" }).click();
+  await expect.poll(() => historyIndex(page)).toBe(before + 1);
+  await dialog.getByRole("button", { name: "Annuller" }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => historyIndex(page)).toBe(before);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/oversigt$/);
+});
+
+test("a drawer and the dialog it opens share one history step, and a saved form leaves none", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: new Date(Date.now() + 3 * 86_400_000) } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  const before = await historyIndex(page);
+
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  const menu = page.getByRole("dialog", { name: "Handlinger" });
+  await menu.getByRole("button", { name: "Ny opgave" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ny opgave" });
+  await expect(dialog).toBeVisible();
+  await expect(menu).toBeHidden();
+  await expect.poll(() => historyIndex(page)).toBe(before + 1);
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+  await expect(menu).toBeHidden();
+  expect(await historyIndex(page)).toBe(before);
+
+  // The action replaces the history entry's state on its way; the step still goes when the dialog does.
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await menu.getByRole("button", { name: "Ny opgave" }).click();
+  await dialog.getByLabel("Opgave").fill("Købe nye bolde");
+  await dialog.getByRole("button", { name: "Opret opgave" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Købe nye bolde")).toBeVisible();
+  await expect.poll(() => historyIndex(page)).toBe(before);
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}$`));
+});
+
+test("a form that moves on to a new page leaves the browser's history alone", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  const before = await historyIndex(page);
+  await page.getByRole("button", { name: "Ny aktivitet" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ny aktivitet" });
+  await dialog.getByLabel("Navn").fill("Afslutningsfest");
+  await dialog.getByLabel("Starter").fill("2031-06-01T18:00");
+  await dialog.getByRole("button", { name: "Gem aktivitet" }).click();
+  await expect(page.getByRole("heading", { name: "Afslutningsfest", level: 1 })).toBeVisible();
+  // The dialog went with the page it was on; nothing may step back off the new one.
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(/\/aktiviteter\/\w+$/);
+  expect(await historyIndex(page)).toBeGreaterThan(before);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect(dialog).toBeHidden();
 });
