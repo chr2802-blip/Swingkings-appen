@@ -430,3 +430,47 @@ test("a finger scrolling up and down the board leaves the page its own height; o
   await expect(page).toHaveURL(/\/boder\/historik$/);
   await expect(page.getByText("Bøde 40")).toBeVisible();
 });
+
+test("a short page beside a long history ends where its own content does", async ({ page, loginAs }) => {
+  const { team, treasurer, anna } = await squad();
+  await db.fine.createMany({
+    data: Array.from({ length: 40 }, (_, i) => ({
+      teamId: team.id,
+      playerId: anna.id,
+      reason: `Bøde ${i + 1}`,
+      units: 1,
+      unitPriceKr: 10,
+      issuedById: treasurer.id,
+    })),
+  });
+  await loginAs(anna);
+  // The document is the page: nothing put away beside it reaches below the body, where
+  // a scroll would show only the frame's colour.
+  const beyond = () =>
+    page.evaluate(() => document.documentElement.scrollHeight - Math.round(document.body.getBoundingClientRect().height));
+  const tab = (name: string) => page.getByRole("tab", { name });
+
+  await page.goto("/boder");
+  await expect(tab("Bødetavlen")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  expect(await beyond()).toBe(0);
+
+  // Through the history and on to the catalogue, which is short again.
+  await tab("Historik").click();
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  const long = await page.evaluate(() => document.documentElement.scrollHeight);
+  expect(await beyond()).toBe(0);
+
+  await tab("Katalog").click();
+  await expect(page).toHaveURL(/\/boder\/katalog$/);
+  await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  expect(await beyond()).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThan(long);
+
+  // A reload on the short page is no taller either.
+  await page.reload();
+  await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel")).toHaveCount(1);
+  expect(await beyond()).toBe(0);
+});

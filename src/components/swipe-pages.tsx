@@ -243,7 +243,11 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
               role="tabpanel"
               aria-label={page.title}
               hidden={!ready && away}
-              className={ready ? `w-full shrink-0 snap-start snap-always px-4 pb-4 ${away ? "invisible h-0 overflow-hidden" : ""}` : ""}
+              // `relative`, so what a page places absolutely (an `sr-only` word in a row) is
+              // put away with it. Left to the app's page, those words kept their place far
+              // down a long history and the document stayed as tall as it: a short page
+              // could be scrolled past its end, into the bare frame behind it.
+              className={ready ? `relative w-full shrink-0 snap-start snap-always px-4 pb-4 ${away ? "invisible h-0 overflow-hidden" : ""}` : ""}
             >
               {page.children}
             </div>
