@@ -85,8 +85,9 @@ npm run db:seed           # super admin + holdet "Swingkings" med startkatalog
 npm run dev
 ```
 
-`npm run db:demo` laver et demohold med spillere, bøder, udfordringer, aktiviteter, opgaver, chat
-og feed (login `mads@demo.swingkings.dk` / `demo-password`).
+`npm run db:demo` laver et demohold midt i en sæson: 18 spillere, fire måneders bøder og udfordringer,
+omkring 40 aktiviteter med opgaver, chat og et feed med billeder og afstemninger (login
+`mads@demo.swingkings.dk` / `demo-password`).
 
 ## Tests
 
