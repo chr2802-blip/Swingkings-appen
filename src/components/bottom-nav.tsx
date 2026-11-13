@@ -49,7 +49,7 @@ export function BottomNav() {
   }, [activeIndex]);
 
   return (
-    <nav className="app-bottombar app-glass fixed inset-x-0 bottom-0 z-40 rounded-t-3xl border-t border-[var(--band-line)] shadow-[0_-10px_28px_-18px_rgb(40_50_30/0.45)] md:hidden">
+    <nav className="app-bottombar bg-[var(--band)] fixed inset-x-0 bottom-0 z-40 rounded-t-3xl border-t border-[var(--band-line)] shadow-[0_-10px_28px_-18px_rgb(40_50_30/0.45)] md:hidden">
       <ul ref={list} className="relative mx-auto flex max-w-lg items-stretch pb-[env(safe-area-inset-bottom)]">
         {pill && activeIndex >= 0 && (
           <li

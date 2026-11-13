@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen overflow-x-clip">
-      <header className="app-topbar app-glass sticky top-0 z-30 pt-[env(safe-area-inset-top)] text-[var(--band-text)]">
+      <header className="app-topbar bg-[var(--band)] sticky top-0 z-30 pt-[env(safe-area-inset-top)] text-[var(--band-text)]">
         <div className="mx-auto flex max-w-5xl items-center gap-x-6 py-2.5 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))]">
           <TeamMenu
             teams={user.teams}
