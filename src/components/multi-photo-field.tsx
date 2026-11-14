@@ -12,8 +12,9 @@ import { PHOTO_FIELD } from "@/lib/photo-file";
  * KB at most) and uploaded the moment it is picked, one after the other, so the post
  * itself only carries ids — in the order they were chosen.
  */
-export function MultiPhotoField({ max }: { max: number }) {
-  const [photoIds, setPhotoIds] = useState<string[]>([]);
+export function MultiPhotoField({ max, initial = [] }: { max: number; initial?: string[] }) {
+  // `initial`: the pictures a post being edited already has.
+  const [photoIds, setPhotoIds] = useState<string[]>(initial);
   const [busy, setBusy] = useState<{ done: number; of: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);

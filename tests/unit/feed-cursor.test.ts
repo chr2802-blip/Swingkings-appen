@@ -24,6 +24,14 @@ describe("the feed's cursor", () => {
     expect(nextFeedCursor([], 3)).toBeNull();
   });
 
+  it("does not count pinned posts in a page, nor end a page on one", () => {
+    const pinned = { ...post("2026-11-01T10:00:00.000Z", "pin"), pinnedAt: new Date("2026-11-13T10:00:00.000Z") };
+    const rest = [post("2026-11-12T10:00:00.000Z", "a"), { ...post("2026-11-11T10:00:00.000Z", "b"), pinnedAt: null }];
+    expect(nextFeedCursor([pinned, ...rest], 2)).toBe("2026-11-11T10:00:00.000Z_b");
+    expect(nextFeedCursor([pinned, ...rest], 3)).toBeNull();
+    expect(nextFeedCursor([pinned], 1)).toBeNull();
+  });
+
   it("pages ten posts at a time, one number for both modules", () => {
     expect(FEED_PAGE).toBe(10);
     expect(FROM_PAGE_MODULE).toBe(FEED_PAGE);

@@ -188,10 +188,66 @@ export async function deletePost(_prev: ActionResult, formData: FormData): Promi
     select: { id: true, authorId: true, photos: { select: { photoId: true } } },
   });
   if (!post) return ok();
-  if (post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke dit opslag.");
+  if (!canChangePost(user, post)) return fail("Det er ikke dit opslag.");
   await db.post.deleteMany({ where: { id: post.id } });
   // The pictures belonged to this post and nothing else.
   await discardPhotos(user.teamId, post.photos.map((p) => p.photoId));
+  revalidatePath("/oversigt");
+  return ok();
+}
+
+/** Who may change or delete a post: whoever wrote it, and the team's admins. */
+function canChangePost(user: Awaited<ReturnType<typeof requireTeamUser>>, post: { authorId: string }) {
+  return post.authorId === user.id || canAdministerTeam(user, user.teamId);
+}
+
+/**
+ * Changing a post afterwards: its words and its pictures (kept, taken off, added, in the
+ * order sent). The poll is left as it was made — people have voted on those answers. A
+ * post still needs something in it.
+ */
+export async function editPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  const db = teamDb(user.teamId);
+  const post = await db.post.findFirst({
+    where: { id: String(formData.get("id") ?? "") },
+    select: { id: true, authorId: true, photos: { select: { photoId: true } }, poll: { select: { id: true } } },
+  });
+  if (!post) return fail("Opslaget findes ikke.");
+  if (!canChangePost(user, post)) return fail("Det er ikke dit opslag.");
+  const text = body.safeParse(formData.get("body") ?? undefined);
+  if (!text.success) return fail(`Teksten er for lang (højst ${MAX_MESSAGE} tegn).`);
+  const before = post.photos.map((p) => p.photoId);
+  const photos = await readPhotoChoices(formData, user.teamId, MAX_POST_PHOTOS, before);
+  if (!photos.ok) return fail(photos.error);
+  if (!text.data && photos.photoIds.length === 0 && !post.poll) return fail("Et opslag skal have tekst eller billeder.");
+
+  // `PostPhoto` has no team of its own; the post was found through `teamDb` just above.
+  await prisma.$transaction([
+    prisma.postPhoto.deleteMany({ where: { postId: post.id } }),
+    prisma.postPhoto.createMany({ data: photos.photoIds.map((photoId, position) => ({ postId: post.id, photoId, position })) }),
+    prisma.post.updateMany({ where: { id: post.id, teamId: user.teamId }, data: { body: text.data, editedAt: new Date() } }),
+  ]);
+  // The pictures taken off belonged to this post and nothing else.
+  await discardPhotos(user.teamId, before.filter((id) => !photos.photoIds.includes(id)));
+  revalidatePath("/oversigt");
+  return ok();
+}
+
+/**
+ * Pinning puts a post at the top of the feed; pressing again lets it go. For everybody on
+ * the team, whoever wrote the post. The form says which way (`pinned`), so two people
+ * pressing at once end where they both meant.
+ */
+export async function pinPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  const db = teamDb(user.teamId);
+  const post = await db.post.findFirst({ where: { id: String(formData.get("id") ?? "") }, select: { id: true, pinnedAt: true } });
+  if (!post) return fail("Opslaget findes ikke.");
+  const pin = formData.get("pinned") === "on";
+  if (pin !== (post.pinnedAt !== null)) {
+    await db.post.updateMany({ where: { id: post.id }, data: { pinnedAt: pin ? new Date() : null } });
+  }
   revalidatePath("/oversigt");
   return ok();
 }

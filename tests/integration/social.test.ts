@@ -7,6 +7,8 @@ import {
   deleteChatMessage,
   deleteComment,
   deletePost,
+  editPost,
+  pinPost,
   sendChatMessage,
   toggleLike,
   vote,
@@ -118,6 +120,89 @@ describe("feed posts", () => {
     expect(await prisma.photo.count()).toBe(0);
   });
 
+  it("edits a post's words and pictures: kept, taken off and added, in the order sent", async () => {
+    const { team, anna } = await makeSquad();
+    const [a, b, c] = await Promise.all([1, 2, 3].map(() => makePhoto(team.id)));
+    await signIn(anna);
+    await createPost(undefined, formData({ body: "Sejr!", [PHOTO_FIELD]: [a!.id, b!.id] }));
+    const post = await prisma.post.findFirstOrThrow();
+    expect(post.editedAt).toBeNull();
+
+    expect(await editPost(undefined, formData({ id: post.id, body: " Sejr 3-1! ", [PHOTO_FIELD]: [c!.id, a!.id] }))).toEqual({ ok: true });
+    const [read] = await feedPosts(team.id, { id: anna.id, canAdminister: false });
+    expect(read).toMatchObject({ body: "Sejr 3-1!", photoIds: [c!.id, a!.id] });
+    expect(read!.editedAt).toBeInstanceOf(Date);
+    expect(read!.createdAt).toEqual(post.createdAt);
+    // The picture taken off belonged to nothing else and is gone.
+    expect(await prisma.photo.findUnique({ where: { id: b!.id } })).toBeNull();
+    expect(await prisma.photo.count()).toBe(2);
+  });
+
+  it("lets the author and an admin edit a post, and no other role", async () => {
+    const { team, anna, bo, treasurer, admin } = await makeSquad();
+    const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Før" } });
+    for (const other of [bo, treasurer]) {
+      await signIn(other);
+      expect(await editPost(undefined, formData({ id: post.id, body: "Kapret" }))).toEqual({ ok: false, error: "Det er ikke dit opslag." });
+    }
+    expect((await prisma.post.findUniqueOrThrow({ where: { id: post.id } })).body).toBe("Før");
+    await signIn(admin);
+    expect(await editPost(undefined, formData({ id: post.id, body: "Rettet af træneren" }))).toEqual({ ok: true });
+    const after = await prisma.post.findUniqueOrThrow({ where: { id: post.id } });
+    // Still Anna's post.
+    expect(after).toMatchObject({ body: "Rettet af træneren", authorId: anna.id });
+  });
+
+  it("refuses an edit that empties the post, is too long, or attaches a picture that is not free", async () => {
+    const { team, anna } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Før" } });
+    const taken = await makePhoto(team.id);
+    await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, photos: { create: { photoId: taken.id, position: 0 } } } });
+    await signIn(anna);
+    expect(await editPost(undefined, formData({ id: post.id, body: "  " }))).toEqual({ ok: false, error: "Et opslag skal have tekst eller billeder." });
+    expect((await editPost(undefined, formData({ id: post.id, body: "x".repeat(4001) })))?.ok).toBe(false);
+    const eleven = await Promise.all(Array.from({ length: 11 }, () => makePhoto(team.id)));
+    expect(await editPost(undefined, formData({ id: post.id, [PHOTO_FIELD]: eleven.map((p) => p.id) }))).toEqual({ ok: false, error: "Højst 10 billeder pr. opslag." });
+    // Another post's picture, and another team's.
+    for (const id of [taken.id, (await makePhoto(other.team.id)).id]) {
+      expect(await editPost(undefined, formData({ id: post.id, body: "x", [PHOTO_FIELD]: [id] }))).toEqual({ ok: false, error: "Et af billederne findes ikke længere." });
+    }
+    expect(await prisma.post.findUniqueOrThrow({ where: { id: post.id } })).toMatchObject({ body: "Før", editedAt: null });
+    expect(await prisma.postPhoto.count({ where: { photoId: taken.id } })).toBe(1);
+  });
+
+  it("leaves a poll alone when its post is edited, and the post may then be only the poll", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const { post, poll, optionIds } = await makePoll(team.id, anna.id);
+    await signIn(bo);
+    await vote(undefined, formData({ pollId: poll.id, optionId: optionIds[0]! }));
+    await signIn(anna);
+    expect(await editPost(undefined, formData({ id: post.id, body: "Husk at stemme" }))).toEqual({ ok: true });
+    expect(await editPost(undefined, formData({ id: post.id, body: "" }))).toEqual({ ok: true });
+    expect((await prisma.post.findUniqueOrThrow({ where: { id: post.id } })).body).toBeNull();
+    expect(await prisma.pollOption.count()).toBe(2);
+    expect(await prisma.pollVote.count()).toBe(1);
+  });
+
+  it("lets every role pin and unpin anybody's post; pressing twice the same way changes nothing", async () => {
+    const { team, anna, bo, treasurer, admin } = await makeSquad();
+    const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Vigtigt" } });
+    const pinnedAt = async () => (await prisma.post.findUniqueOrThrow({ where: { id: post.id } })).pinnedAt;
+    for (const user of [bo, treasurer, admin, anna]) {
+      await signIn(user);
+      expect(await pinPost(undefined, formData({ id: post.id, pinned: "on" }))).toEqual({ ok: true });
+      const first = await pinnedAt();
+      expect(first).toBeInstanceOf(Date);
+      expect(await pinPost(undefined, formData({ id: post.id, pinned: "on" }))).toEqual({ ok: true });
+      expect(await pinnedAt()).toEqual(first);
+      expect(await pinPost(undefined, formData({ id: post.id, pinned: "off" }))).toEqual({ ok: true });
+      expect(await pinnedAt()).toBeNull();
+    }
+    // Pinning is not an edit.
+    expect((await prisma.post.findUniqueOrThrow({ where: { id: post.id } })).editedAt).toBeNull();
+  });
+
   it("likes, unlikes, comments and deletes comments", async () => {
     const { team, anna, bo } = await makeSquad();
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "x" } });
@@ -155,7 +240,7 @@ describe("feed posts", () => {
     ]);
   });
 
-  it("cannot like, comment on or delete another team's post", async () => {
+  it("cannot like, comment on, edit, pin or delete another team's post", async () => {
     const { anna } = await makeSquad();
     const other = await makeSquad("Andre");
     const theirs = await prisma.post.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "x" } });
@@ -165,12 +250,17 @@ describe("feed posts", () => {
     expect(await addComment(undefined, formData({ postId: theirs.id, body: "x" }))).toEqual({ ok: false, error: "Opslaget findes ikke." });
     await deleteComment(undefined, formData({ id: comment.id }));
     await deletePost(undefined, formData({ id: theirs.id }));
+    expect(await editPost(undefined, formData({ id: theirs.id, body: "Kapret" }))).toEqual({ ok: false, error: "Opslaget findes ikke." });
+    expect(await pinPost(undefined, formData({ id: theirs.id, pinned: "on" }))).toEqual({ ok: false, error: "Opslaget findes ikke." });
+    expect(await prisma.post.findUniqueOrThrow({ where: { id: theirs.id } })).toMatchObject({ body: "x", pinnedAt: null, editedAt: null });
     expect(await prisma.post.count()).toBe(1);
     expect(await prisma.postComment.count()).toBe(1);
   });
 
   it("needs a session", async () => {
     await expectRedirectToLogin(() => createPost(undefined, formData({ body: "x" })));
+    await expectRedirectToLogin(() => editPost(undefined, formData({ id: "x", body: "x" })));
+    await expectRedirectToLogin(() => pinPost(undefined, formData({ id: "x", pinned: "on" })));
   });
 });
 
