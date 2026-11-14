@@ -45,11 +45,14 @@ export function ChallengeCard({
   viewerId,
   managesFines,
   finePriceKr,
+  children,
 }: {
   challenge: ChallengeView;
   viewerId: string;
   managesFines: boolean;
   finePriceKr: number;
+  /** More about the challenge, drawn at the foot of the same card (a fine's own facts). */
+  children?: React.ReactNode;
 }) {
   const moves = movesFor(c, viewerId, managesFines);
   const fields = (move: string) => ({ id: c.id, move });
@@ -90,6 +93,7 @@ export function ChallengeCard({
           {moves.includes("cancel") && <ActionButton action={moveChallenge} fields={fields("cancel")} label="Træk tilbage" variant="ghost" />}
         </div>
       )}
+      {children}
     </Card>
   );
 }

@@ -218,7 +218,6 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
   const types = board.fineTypes;
   return (
     <>
-      <p className="mb-3 text-sm text-slate-500">Hvad koster hvad. 1 bøde = {kr(board.finePriceKr)}.</p>
       {types.length === 0 && (
         <EmptyState icon="📜">
           {manages ? "Kataloget er tomt. Opret holdets bøder, så er de klar, når der skal deles ud." : "Kataloget er tomt endnu."}
