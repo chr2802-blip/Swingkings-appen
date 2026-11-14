@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { holdHistoryEntry } from "@/components/modal-history";
 
-const EXIT_MS = 200;
+/** How long a sheet takes to leave; it is still on screen for this long after it closes. */
+export const EXIT_MS = 200;
 
 // Sheets can overlap — the action drawer is still closing as the dialog it opened comes
 // up — so the page is locked while any is mounted, and unlocked by the last to go.

@@ -27,7 +27,18 @@ const noChange = () => () => {};
  * Drawn into <body>: the page sits in an element that animates in, and a transformed
  * ancestor would make `fixed` mean "fixed to the page" instead of to the screen.
  */
-export function CreateFab({ label, onClick, expanded }: { label: string; onClick: () => void; expanded?: boolean }) {
+export function CreateFab({
+  label,
+  onClick,
+  expanded,
+  above = expanded,
+}: {
+  label: string;
+  onClick: () => void;
+  expanded?: boolean;
+  /** Drawn over the sheets rather than under them: while its drawer is open or leaving. */
+  above?: boolean;
+}) {
   const browser = useSyncExternalStore(
     noChange,
     () => true,
@@ -41,7 +52,7 @@ export function CreateFab({ label, onClick, expanded }: { label: string; onClick
       aria-haspopup="dialog"
       aria-expanded={expanded}
       onClick={onClick}
-      className={`app-create fixed ${expanded ? "z-[60]" : "z-[45]"} flex h-15 w-15 items-center justify-center rounded-full bg-[var(--create)] text-[var(--create-text)] shadow-[0_10px_24px_-6px_rgb(15_25_40/0.6)] ring-4 ring-[var(--band)] hover:bg-[var(--create-hover)] md:ring-0`}
+      className={`app-create fixed ${above ? "z-[60]" : "z-[45]"} flex h-15 w-15 items-center justify-center rounded-full bg-[var(--create)] text-[var(--create-text)] shadow-[0_10px_24px_-6px_rgb(15_25_40/0.6)] ring-4 ring-[var(--band)] hover:bg-[var(--create-hover)] md:ring-0`}
     >
       <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden>
         <path d="M12 5v14M5 12h14" />
@@ -57,7 +68,7 @@ export function CreateFab({ label, onClick, expanded }: { label: string; onClick
  */
 export function CreateMenu({ children }: { children: React.ReactNode }) {
   return (
-    <ActionMenu label="Opret" roomBelow trigger={({ open, toggle }) => <CreateFab label="Opret" onClick={toggle} expanded={open} />}>
+    <ActionMenu label="Opret" roomBelow trigger={({ open, above, toggle }) => <CreateFab label="Opret" onClick={toggle} expanded={open} above={above} />}>
       {children}
     </ActionMenu>
   );

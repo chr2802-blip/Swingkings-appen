@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Modal, ModalBody } from "@/components/modal";
+import { EXIT_MS, Modal, ModalBody } from "@/components/modal";
 import { Button, type Variant } from "@/components/ui";
 import { CreateFab, useCreateFab } from "@/components/create-button";
 
@@ -29,18 +29,32 @@ export function ActionMenu({
   title?: string;
   icon?: boolean;
   /** Draws the button that opens (and closes) the drawer, in place of the default ones. */
-  trigger?: (state: { open: boolean; toggle: () => void }) => React.ReactNode;
+  /** `above`: the drawer is open or still sliding away, and the button stays on top of it. */
+  trigger?: (state: { open: boolean; above: boolean; toggle: () => void }) => React.ReactNode;
   /** Leaves the drawer's foot free on a phone, for a button that stays above it. */
   roomBelow?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  // Closed by a row, the drawer hands over to that row's dialog and the button goes under
+  // it at once. Dismissed, the drawer slides away on its own, and the button stays above
+  // it until it has gone — dropping behind it halfway makes the button flicker.
+  const [leaving, setLeaving] = useState(false);
   const close = () => setOpen(false);
+  const dismiss = () => {
+    setOpen(false);
+    setLeaving(true);
+  };
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = setTimeout(() => setLeaving(false), EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [leaving]);
   return (
     <>
       {trigger ? (
-        trigger({ open, toggle: () => setOpen((was) => !was) })
+        trigger({ open, above: open || leaving, toggle: () => (open ? dismiss() : setOpen(true)) })
       ) : icon ? (
         <button
           type="button"
@@ -63,7 +77,7 @@ export function ActionMenu({
           </svg>
         </Button>
       )}
-      <Modal open={open} onClose={close} title={title ?? label} size="drawer">
+      <Modal open={open} onClose={dismiss} title={title ?? label} size="drawer">
         <ModalBody
           className={roomBelow ? "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-5" : "pb-[max(1.25rem,env(safe-area-inset-bottom))]"}
         >
