@@ -35,7 +35,7 @@ test("a player is kept out of the team settings", async ({ page, loginAs }) => {
 test("a coach removes a player, who no longer reaches the team", async ({ page, loginAs }) => {
   const { team, admin, bo } = await squad();
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/spillere");
   const row = page.getByRole("listitem").filter({ has: page.getByText("Bo", { exact: true }) });
   await row.getByRole("button", { name: "Handlinger for Bo" }).click();
   await page.getByRole("dialog", { name: "Bo" }).getByRole("button", { name: "Fjern fra holdet" }).click();
