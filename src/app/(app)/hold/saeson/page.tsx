@@ -204,7 +204,7 @@ function SetupStep() {
       <h2 className="text-lg font-semibold text-slate-900">Passer opsætningen til den nye sæson?</h2>
       <ul className="list-disc space-y-2 pl-5">
         <li>
-          <Go href="/hold#medlemmer">Roller</Go> — hvem er bødekasseformand og admin?
+          <Go href="/hold/spillere">Roller</Go> — hvem er bødekasseformand og admin?
         </li>
         <li>
           <Go href="/boder/katalog">Bødekataloget</Go> — skal der nye bøder til?

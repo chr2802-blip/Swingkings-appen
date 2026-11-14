@@ -1,7 +1,8 @@
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamRoster } from "@/lib/roster";
-import { Badge, ButtonLink, buttonClass, Card, PageHeader } from "@/components/ui";
+import { Badge, buttonClass, Card, PageHeader } from "@/components/ui";
+import { MemberTable } from "@/components/member-table";
 import { PayDialog } from "@/components/pay-dialog";
 import { prisma } from "@/lib/prisma";
 import { kr } from "@/lib/money";
@@ -25,13 +26,6 @@ export default async function RosterPage() {
       <PageHeader
         title="Spillere"
         description={`${roster.length} på ${user.teamName} · ${paid} af ${roster.length} har betalt kontingent`}
-        action={
-          admin && (
-            <ButtonLink href="/hold#medlemmer" variant="secondary">
-              Ret roller
-            </ButtonLink>
-          )
-        }
       />
       {me && !me.duesPaid && pay && (
         <Card className="mb-4 flex items-center justify-between gap-3 text-sm">
@@ -46,32 +40,36 @@ export default async function RosterPage() {
           />
         </Card>
       )}
-      <Card padded={false}>
-        <ul className="divide-y divide-slate-100">
-          {roster.map((member) => (
-            <li key={member.userId}>
-              <Link href={playerHref(member.userId)} className="press-card flex items-center gap-3 px-4 py-3">
-              <Avatar name={member.name} photoId={member.photoId} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">
-                  {member.name}
-                  {member.shirtNumber != null && <span className="ml-1.5 text-sm text-slate-400">#{member.shirtNumber}</span>}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
-                  {member.role !== "PLAYER" && <Badge tone="accent">{ROLE_LABEL[member.role]}</Badge>}
-                  {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
-                  {!member.takesTasks && <Badge>Ingen opgaver</Badge>}
+      {admin ? (
+        <MemberTable roster={roster} userId={user.id} />
+      ) : (
+        <Card padded={false}>
+          <ul className="divide-y divide-slate-100">
+            {roster.map((member) => (
+              <li key={member.userId}>
+                <Link href={playerHref(member.userId)} className="press-card flex items-center gap-3 px-4 py-3">
+                <Avatar name={member.name} photoId={member.photoId} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {member.name}
+                    {member.shirtNumber != null && <span className="ml-1.5 text-sm text-slate-400">#{member.shirtNumber}</span>}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
+                    {member.role !== "PLAYER" && <Badge tone="accent">{ROLE_LABEL[member.role]}</Badge>}
+                    {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
+                    {!member.takesTasks && <Badge>Ingen opgaver</Badge>}
+                  </div>
                 </div>
-              </div>
-              <span aria-hidden className="text-slate-300">
-                ›
-              </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </Card>
+                <span aria-hidden className="text-slate-300">
+                  ›
+                </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <p className="mt-6 text-center text-sm">
         <Link href="/hold/saesoner" className="font-medium text-[var(--accent)] underline-offset-2 hover:underline">
           Tidligere sæsoner
