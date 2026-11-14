@@ -150,6 +150,33 @@ describe("members", () => {
     });
   });
 
+  it("marks kontingent paid with the day it was paid, keeps that day, clears it, and leaves it alone when not asked", async () => {
+    const { team, admin, anna } = await makeSquad();
+    await signIn(admin);
+    const dues = async () =>
+      (await prisma.teamMember.findUniqueOrThrow({ where: { userId_teamId: { userId: anna.id, teamId: team.id } } })).duesPaidAt;
+
+    await updateMember(undefined, formData({ userId: anna.id, role: "PLAYER", duesPaid: ["off", "on"] }));
+    const paidAt = await dues();
+    expect(paidAt).not.toBeNull();
+    await updateMember(undefined, formData({ userId: anna.id, role: "PLAYER", duesPaid: ["off", "on"] }));
+    expect(await dues()).toEqual(paidAt);
+    // A form without the box (an older page) changes nothing.
+    await updateMember(undefined, formData({ userId: anna.id, role: "PLAYER" }));
+    expect(await dues()).toEqual(paidAt);
+    await updateMember(undefined, formData({ userId: anna.id, role: "PLAYER", duesPaid: ["off"] }));
+    expect(await dues()).toBeNull();
+  });
+
+  it("lets only an admin mark kontingent", async () => {
+    const { team, treasurer, anna } = await makeSquad();
+    for (const who of [treasurer, anna]) {
+      await signIn(who);
+      await expectDenied(() => updateMember(undefined, formData({ userId: anna.id, role: "PLAYER", duesPaid: ["off", "on"] })));
+    }
+    expect((await prisma.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).duesPaidAt).toBeNull();
+  });
+
   it("refuses a shirt number that is not a number", async () => {
     const { admin, anna } = await makeSquad();
     await signIn(admin);

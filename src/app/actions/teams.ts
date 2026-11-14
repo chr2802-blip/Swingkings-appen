@@ -121,6 +121,7 @@ const memberSchema = z.object({
     .transform((v) => (v ? Number(v) : null))
     .refine((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 999), "Trøjenummeret skal være et tal."),
   takesTasks: z.enum(["on", "off"]).optional(),
+  duesPaid: z.enum(["on", "off"]).optional(),
 });
 
 export async function updateMember(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -139,12 +140,16 @@ export async function updateMember(_prev: ActionResult, formData: FormData): Pro
     if (admins <= 1) return fail("Holdet skal have mindst én admin.");
   }
 
+  // Kontingent: marked when it is ticked and was not, so the date says when it was paid;
+  // left alone by a form that does not carry the box.
+  const duesPaid = formData.has("duesPaid") ? formData.getAll("duesPaid").includes("on") : undefined;
   await db.teamMember.updateMany({
     where: { userId: form.fields.userId },
     data: {
       role: form.fields.role,
       shirtNumber: form.fields.shirtNumber,
       takesTasks: formData.getAll("takesTasks").includes("on"),
+      ...(duesPaid === undefined ? {} : { duesPaidAt: duesPaid ? (member.duesPaidAt ?? new Date()) : null }),
     },
   });
   revalidatePath("/hold", "layout");

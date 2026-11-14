@@ -73,7 +73,15 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
 - **Money**: a `Fine` copies `units` and `unitPriceKr` when given — never recompute from the
   current catalogue or price. Nobody pays: there is no payment model. Outstanding = the
   fines without `clearedAt` (`balances` in `src/lib/money.ts`), never below zero. The
-  treasurer resets (`resetFines`) by setting `clearedAt`; nothing is deleted.
+  treasurer resets (`resetFines`) by setting `clearedAt` — a reset means paid; nothing is
+  deleted until the season ends.
+- **Seasons**: "Start ny sæson" (`startNewSeason`, admin, `/hold/saeson`) saves a `Season`
+  summary (`summarizeSeason`, `src/lib/season.ts`), then deletes every fine and challenge,
+  the activities that have taken place (their jobs and sign-ups go with them), done jobs
+  with no activity and the invitation links, and clears `TeamMember.duesPaidAt`
+  (kontingent, marked by an admin in `updateMember`, seen by everybody). All in one
+  transaction guarded on `Team.seasonStartedAt`, so a double press ends it once. The
+  KampKlar sync brings nothing back from before `seasonStartedAt`.
 - **Challenges** are reported after they are played (winner, loser, stake) and go through
   when anybody but the reporter approves — the only flow (`canMove` in
   `src/lib/challenges.ts`). Approving is `settleChallenge` (`src/lib/fines.ts`): the

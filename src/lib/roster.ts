@@ -8,6 +8,8 @@ export type RosterMember = {
   role: MemberRole;
   shirtNumber: number | null;
   takesTasks: boolean;
+  /** Whether this season's kontingent is marked paid. Everybody on the team sees it. */
+  duesPaid: boolean;
   /** The installation's super admin, who is that on every team whatever `role` says. */
   superAdmin: boolean;
 };
@@ -19,6 +21,7 @@ export async function teamRoster(teamId: string): Promise<RosterMember[]> {
       role: true,
       shirtNumber: true,
       takesTasks: true,
+      duesPaidAt: true,
       user: { select: { id: true, name: true, photoId: true, role: true } },
     },
   });
@@ -30,6 +33,7 @@ export async function teamRoster(teamId: string): Promise<RosterMember[]> {
       role: m.role,
       shirtNumber: m.shirtNumber,
       takesTasks: m.takesTasks,
+      duesPaid: m.duesPaidAt !== null,
       superAdmin: m.user.role === "SUPER_ADMIN",
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "da"));

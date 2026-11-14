@@ -13,7 +13,7 @@ describe("teamRoster", () => {
     await makeMember(other.id, "Fremmed");
     const roster = await teamRoster(team.id);
     expect(roster.map((m) => m.name)).toEqual(["anna", "Bo", "Zara", "Ævar", "Øjvind", "Åse"]);
-    expect(roster[0]).toMatchObject({ role: "PLAYER", shirtNumber: null, takesTasks: true, photoId: null });
+    expect(roster[0]).toMatchObject({ role: "PLAYER", shirtNumber: null, takesTasks: true, duesPaid: false, photoId: null });
   });
 });
 

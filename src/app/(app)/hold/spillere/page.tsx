@@ -10,11 +10,12 @@ export default async function RosterPage() {
   const user = await requireTeamUser();
   const admin = canAdministerTeam(user, user.teamId);
   const roster = await teamRoster(user.teamId);
+  const paid = roster.filter((m) => m.duesPaid).length;
   return (
     <div>
       <PageHeader
         title="Spillere"
-        description={`${roster.length} på ${user.teamName}`}
+        description={`${roster.length} på ${user.teamName} · ${paid} af ${roster.length} har betalt kontingent`}
         action={
           admin && (
             <ButtonLink href="/hold#medlemmer" variant="secondary">
@@ -37,6 +38,7 @@ export default async function RosterPage() {
                 <div className="flex flex-wrap gap-1.5">
                   {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
                   {member.role !== "PLAYER" && <Badge tone="accent">{ROLE_LABEL[member.role]}</Badge>}
+                  {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
                   {!member.takesTasks && <Badge>Ingen opgaver</Badge>}
                 </div>
               </div>
@@ -48,6 +50,11 @@ export default async function RosterPage() {
           ))}
         </ul>
       </Card>
+      <p className="mt-6 text-center text-sm">
+        <Link href="/hold/saesoner" className="font-medium text-[var(--accent)] underline-offset-2 hover:underline">
+          Tidligere sæsoner
+        </Link>
+      </p>
     </div>
   );
 }
