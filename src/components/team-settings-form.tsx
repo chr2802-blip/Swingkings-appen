@@ -10,7 +10,15 @@ import { THEMES } from "@/lib/theme";
 export function TeamSettingsForm({
   team,
 }: {
-  team: { name: string; theme: TeamTheme; finePriceKr: number; calendarUrl: string | null; photoId: string | null };
+  team: {
+    name: string;
+    theme: TeamTheme;
+    finePriceKr: number;
+    calendarUrl: string | null;
+    photoId: string | null;
+    mobilePayBox: string | null;
+    duesKr: number | null;
+  };
 }) {
   return (
     <ActionForm action={updateTeam} submitLabel="Gem" className="space-y-5">
@@ -36,6 +44,16 @@ export function TeamSettingsForm({
       </fieldset>
       <Field label="Pris for én bøde (kr)" htmlFor="finePriceKr" hint="Gælder nye bøder. Allerede givne bøder beholder deres pris.">
         <Input id="finePriceKr" name="finePriceKr" type="number" inputMode="numeric" min={1} max={1000} defaultValue={team.finePriceKr} required />
+      </Field>
+      <Field
+        label="MobilePay Box"
+        htmlFor="mobilePayBox"
+        hint="Hvor kontingent og bøder betales. Spillerne får en “Betal”-knap med boxnummer og beløb. Betalinger markeres stadig i hånden."
+      >
+        <Input id="mobilePayBox" name="mobilePayBox" placeholder="fx 9162TV" autoCapitalize="characters" defaultValue={team.mobilePayBox ?? ""} />
+      </Field>
+      <Field label="Kontingent pr. sæson (kr)" htmlFor="duesKr" hint="Vises på “Betal kontingent”. Tomt: intet beløb vises.">
+        <Input id="duesKr" name="duesKr" type="number" inputMode="numeric" min={1} max={100000} defaultValue={team.duesKr ?? ""} />
       </Field>
       <Field
         label="Kalenderlink fra DBU KampKlar"

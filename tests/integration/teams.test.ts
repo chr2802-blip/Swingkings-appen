@@ -35,6 +35,32 @@ describe("updateTeam", () => {
     });
   });
 
+  it("sets the MobilePay Box however it is typed, and what kontingent costs, and clears both", async () => {
+    const { team, admin } = await makeSquad();
+    await signIn(admin);
+    expect(await updateTeam(undefined, teamForm({ mobilePayBox: " 9162 tv ", duesKr: "600" }))).toEqual({ ok: true });
+    expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: "9162TV", duesKr: 600 });
+    // A form without the fields leaves them be.
+    await updateTeam(undefined, teamForm());
+    expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: "9162TV", duesKr: 600 });
+    await updateTeam(undefined, teamForm({ mobilePayBox: "", duesKr: "" }));
+    expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: null, duesKr: null });
+  });
+
+  it("refuses a box number that is not one, and a kontingent that is not whole kroner", async () => {
+    const { team, admin } = await makeSquad();
+    await signIn(admin);
+    expect(await updateTeam(undefined, teamForm({ mobilePayBox: "9162-TV" }))).toEqual({
+      ok: false,
+      error: "Boxnummeret er bogstaver og tal, fx 9162TV.",
+    });
+    expect(await updateTeam(undefined, teamForm({ duesKr: "12.5" }))).toEqual({
+      ok: false,
+      error: "Kontingentet skal være et helt antal kroner.",
+    });
+    expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: null, duesKr: null });
+  });
+
   it("refuses a link that is not an address, and a price outside 1–1000", async () => {
     const { admin } = await makeSquad();
     await signIn(admin);

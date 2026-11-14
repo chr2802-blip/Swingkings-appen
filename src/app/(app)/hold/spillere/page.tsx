@@ -1,7 +1,10 @@
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamRoster } from "@/lib/roster";
-import { Badge, ButtonLink, Card, PageHeader } from "@/components/ui";
+import { Badge, ButtonLink, buttonClass, Card, PageHeader } from "@/components/ui";
+import { PayDialog } from "@/components/pay-dialog";
+import { prisma } from "@/lib/prisma";
+import { kr } from "@/lib/money";
 import { Avatar } from "@/components/photo";
 import { playerHref } from "@/components/player-link";
 import Link from "next/link";
@@ -9,8 +12,12 @@ import Link from "next/link";
 export default async function RosterPage() {
   const user = await requireTeamUser();
   const admin = canAdministerTeam(user, user.teamId);
-  const roster = await teamRoster(user.teamId);
+  const [roster, team] = await Promise.all([
+    teamRoster(user.teamId),
+    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { mobilePayBox: true, duesKr: true } }),
+  ]);
   const paid = roster.filter((m) => m.duesPaid).length;
+  const me = roster.find((m) => m.userId === user.id);
   return (
     <div>
       <PageHeader
@@ -24,6 +31,19 @@ export default async function RosterPage() {
           )
         }
       />
+      {me && !me.duesPaid && team.mobilePayBox && (
+        <Card className="mb-4 flex items-center justify-between gap-3 text-sm">
+          <span>Du mangler at betale kontingent{team.duesKr ? ` (${kr(team.duesKr)})` : ""}.</span>
+          <PayDialog
+            kind="dues"
+            box={team.mobilePayBox}
+            amountKr={team.duesKr}
+            name={me.name}
+            trigger="Betal"
+            triggerClassName={buttonClass("primary", "shrink-0")}
+          />
+        </Card>
+      )}
       <Card padded={false}>
         <ul className="divide-y divide-slate-100">
           {roster.map((member) => (

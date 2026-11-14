@@ -75,6 +75,10 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   fines without `clearedAt` (`balances` in `src/lib/money.ts`), never below zero. The
   treasurer resets (`resetFines`) by setting `clearedAt` — a reset means paid; nothing is
   deleted until the season ends.
+- **Paying** is in MobilePay, to the team's `Team.mobilePayBox` (admin sets it, with
+  `duesKr`). MobilePay Box has no API: `PayDialog` only shows the box, the amount and the
+  message (`src/lib/pay.ts`); nothing is marked paid by it — the treasurer still resets
+  fines and an admin still ticks kontingent.
 - **Seasons**: "Start ny sæson" (`startNewSeason`, admin, `/hold/saeson`) saves a `Season`
   summary (`summarizeSeason`, `src/lib/season.ts`), then deletes every fine and challenge,
   the activities that have taken place (their jobs and sign-ups go with them), done jobs

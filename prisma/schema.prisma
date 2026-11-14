@@ -89,6 +89,14 @@ model Team {
   calendarUrl      String?
   /// When the calendar was last read successfully.
   calendarSyncedAt DateTime?
+  /**
+   * The team's MobilePay Box ("9162TV"), where kontingent and fines are paid. The app
+   * only says where and how much (`src/lib/pay.ts`): MobilePay Box has no API, so an
+   * admin still marks kontingent paid and the treasurer still resets the fines.
+   */
+  mobilePayBox     String?
+  /// What a season's kontingent costs in kroner, shown on "Betal kontingent"; null when not set.
+  duesKr           Int?
   /// Made by "Opret testhold" (`src/lib/demo-team.ts`); the only team "Slet testhold" removes.
   isDemo           Boolean   @default(false)
   /**
