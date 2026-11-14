@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
 import { FEED_PAGE } from "./feed-page";
 import { isOpen, tally } from "./polls";
@@ -26,13 +27,20 @@ export function decodeFeedCursor(value: string): FeedCursor | null {
 }
 
 /** The cursor after a page, or null when the page was the last one. */
-export function nextFeedCursor(posts: FeedCursor[], take: number): string | null {
-  const last = posts.at(-1);
-  return last && posts.length === take ? encodeFeedCursor(last) : null;
+export function nextFeedCursor(posts: (FeedCursor & { pinnedAt?: Date | null })[], take: number): string | null {
+  // Pinned posts come before the pages and are not counted in them.
+  const paged = posts.filter((post) => !post.pinnedAt);
+  const last = paged.at(-1);
+  return last && paged.length === take ? encodeFeedCursor(last) : null;
 }
 
+/** At most this many pinned posts are shown at the top; more than that is no longer a top. */
+export const MAX_PINNED_SHOWN = 20;
+
 /**
- * The feed's posts, with each poll already turned into what the viewer may see.
+ * The feed's posts, with each poll already turned into what the viewer may see. The first
+ * page is the pinned posts and then `take` of the others; a page after a cursor is `take`
+ * of the others.
  *
  * This is where an anonymous poll stays anonymous on the way to the phone: its votes
  * have no voter to send, and the only per-person fact read is whether the *viewer* has a
@@ -45,40 +53,56 @@ export async function feedPosts(
   viewer: { id: string; canAdminister: boolean },
   { take = FEED_PAGE, after = null, now = new Date() }: { take?: number; after?: FeedCursor | null; now?: Date } = {},
 ) {
-  const posts = await teamDb(teamId).post.findMany({
-    where: after
-      ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] }
-      : undefined,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take,
-    select: {
-      id: true,
-      body: true,
-      createdAt: true,
-      author: person,
-      photos: { orderBy: { position: "asc" }, select: { photoId: true } },
-      // Shown as faces, first to like first — hence the picture and the order.
-      likes: { orderBy: [{ createdAt: "asc" }, { userId: "asc" }], select: { userId: true, user: { select: { name: true, photoId: true } } } },
-      comments: { orderBy: { createdAt: "asc" }, select: { id: true, body: true, createdAt: true, author: person } },
-      poll: {
-        select: {
-          id: true,
-          question: true,
-          anonymous: true,
-          multipleChoice: true,
-          closesAt: true,
-          closedAt: true,
-          match: { select: { opponent: true, title: true, startsAt: true } },
-          options: {
-            orderBy: { position: "asc" },
-            select: { id: true, text: true, playerId: true, player: { select: { photoId: true } } },
-          },
-          votes: { select: { optionId: true, voterId: true, voter: person } },
-          ballots: { select: { userId: true } },
+  const select = {
+    id: true,
+    body: true,
+    createdAt: true,
+    editedAt: true,
+    pinnedAt: true,
+    author: person,
+    photos: { orderBy: { position: "asc" }, select: { photoId: true } },
+    // Shown as faces, first to like first — hence the picture and the order.
+    likes: { orderBy: [{ createdAt: "asc" }, { userId: "asc" }], select: { userId: true, user: { select: { name: true, photoId: true } } } },
+    comments: { orderBy: { createdAt: "asc" }, select: { id: true, body: true, createdAt: true, author: person } },
+    poll: {
+      select: {
+        id: true,
+        question: true,
+        anonymous: true,
+        multipleChoice: true,
+        closesAt: true,
+        closedAt: true,
+        match: { select: { opponent: true, title: true, startsAt: true } },
+        options: {
+          orderBy: { position: "asc" },
+          select: { id: true, text: true, playerId: true, player: { select: { photoId: true } } },
         },
+        votes: { select: { optionId: true, voterId: true, voter: person } },
+        ballots: { select: { userId: true } },
       },
     },
+  } satisfies Prisma.PostSelect;
+  const db = teamDb(teamId);
+  // The pinned posts lead the first page, the latest pinned first; the pages after it are
+  // the rest, newest first, so the cursor never meets a pinned post.
+  const pinned = after
+    ? []
+    : await db.post.findMany({
+        where: { pinnedAt: { not: null } },
+        orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
+        take: MAX_PINNED_SHOWN,
+        select,
+      });
+  const paged = await db.post.findMany({
+    where: {
+      pinnedAt: null,
+      ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take,
+    select,
   });
+  const posts = [...pinned, ...paged];
 
   return posts.map(({ poll, ...post }) => ({
     ...post,

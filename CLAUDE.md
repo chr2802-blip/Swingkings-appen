@@ -103,6 +103,11 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   never send results to somebody who has not voted while the poll is open.
 - **A feed post's pictures** are `PostPhoto` rows (up to `MAX_POST_PHOTOS`), read with
   `readPhotoChoices`.
+- **A feed post** is edited (`editPost`: words and pictures, never the poll) and deleted by
+  its author or `canAdministerTeam`; anybody on the team pins and unpins it (`pinPost`).
+  Pinned posts lead the first page of `feedPosts` and are not counted in its pages
+  (`nextFeedCursor`). A single-choice poll is voted by pressing the answer; only a
+  multiple-choice one has "Stem".
 - **Pictures** are shrunk in the browser (`downscale.ts`), re-measured on arrival
   (`photo-file.ts`), stored in Postgres, served from `/api/photos/<id>` behind the session.
   Pages read `photoId`, never the bytes.

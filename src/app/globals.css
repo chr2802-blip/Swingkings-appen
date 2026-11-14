@@ -448,6 +448,18 @@ h1,
   animation: pop 320ms var(--ease-spring);
 }
 
+/* A poll's result: each bar grows out from the left to its share of the votes. */
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.animate-bar-grow {
+  transform-origin: left;
+  animation: bar-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
 /*
  * The front page's banner hangs from the header's stripe band, as wide as the screen, and
  * rolls down out of it on arrival and back up into it on leaving (`HomeBanner`).

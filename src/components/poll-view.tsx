@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useFormAction } from "@/components/use-form-action";
+import { useState, useTransition, type FormEvent } from "react";
+import type { ActionResult } from "@/lib/action-result";
 import { Avatar } from "@/components/photo";
 import { Badge, Button } from "@/components/ui";
 import { useChangingVote } from "@/components/post-menu";
@@ -40,16 +40,42 @@ export type PollViewData = {
 
 /**
  * A poll on a post. Before voting: the answers to pick, in two columns once there are
- * more than four, so nothing scrolls. After voting — or once it is closed — the
- * results, most votes first. Who voted for what, voting again and closing the poll are
- * in the post's ⋯ menu (`PostMenu`).
+ * more than four, so nothing scrolls. With one answer allowed each answer is a button and
+ * pressing it is the vote; with several, they are ticked and sent with "Stem". After
+ * voting — or once it is closed — the results, most votes first, their bars growing in.
+ * Who voted for what, voting again and closing the poll are in the post's ⋯ menu
+ * (`PostMenu`).
  */
 export function PollView({ poll }: { poll: PollViewData }) {
   const { changing, setChanging } = useChangingVote();
   const [showAll, setShowAll] = useState(false);
-  const { state, pending, handleSubmit } = useFormAction(vote, { onSuccess: () => setChanging(false) });
+  const [state, setState] = useState<ActionResult>(undefined);
+  const [pending, startTransition] = useTransition();
+  /** The answer just pressed, while its vote is on the way. */
+  const [pressed, setPressed] = useState<string | null>(null);
+
+  function send(optionIds: string[]) {
+    const data = new FormData();
+    data.set("pollId", poll.id);
+    for (const id of optionIds) data.append("optionId", id);
+    startTransition(async () => {
+      const result = await vote(undefined, data);
+      setState(result);
+      setPressed(null);
+      if (result?.ok) setChanging(false);
+    });
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    send(new FormData(event.currentTarget).getAll("optionId").map(String));
+  }
+
   const showResults = (poll.hasVoted || !poll.open) && !changing;
   const twoColumns = poll.options.length > 4;
+  const answer = `press-card flex h-full w-full cursor-pointer items-center rounded-xl border border-slate-200 bg-white text-left text-sm ${
+    twoColumns ? "gap-2 px-2.5 py-2" : "gap-2.5 px-3 py-2.5"
+  }`;
   const shown = showAll ? poll.options : poll.options.slice(0, RESULTS_SHOWN);
 
   return (
@@ -66,13 +92,13 @@ export function PollView({ poll }: { poll: PollViewData }) {
 
       {showResults ? (
         <ul className="space-y-2">
-          {shown.map((option) => (
-            <li key={option.id}>
+          {shown.map((option, index) => (
+            <li key={option.id} className="animate-row-in" style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}>
               <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <span
                   aria-hidden
-                  className={`absolute inset-y-0 left-0 ${option.leading ? "bg-[color-mix(in_srgb,var(--accent)_22%,white)]" : "bg-slate-100"}`}
-                  style={{ width: `${Math.round(option.share * 100)}%` }}
+                  className={`animate-bar-grow absolute inset-y-0 left-0 ${option.leading ? "bg-[color-mix(in_srgb,var(--accent)_22%,white)]" : "bg-slate-100"}`}
+                  style={{ width: `${Math.round(option.share * 100)}%`, animationDelay: `${120 + Math.min(index, 8) * 60}ms` }}
                 />
                 <div className="relative flex items-center gap-2 px-3 py-2 text-sm">
                   {option.isPlayer && <Avatar name={option.text} photoId={option.playerPhotoId} size="xs" />}
@@ -104,41 +130,72 @@ export function PollView({ poll }: { poll: PollViewData }) {
         <form onSubmit={handleSubmit} className="space-y-2">
           <input type="hidden" name="pollId" value={poll.id} />
           <ul className={twoColumns ? "grid grid-cols-2 gap-1.5" : "space-y-1.5"}>
-            {poll.options.map((option) => (
-              <li key={option.id} className="min-w-0">
-                <label
-                  className={`press-card flex h-full cursor-pointer items-center rounded-xl border border-slate-200 bg-white text-sm has-[:checked]:border-[var(--accent)] has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_8%,white)] ${
-                    twoColumns ? "gap-2 px-2.5 py-2" : "gap-2.5 px-3 py-2.5"
-                  }`}
-                >
-                  <input
-                    type={poll.multipleChoice ? "checkbox" : "radio"}
-                    name="optionId"
-                    value={option.id}
-                    defaultChecked={poll.myChoices.includes(option.id)}
-                    className="h-4 w-4 shrink-0 accent-[var(--accent)]"
-                  />
+            {poll.options.map((option) => {
+              const inner = (
+                <>
                   {option.isPlayer && <Avatar name={option.text} photoId={option.playerPhotoId} size="xs" />}
                   <span className="min-w-0 flex-1 leading-tight break-words">{option.text}</span>
-                </label>
-              </li>
-            ))}
+                </>
+              );
+              const mine = pressed ? pressed === option.id : poll.myChoices.includes(option.id);
+              return (
+                <li key={option.id} className="min-w-0">
+                  {poll.multipleChoice ? (
+                    <label className={`${answer} has-[:checked]:border-[var(--accent)] has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_8%,white)]`}>
+                      <input
+                        type="checkbox"
+                        name="optionId"
+                        value={option.id}
+                        defaultChecked={poll.myChoices.includes(option.id)}
+                        className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                      />
+                      {inner}
+                    </label>
+                  ) : (
+                    // One answer allowed: pressing it is the vote, there is no "Stem".
+                    <button
+                      type="button"
+                      disabled={pending}
+                      aria-pressed={mine}
+                      aria-busy={pending && pressed === option.id}
+                      onClick={() => {
+                        setPressed(option.id);
+                        send([option.id]);
+                      }}
+                      className={`${answer} disabled:cursor-default ${
+                        mine ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,white)]" : pending ? "opacity-60" : ""
+                      }`}
+                    >
+                      {inner}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {state?.ok === false && (
             <p role="alert" className="text-sm text-red-600">
               {state.error}
             </p>
           )}
-          <div className="flex items-center gap-2">
-            <Button type="submit" disabled={pending}>
-              {pending ? "Stemmer…" : "Stem"}
-            </Button>
+          <div className="flex flex-wrap items-center gap-2 empty:hidden">
+            {poll.multipleChoice && (
+              <Button type="submit" disabled={pending}>
+                {pending ? "Stemmer…" : "Stem"}
+              </Button>
+            )}
             {changing && (
               <Button type="button" variant="ghost" onClick={() => setChanging(false)}>
                 Annuller
               </Button>
             )}
-            {poll.anonymous && <span className="text-xs text-slate-500">Din stemme er anonym og kan ikke ændres.</span>}
+            {poll.anonymous && (
+              <span className="text-xs text-slate-500">
+                {poll.multipleChoice
+                  ? "Din stemme er anonym og kan ikke ændres."
+                  : "Tryk på et svar for at stemme. Din stemme er anonym og kan ikke ændres."}
+              </span>
+            )}
           </div>
         </form>
       )}

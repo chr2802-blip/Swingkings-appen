@@ -50,9 +50,13 @@ test("a poll hides its result until you have voted", async ({ page, loginAs }) =
   await loginAs(bo);
   await page.goto("/oversigt");
   await expect(page.getByText("0 har stemt")).toBeVisible();
-  await page.getByRole("radio", { name: "Lørdag" }).check();
-  await page.getByRole("button", { name: "Stem", exact: true }).click();
+  // One answer allowed: pressing it is the vote, and there is no "Stem" to press.
+  await expect(page.getByRole("button", { name: "Stem", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Lørdag" }).click();
   await expect(page.getByText("1 har stemt")).toBeVisible();
+  // The result's bars grow in.
+  await expect(page.locator(".animate-bar-grow")).toHaveCount(2);
+  await expect(page.locator(".animate-bar-grow").first()).toHaveCSS("animation-name", "bar-grow");
   await page.getByRole("button", { name: "Handlinger" }).click();
   await expect(page.getByRole("dialog").getByRole("button", { name: "Skift stemme" })).toBeVisible();
   expect(await db.pollVote.findFirst({ include: { option: true } })).toMatchObject({ voterId: bo.id, option: { text: "Lørdag" } });
@@ -91,18 +95,20 @@ test("a poll's many answers sit in two columns, its result leads with the most v
 
   await loginAs(bo);
   await page.goto("/oversigt");
-  await expect(page.getByRole("radio", { name: "Frederik" }).locator("xpath=ancestor::ul[1]")).toHaveClass(/grid-cols-2/);
+  await expect(page.getByRole("button", { name: "Frederik" }).locator("xpath=ancestor::ul[1]")).toHaveClass(/grid-cols-2/);
   // The post's text sits above the poll.
   const bodyBox = await page.getByText("Kampens spiller").boundingBox();
   const questionBox = await page.getByText("Hvem var bedst?").boundingBox();
   expect(bodyBox!.y).toBeLessThan(questionBox!.y);
-  // Bo has not voted, so the menu offers nothing about the poll — and Bo did not write the post.
-  await expect(page.getByRole("button", { name: "Handlinger" })).toHaveCount(0);
+  // Bo has not voted and did not write the post: the menu offers pinning and nothing else.
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await expect(page.getByRole("dialog").getByRole("list").getByRole("button")).toHaveText([/Fastgør øverst/]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
 
   // Pressed the moment the page opens: with the feed behind a <Suspense> this left the
   // button pending for good now and then (see tests/unit/no-suspense.test.ts).
-  await page.getByRole("radio", { name: "Victor" }).check();
-  await page.getByRole("button", { name: "Stem", exact: true }).click();
+  await page.getByRole("button", { name: "Victor" }).click();
   await expect(page.getByText("2 har stemt")).toBeVisible();
   // Emil and Victor have a vote each and lead, in the order they were written; the rest follow.
   await expect(page.locator("li").filter({ hasText: /· \d+%$/ })).toHaveText([/^Emil/, /^Victor.*din stemme/, /^Frederik/, /^Oliver/, /^Lucas/]);
@@ -121,8 +127,9 @@ test("a poll's many answers sit in two columns, its result leads with the most v
 
   await page.getByRole("button", { name: "Handlinger" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Skift stemme" }).click();
-  await page.getByRole("radio", { name: "Oliver" }).check();
-  await page.getByRole("button", { name: "Stem", exact: true }).click();
+  // The answer chosen last time is marked; pressing another moves the vote at once.
+  await expect(page.getByRole("button", { name: "Victor" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Oliver" }).click();
   await expect.poll(async () => (await db.pollVote.findFirst({ where: { voterId: bo.id }, include: { option: true } }))?.option.text).toBe("Oliver");
 
   await loginAs(anna);
@@ -139,6 +146,100 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   await page.getByRole("dialog", { name: "Slet opslaget?" }).getByRole("button", { name: "Slet" }).click();
   await expect(page.getByText("Hvem var bedst?")).toBeHidden();
   expect(await db.post.count()).toBe(0);
+});
+
+test("a poll with several answers is ticked and sent with Stem", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  await db.post.create({
+    data: {
+      teamId: team.id,
+      authorId: anna.id,
+      poll: {
+        create: {
+          teamId: team.id,
+          question: "Hvilke dage kan du?",
+          multipleChoice: true,
+          options: { create: ["Mandag", "Onsdag", "Fredag"].map((text, position) => ({ text, position })) },
+        },
+      },
+    },
+  });
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("checkbox", { name: "Mandag" }).check();
+  await page.getByRole("checkbox", { name: "Fredag" }).check();
+  // Ticking is not voting.
+  await expect(page.getByText("0 har stemt")).toBeVisible();
+  expect(await db.pollVote.count()).toBe(0);
+  await page.getByRole("button", { name: "Stem", exact: true }).click();
+  await expect(page.getByText("1 har stemt")).toBeVisible();
+  expect((await db.pollVote.findMany({ include: { option: true }, orderBy: { option: { position: "asc" } } })).map((v) => v.option.text)).toEqual(["Mandag", "Fredag"]);
+});
+
+test("the author edits a post's words, an admin edits anybody's, and a teammate cannot", async ({ page, loginAs }) => {
+  const { team, admin, anna, bo } = await squad();
+  const post = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Træning kl. 18" } });
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Fastgør øverst" })).toBeVisible();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Rediger opslag" })).toHaveCount(0);
+
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await expect(page.getByText("redigeret")).toHaveCount(0);
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Rediger opslag" }).click();
+  const edit = page.getByRole("dialog", { name: "Rediger opslag" });
+  await expect(edit.getByLabel("Tekst")).toHaveValue("Træning kl. 18");
+  // Emptied, it is refused and what was typed stays.
+  await edit.getByLabel("Tekst").fill(" ");
+  await edit.getByRole("button", { name: "Gem" }).click();
+  await expect(edit.getByRole("alert")).toHaveText("Et opslag skal have tekst eller billeder.");
+  await edit.getByLabel("Tekst").fill("Træning kl. 19 — ny tid!");
+  await edit.getByRole("button", { name: "Gem" }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText("Træning kl. 19 — ny tid!")).toBeVisible();
+  await expect(page.getByText("· redigeret")).toBeVisible();
+
+  await loginAs(admin);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Rediger opslag" }).click();
+  await page.getByRole("dialog", { name: "Rediger opslag" }).getByLabel("Tekst").fill("Træning aflyst");
+  await page.getByRole("dialog", { name: "Rediger opslag" }).getByRole("button", { name: "Gem" }).click();
+  await expect(page.getByText("Træning aflyst")).toBeVisible();
+  expect(await db.post.findUniqueOrThrow({ where: { id: post.id } })).toMatchObject({ body: "Træning aflyst", authorId: anna.id });
+});
+
+test("anybody pins a post to the top of the feed and lets it go again", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const old = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Husk kontingent", createdAt: new Date(Date.now() - 86_400_000) } });
+  await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Nyeste opslag" } });
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  const bodies = page.locator("#feed p.whitespace-pre-line");
+  await expect(bodies).toHaveText(["Nyeste opslag", "Husk kontingent"]);
+  await expect(page.getByText("Fastgjort")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Handlinger" }).nth(1).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Fastgør øverst" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(bodies).toHaveText(["Husk kontingent", "Nyeste opslag"]);
+  await expect(page.getByText("Fastgjort")).toHaveCount(1);
+  expect((await db.post.findUniqueOrThrow({ where: { id: old.id } })).pinnedAt).not.toBeNull();
+
+  // Another teammate sees it on top, and may let it go.
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await expect(bodies).toHaveText(["Husk kontingent", "Nyeste opslag"]);
+  await page.getByRole("button", { name: "Handlinger" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Frigør fra toppen" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(bodies).toHaveText(["Nyeste opslag", "Husk kontingent"]);
+  await expect(page.getByText("Fastgjort")).toHaveCount(0);
 });
 
 test("comments open in a drawer, each apart with its writer, and only its writer can delete it", async ({ page, loginAs }) => {
@@ -240,7 +341,8 @@ test("the chat's message box goes down with the tab bar, leaving no empty strip 
   });
   await loginAs(anna);
   await page.goto("/chat");
-  await expect(page.getByText("Besked 30")).toBeVisible();
+  // Exact: "Besked 3" followed by a time stamp starting with 0 also reads "Besked 30…".
+  await expect(page.getByText("Besked 30", { exact: true })).toBeVisible();
   // The tab bar's highlight is placed once the page has hydrated and is listening to the scroll.
   await expect(page.getByTestId("tab-pill")).toBeAttached();
   const box = page.locator("form").filter({ has: page.getByRole("textbox", { name: "Besked" }) });

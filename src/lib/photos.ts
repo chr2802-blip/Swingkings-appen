@@ -173,11 +173,14 @@ export async function readPhotoChoices(
   formData: FormData,
   teamId: string,
   max: number,
+  /** The pictures the post already has: they may be sent again, which keeps them. */
+  current: string[] = [],
 ): Promise<{ ok: true; photoIds: string[] } | { ok: false; error: string }> {
   const ids = [...new Set(formData.getAll(PHOTO_FIELD).map((v) => String(v).trim()).filter(Boolean))];
   if (ids.length > max) return { ok: false, error: `Højst ${max} billeder pr. opslag.` };
-  if (ids.length === 0) return { ok: true, photoIds: [] };
-  const found = await teamDb(teamId).photo.findMany({ where: { id: { in: ids }, ...UNCLAIMED }, select: { id: true } });
-  if (found.length !== ids.length) return { ok: false, error: "Et af billederne findes ikke længere." };
+  const added = ids.filter((id) => !current.includes(id));
+  if (added.length === 0) return { ok: true, photoIds: ids };
+  const found = await teamDb(teamId).photo.findMany({ where: { id: { in: added }, ...UNCLAIMED }, select: { id: true } });
+  if (found.length !== added.length) return { ok: false, error: "Et af billederne findes ikke længere." };
   return { ok: true, photoIds: ids };
 }

@@ -3,9 +3,12 @@
 import { createContext, useContext, useState } from "react";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Avatar } from "@/components/photo";
-import { Button } from "@/components/ui";
+import { Button, Field, Textarea } from "@/components/ui";
+import { DialogForm } from "@/components/form-dialog";
+import { MultiPhotoField } from "@/components/multi-photo-field";
 import { useFormAction } from "@/components/use-form-action";
-import { closePoll, deletePost } from "@/app/actions/social";
+import { closePoll, deletePost, editPost, pinPost } from "@/app/actions/social";
+import { MAX_POST_PHOTOS } from "@/lib/polls";
 import type { PollViewData } from "@/components/poll-view";
 import type { FormAction } from "@/lib/action-result";
 
@@ -27,20 +30,36 @@ export function useChangingVote() {
 type Step = "menu" | "votes" | "delete" | "close";
 
 /**
- * The ⋯ in a post's corner, with everything one can do to it: see who voted for what,
- * vote again, close the poll and delete the post. Only what this viewer may do is listed,
- * and with nothing to list there is no button.
+ * The ⋯ in a post's corner, with everything one can do to it: pin it to the top, edit it,
+ * see who voted for what, vote again, close the poll and delete the post. Only what this
+ * viewer may do is listed; pinning is for everybody, so there is always a button.
  */
-export function PostMenu({ postId, canDelete, poll }: { postId: string; canDelete: boolean; poll: PollViewData | null }) {
+export function PostMenu({
+  postId,
+  body,
+  photoIds,
+  pinned,
+  canChange,
+  poll,
+}: {
+  postId: string;
+  body: string | null;
+  photoIds: string[];
+  pinned: boolean;
+  /** The author and the team's admins: edit and delete. */
+  canChange: boolean;
+  poll: PollViewData | null;
+}) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [step, setStep] = useState<Step>("menu");
   const { setChanging } = useChangingVote();
+  const pin = useFormAction(pinPost, { onSuccess: () => setOpen(false) });
 
   const revealed = poll !== null && (poll.hasVoted || !poll.open);
   const canSeeVotes = revealed && !poll.anonymous && poll.ballots > 0;
-  const canChange = poll !== null && poll.open && poll.hasVoted && !poll.anonymous;
+  const canChangeVote = poll !== null && poll.open && poll.hasVoted && !poll.anonymous;
   const canClose = poll !== null && poll.open && poll.canClose;
-  if (!canDelete && !canSeeVotes && !canChange && !canClose) return null;
 
   const close = () => setOpen(false);
   const show = (next: Step) => {
@@ -73,6 +92,34 @@ export function PostMenu({ postId, canDelete, poll }: { postId: string; canDelet
         {step === "menu" && (
           <ModalBody>
             <ul className="-mx-2 space-y-0.5">
+              <li>
+                <form onSubmit={pin.handleSubmit}>
+                  <input type="hidden" name="id" value={postId} />
+                  <input type="hidden" name="pinned" value={pinned ? "off" : "on"} />
+                  <button type="submit" className={item} disabled={pin.pending} aria-busy={pin.pending}>
+                    <span aria-hidden>📌</span> {pinned ? "Frigør fra toppen" : "Fastgør øverst"}
+                  </button>
+                  {pin.state?.ok === false && (
+                    <p role="alert" className="px-3 text-sm text-red-600">
+                      {pin.state.error}
+                    </p>
+                  )}
+                </form>
+              </li>
+              {canChange && (
+                <li>
+                  <button
+                    type="button"
+                    className={item}
+                    onClick={() => {
+                      close();
+                      setEditing(true);
+                    }}
+                  >
+                    <span aria-hidden>✏️</span> Rediger opslag
+                  </button>
+                </li>
+              )}
               {canSeeVotes && (
                 <li>
                   <button type="button" className={item} onClick={() => setStep("votes")}>
@@ -80,7 +127,7 @@ export function PostMenu({ postId, canDelete, poll }: { postId: string; canDelet
                   </button>
                 </li>
               )}
-              {canChange && (
+              {canChangeVote && (
                 <li>
                   <button
                     type="button"
@@ -101,7 +148,7 @@ export function PostMenu({ postId, canDelete, poll }: { postId: string; canDelet
                   </button>
                 </li>
               )}
-              {canDelete && (
+              {canChange && (
                 <li>
                   <button type="button" className={`${item} text-red-600`} onClick={() => setStep("delete")}>
                     <span aria-hidden>🗑️</span> Slet opslag
@@ -126,6 +173,20 @@ export function PostMenu({ postId, canDelete, poll }: { postId: string; canDelet
           />
         )}
       </Modal>
+      {canChange && (
+        <Modal open={editing} onClose={() => setEditing(false)} title="Rediger opslag">
+          {editing && (
+            <DialogForm action={editPost} submitLabel="Gem" onDone={() => setEditing(false)} onCancel={() => setEditing(false)}>
+              <input type="hidden" name="id" value={postId} />
+              <MultiPhotoField max={MAX_POST_PHOTOS} initial={photoIds} />
+              <Field label="Tekst" htmlFor={`body-${postId}`}>
+                <Textarea id={`body-${postId}`} name="body" rows={4} maxLength={4000} defaultValue={body ?? ""} />
+              </Field>
+              {poll && <p className="text-xs text-slate-500">Afstemningen kan ikke ændres, når den først er delt.</p>}
+            </DialogForm>
+          )}
+        </Modal>
+      )}
     </>
   );
 }
@@ -137,8 +198,8 @@ function Votes({ poll }: { poll: PollViewData }) {
       <ul className="space-y-4">
         {poll.options
           .filter((option) => option.votes > 0)
-          .map((option) => (
-            <li key={option.id}>
+          .map((option, index) => (
+            <li key={option.id} className="animate-row-in" style={{ animationDelay: `${index * 60}ms` }}>
               <p className="flex items-baseline justify-between gap-3 text-sm font-semibold">
                 <span className="min-w-0 break-words">{option.text}</span>
                 <span className="shrink-0 font-normal text-slate-500">

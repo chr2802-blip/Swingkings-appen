@@ -30,9 +30,24 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
             <p className="text-sm font-medium">
               <PlayerLink userId={post.author.id}>{post.author.name}</PlayerLink>
             </p>
-            <p className="text-xs text-slate-500">{stampLabel(post.createdAt)}</p>
+            <p className="text-xs text-slate-500">
+              {stampLabel(post.createdAt)}
+              {post.editedAt && " · redigeret"}
+            </p>
           </div>
-          <PostMenu postId={post.id} canDelete={post.author.id === viewerId || admin} poll={post.poll} />
+          {post.pinnedAt && (
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+              <span aria-hidden>📌 </span>Fastgjort
+            </span>
+          )}
+          <PostMenu
+            postId={post.id}
+            body={post.body}
+            photoIds={post.photoIds}
+            pinned={post.pinnedAt !== null}
+            canChange={post.author.id === viewerId || admin}
+            poll={post.poll}
+          />
         </div>
         {/* What the author wrote comes first, above pictures, poll, likes and comments. */}
         {post.body && <p className="px-4 pb-3 text-sm whitespace-pre-line">{post.body}</p>}

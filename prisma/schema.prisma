@@ -439,6 +439,10 @@ model Post {
   authorId  String
   body      String?
   createdAt DateTime @default(now())
+  /// When the words or pictures were last changed after posting; the feed says "redigeret".
+  editedAt  DateTime?
+  /// Pinned posts lie at the top of the feed, the latest pinned first. Anybody on the team pins and unpins.
+  pinnedAt  DateTime?
 
   team     Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
   author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
@@ -448,6 +452,7 @@ model Post {
   comments PostComment[]
 
   @@index([teamId, createdAt])
+  @@index([teamId, pinnedAt])
   @@index([authorId])
 }
 

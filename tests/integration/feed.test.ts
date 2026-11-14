@@ -32,6 +32,27 @@ describe("feedPosts", () => {
     expect(seen).not.toContain("fremmed");
   });
 
+  it("puts pinned posts at the top, the latest pinned first, and pages the rest without them", async () => {
+    const { team, anna } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const day = (n: number) => new Date(Date.UTC(2026, 10, n, 12));
+    for (let i = 1; i <= 7; i++) {
+      await prisma.post.create({
+        data: { teamId: team.id, authorId: anna.id, body: `#${i}`, createdAt: day(i), pinnedAt: i === 2 ? day(20) : i === 4 ? day(21) : null },
+      });
+    }
+    await prisma.post.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "fremmed", pinnedAt: day(22) } });
+
+    const viewer = { id: anna.id, canAdminister: false };
+    const first = await feedPosts(team.id, viewer, { take: 3 });
+    // Two pinned, then a full page of three others.
+    expect(first.map((p) => p.body)).toEqual(["#4", "#2", "#7", "#6", "#5"]);
+    const next = nextFeedCursor(first, 3);
+    const second = await feedPosts(team.id, viewer, { take: 3, after: decodeFeedCursor(next!) });
+    expect(second.map((p) => p.body)).toEqual(["#3", "#1"]);
+    expect(nextFeedCursor(second, 3)).toBeNull();
+  });
+
   it("shows ten at first", async () => {
     const { team, anna } = await makeSquad();
     await prisma.post.createMany({ data: Array.from({ length: 15 }, (_, i) => ({ teamId: team.id, authorId: anna.id, body: `${i}` })) });
