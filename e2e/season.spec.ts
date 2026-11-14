@@ -6,7 +6,7 @@ const BOX_LINK = "https://qr.mobilepay.dk/box/b865a6da-62a7-4360-a406-b39a192c75
 test("a coach marks a player's kontingent paid, and the whole team sees it", async ({ page, loginAs }) => {
   const { team, admin, anna } = await squad();
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/spillere");
   const paid = page.getByRole("checkbox", { name: "Kontingent betalt for Anna" });
   await expect(paid).toHaveAttribute("aria-checked", "false");
   await paid.click();

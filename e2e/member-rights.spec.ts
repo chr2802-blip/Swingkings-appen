@@ -5,7 +5,7 @@ test("a coach ticks roles as a stack: Bøder, then Admin, and back down", async 
   const { team, admin, anna } = await squad();
   const role = async () => (await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).role;
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/spillere");
   const fines = page.getByRole("checkbox", { name: "Bøder for Anna" });
   const adminTick = page.getByRole("checkbox", { name: "Admin for Anna" });
   await expect(fines).toHaveAttribute("aria-checked", "false");
@@ -30,7 +30,7 @@ test("a coach ticks roles as a stack: Bøder, then Admin, and back down", async 
 test("the last admin cannot untick themselves, and is told why", async ({ page, loginAs }) => {
   const { team, admin } = await squad();
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/spillere");
   const own = page.getByRole("checkbox", { name: `Admin for ${admin.name}` });
   await own.click();
   await expect(page.getByRole("alert").filter({ hasText: "Holdet skal have mindst én admin." })).toBeVisible();
@@ -38,9 +38,22 @@ test("the last admin cannot untick themselves, and is told why", async ({ page, 
   expect((await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: admin.id } })).role).toBe("ADMIN");
 });
 
-test("a player sees no ticks on the members table", async ({ page, loginAs }) => {
-  const { anna } = await squad();
-  await loginAs(anna);
+test("everybody but an admin sees the plain roster, with no ticks", async ({ page, loginAs }) => {
+  const { treasurer, anna } = await squad();
+  for (const who of [treasurer, anna]) {
+    await loginAs(who);
+    await page.goto("/hold/spillere");
+    await expect(page.getByRole("link").filter({ hasText: "Bo" }).getByText("Mangler kontingent")).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+  }
+});
+
+test("the table lives on Spillere, not in the team settings", async ({ page, loginAs }) => {
+  const { admin } = await squad();
+  await loginAs(admin);
   await page.goto("/hold");
+  await expect(page.getByRole("heading", { name: "Holdindstillinger" })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Admin for Anna" })).toHaveCount(0);
+  await page.goto("/hold/spillere");
+  await expect(page.getByRole("checkbox", { name: "Admin for Anna" })).toBeVisible();
 });
