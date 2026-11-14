@@ -130,7 +130,7 @@ test("a player reads the past seasons but is kept out of the guide", async ({ pa
   await expect(page.getByRole("button", { name: "Start ny sæson" })).toHaveCount(0);
 });
 
-test("an admin sets the MobilePay Box, and a player sees where and how much to pay for fines and kontingent", async ({ page, loginAs }) => {
+test("an admin pastes the box's link, and a player's Betal opens MobilePay with the amount and the message filled in", async ({ page, loginAs }) => {
   const { team, admin, treasurer, anna } = await squad();
   await db.fine.create({ data: { teamId: team.id, playerId: anna.id, reason: "For sent", units: 3, unitPriceKr: 10, issuedById: treasurer.id } });
 
@@ -138,51 +138,42 @@ test("an admin sets the MobilePay Box, and a player sees where and how much to p
   await loginAs(anna);
   await page.goto("/boder");
   await expect(page.getByRole("heading", { name: "Bødekassen" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Betal dine bøder/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Betal dine bøder/ })).toHaveCount(0);
 
   await loginAs(admin);
   await page.goto("/hold");
-  await page.getByLabel("MobilePay Box", { exact: true }).fill("9162tv");
-  await page.getByLabel("Kontingent pr. sæson (kr)").fill("600");
   await page.getByLabel("Link til MobilePay Box").fill(`${BOX_LINK}?amount=30`);
+  await page.getByLabel("Kontingent pr. sæson (kr)").fill("600");
   await page.getByRole("button", { name: "Gem" }).click();
   await expect(page.getByText("Gemt.")).toBeVisible();
-  expect(await db.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: "9162TV", mobilePayLink: BOX_LINK, duesKr: 600 });
+  expect(await db.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayLink: BOX_LINK, duesKr: 600 });
+
+  // MobilePay reads the amount in øre, and puts `message` in the payment's message.
+  const fines = `${BOX_LINK}?amount=3000&message=B%C3%B8der%20%E2%80%93%20Anna`;
+  const dues = `${BOX_LINK}?amount=60000&message=Kontingent%20%E2%80%93%20Anna`;
 
   await loginAs(anna);
   await page.goto("/boder");
-  await page.getByRole("button", { name: /Betal dine bøder/ }).click();
-  const fines = page.getByRole("dialog", { name: "Betal dine bøder" });
-  await expect(fines.getByText("9162TV")).toBeVisible();
-  await expect(fines.getByText("30 kr", { exact: true })).toBeVisible();
-  await expect(fines.getByText("Bøder – Anna")).toBeVisible();
-  // MobilePay reads the amount in øre.
-  await expect(fines.getByRole("link", { name: "Åbn MobilePay med 30 kr" })).toHaveAttribute("href", `${BOX_LINK}?amount=3000`);
-  await expect(fines.getByText(/nulstiller dine bøder/)).toBeVisible();
-  await fines.getByRole("button", { name: "Luk" }).click();
-  await expect(fines).toHaveCount(0);
-  // Closing steps back off the sheet's history entry; the next page waits until it has.
-  await expect.poll(() => page.evaluate(() => (history.state as Record<string, unknown> | null)?.swingkingsSheet ?? null)).toBeNull();
-  // Paying marks nothing: the fine is outstanding until the treasurer resets it.
-  expect(await db.fine.count({ where: { playerId: anna.id, clearedAt: null } })).toBe(1);
+  await expect(page.getByRole("link", { name: /Betal dine bøder.*30 kr med MobilePay/ })).toHaveAttribute("href", fines);
 
   await page.goto("/hold/spillere");
   await expect(page.getByText("Du mangler at betale kontingent (600 kr).")).toBeVisible();
-  await page.getByRole("button", { name: "Betal", exact: true }).click();
-  const dues = page.getByRole("dialog", { name: "Betal kontingent" });
-  await expect(dues.getByText("600 kr", { exact: true })).toBeVisible();
-  await expect(dues.getByText("Kontingent – Anna")).toBeVisible();
-  await expect(dues.getByRole("link", { name: "Åbn MobilePay med 600 kr" })).toHaveAttribute("href", `${BOX_LINK}?amount=60000`);
+  await expect(page.getByRole("link", { name: "Betal", exact: true })).toHaveAttribute("href", dues);
+  await expect(page.getByText(/En admin markerer dit kontingent/)).toBeVisible();
 
   await page.goto(`/spiller/${anna.id}`);
-  await expect(page.getByRole("button", { name: "💸 Betal 30 kr med MobilePay" })).toBeVisible();
-  await page.getByRole("button", { name: "Betal kontingent ›" }).click();
-  await expect(page.getByRole("dialog", { name: "Betal kontingent" }).getByText("9162TV")).toBeVisible();
+  await expect(page.getByRole("link", { name: "💸 Betal 30 kr med MobilePay" })).toHaveAttribute("href", fines);
+  await expect(page.getByText(/nulstiller dine bøder/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Betal kontingent (600 kr) ›" })).toHaveAttribute("href", dues);
+  // Paying marks nothing: the fine is outstanding until the treasurer resets it.
+  expect(await db.fine.count({ where: { playerId: anna.id, clearedAt: null } })).toBe(1);
 
   // Once marked paid, kontingent asks no more; and nobody is asked to pay for somebody else.
   await db.teamMember.updateMany({ where: { teamId: team.id, userId: anna.id }, data: { duesPaidAt: new Date() } });
   await page.goto("/hold/spillere");
+  await expect(page.getByRole("heading", { name: "Spillere", level: 1 })).toBeVisible();
   await expect(page.getByText(/Du mangler at betale kontingent/)).toHaveCount(0);
   await page.goto(`/spiller/${treasurer.id}`);
-  await expect(page.getByRole("button", { name: /Betal/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Kasserer Kim", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Betal/ })).toHaveCount(0);
 });
