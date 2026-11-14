@@ -1,18 +1,10 @@
 /**
- * Paying through the team's MobilePay Box. MobilePay Box has no API: the app can only say
- * where to pay, how much and what to write, and nobody is marked paid by it — an admin
- * ticks kontingent off, and the treasurer resets (nulstiller) the fines, once they have
- * seen the money in the box.
+ * Paying through the team's MobilePay Box. The box's own pay-in link
+ * (https://qr.mobilepay.dk/box/<id>/pay-in) opens MobilePay on the box, and takes the
+ * amount (in øre) and the message along. MobilePay Box has no API, so nobody is marked
+ * paid by it: an admin ticks kontingent off, and the treasurer resets (nulstiller) the
+ * fines, once they have seen the money in the box.
  */
-
-/**
- * A box number as typed — "9162tv", " 9162 TV " — or null when it cannot be one. A box
- * number is a few letters and digits; spaces are dropped and letters made capitals.
- */
-export function normalizeBox(input: string): string | null {
-  const box = input.replace(/\s+/g, "").toUpperCase();
-  return /^[0-9A-Z]{4,12}$/.test(box) ? box : null;
-}
 
 const BOX_ID = /^\/box\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/pay-in\/?$/i;
 
@@ -32,29 +24,27 @@ export function normalizeBoxLink(input: string): string | null {
   return id ? `https://qr.mobilepay.dk/box/${id.toLowerCase()}/pay-in` : null;
 }
 
-/**
- * The pay-in link with the amount filled in. MobilePay reads `amount` in øre: 30 kr is
- * `amount=3000`. Without an amount the box opens for the payer to type one.
- */
-export function payLink(link: string, amountKr: number | null) {
-  return amountKr && amountKr > 0 ? `${link}?amount=${Math.round(amountKr * 100)}` : link;
-}
-
-/** Where a team takes payments, or null when it has said nowhere. */
-export function payTarget(team: { mobilePayBox: string | null; mobilePayLink: string | null }) {
-  return team.mobilePayBox || team.mobilePayLink ? { box: team.mobilePayBox, link: team.mobilePayLink } : null;
-}
-
-export type PayTarget = NonNullable<ReturnType<typeof payTarget>>;
-
 export type PayKind = "fines" | "dues";
 
-/** What to write in the payment's message, so whoever checks the box knows who paid for what. */
+/** What the payment's message says, so whoever checks the box knows who paid for what. */
 export function paymentMessage(kind: PayKind, name: string) {
   return `${kind === "fines" ? "Bøder" : "Kontingent"} – ${name}`;
 }
 
-/** Who looks at the box afterwards, as the payment sheet tells it. */
+/**
+ * The pay-in link with the amount and the message filled in. MobilePay reads `amount` in
+ * øre — 30 kr is `amount=3000` — and puts `message` in the payment's message field.
+ * Without an amount the payer types one. Spaces are sent as %20, as MobilePay was tried with.
+ */
+export function payLink(link: string, amountKr: number | null, message: string) {
+  const query = [
+    amountKr && amountKr > 0 ? `amount=${Math.round(amountKr * 100)}` : null,
+    `message=${encodeURIComponent(message)}`,
+  ].filter(Boolean);
+  return `${link}?${query.join("&")}`;
+}
+
+/** Who looks at the box afterwards, as the page says beside the button. */
 export function afterPaying(kind: PayKind) {
   return kind === "fines"
     ? "Bødekassen nulstiller dine bøder, når betalingen er set i boxen."

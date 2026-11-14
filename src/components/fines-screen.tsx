@@ -17,7 +17,7 @@ import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { ActionButton } from "@/components/action-button";
 import { resetFines } from "@/app/actions/fines";
 import { Crown } from "@/components/crest";
-import { PayDialog } from "@/components/pay-dialog";
+import { PayLink } from "@/components/pay-link";
 
 /** How far back the history page goes. A team gives a few fines a week, so this is a year or two. */
 const HISTORY = 100;
@@ -95,23 +95,20 @@ export async function FinesScreen({
             <p className="text-xs text-slate-500">{kr(totals.owed)} udestående</p>
           </div>
         </div>
-        {mine && mine.owesKr > 0 && board.pay && (
-          <PayDialog
+        {mine && mine.owesKr > 0 && board.payLink && (
+          <PayLink
             kind="fines"
-            target={board.pay}
+            link={board.payLink}
             amountKr={mine.owesKr}
             name={user.name}
-            triggerClassName="press-card flex w-full items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-left text-sm"
-            trigger={
-              <>
-                <span className="font-medium">💸 Betal dine bøder</span>
-                <span className="flex items-center gap-2 text-xs text-slate-500">
-                  {kr(mine.owesKr)} med MobilePay
-                  <span aria-hidden>›</span>
-                </span>
-              </>
-            }
-          />
+            className="press-card flex w-full items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-left text-sm"
+          >
+            <span className="font-medium">💸 Betal dine bøder</span>
+            <span className="flex items-center gap-2 text-xs text-slate-500">
+              {kr(mine.owesKr)} med MobilePay
+              <span aria-hidden>›</span>
+            </span>
+          </PayLink>
         )}
         <DetailSheet
           title="Udfordringer"

@@ -3,10 +3,10 @@ import { canAdministerTeam, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamRoster } from "@/lib/roster";
 import { Badge, buttonClass, Card, PageHeader } from "@/components/ui";
 import { MemberTable } from "@/components/member-table";
-import { PayDialog } from "@/components/pay-dialog";
+import { PayLink } from "@/components/pay-link";
 import { prisma } from "@/lib/prisma";
 import { kr } from "@/lib/money";
-import { payTarget } from "@/lib/pay";
+import { afterPaying } from "@/lib/pay";
 import { Avatar } from "@/components/photo";
 import { playerHref } from "@/components/player-link";
 import Link from "next/link";
@@ -16,28 +16,25 @@ export default async function RosterPage() {
   const admin = canAdministerTeam(user, user.teamId);
   const [roster, team] = await Promise.all([
     teamRoster(user.teamId),
-    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { mobilePayBox: true, mobilePayLink: true, duesKr: true } }),
+    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { mobilePayLink: true, duesKr: true } }),
   ]);
   const paid = roster.filter((m) => m.duesPaid).length;
   const me = roster.find((m) => m.userId === user.id);
-  const pay = payTarget(team);
   return (
     <div>
       <PageHeader
         title="Spillere"
         description={`${roster.length} på ${user.teamName} · ${paid} af ${roster.length} har betalt kontingent`}
       />
-      {me && !me.duesPaid && pay && (
-        <Card className="mb-4 flex items-center justify-between gap-3 text-sm">
-          <span>Du mangler at betale kontingent{team.duesKr ? ` (${kr(team.duesKr)})` : ""}.</span>
-          <PayDialog
-            kind="dues"
-            target={pay}
-            amountKr={team.duesKr}
-            name={me.name}
-            trigger="Betal"
-            triggerClassName={buttonClass("primary", "shrink-0")}
-          />
+      {me && !me.duesPaid && team.mobilePayLink && (
+        <Card className="mb-4 space-y-1 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span>Du mangler at betale kontingent{team.duesKr ? ` (${kr(team.duesKr)})` : ""}.</span>
+            <PayLink kind="dues" link={team.mobilePayLink} amountKr={team.duesKr} name={me.name} className={buttonClass("primary", "shrink-0")}>
+              Betal
+            </PayLink>
+          </div>
+          <p className="text-xs text-slate-500">{afterPaying("dues")}</p>
         </Card>
       )}
       {admin ? (

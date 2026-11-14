@@ -90,14 +90,9 @@ model Team {
   /// When the calendar was last read successfully.
   calendarSyncedAt DateTime?
   /**
-   * The team's MobilePay Box ("9162TV"), where kontingent and fines are paid. The app
-   * only says where and how much (`src/lib/pay.ts`): MobilePay Box has no API, so an
-   * admin still marks kontingent paid and the treasurer still resets the fines.
-   */
-  mobilePayBox     String?
-  /**
-   * The box's own pay-in link (https://qr.mobilepay.dk/box/<id>/pay-in), from "Del" on the
-   * box in MobilePay. "Åbn MobilePay" opens it with the amount filled in (`payLink`).
+   * The team's MobilePay Box, as its own pay-in link (https://qr.mobilepay.dk/box/<id>/pay-in)
+   * from "Del" on the box in MobilePay. "Betal" opens it with the amount and the message
+   * filled in (`src/lib/pay.ts`). MobilePay Box has no API, so nothing is marked paid by it.
    */
   mobilePayLink    String?
   /// What a season's kontingent costs in kroner, shown on "Betal kontingent"; null when not set.
