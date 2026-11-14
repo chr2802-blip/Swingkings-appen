@@ -56,7 +56,7 @@ test("a poll hides its result until you have voted", async ({ page, loginAs }) =
   await loginAs(bo);
   await page.goto("/oversigt");
   await expect(page.getByText("0 har stemt")).toBeVisible();
-  // Nobody is named before the viewer has voted: the count is words, not a button.
+  // Nobody has voted yet, so there is nobody to list: the count is words, not a button.
   await expect(page.getByRole("button", { name: /har stemt/ })).toHaveCount(0);
   // One answer allowed: pressing it is the vote, and there is no "Stem" to press.
   await expect(page.getByRole("button", { name: "Stem", exact: true })).toHaveCount(0);
@@ -113,6 +113,13 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   await expect(page.getByRole("dialog").getByRole("list").getByRole("button")).toHaveText([/Fastgør øverst/]);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
+  // Before voting in the open poll, "1 har stemt" says who has voted — and not for whom.
+  await page.getByRole("button", { name: "1 har stemt" }).click();
+  const hasVoted = page.getByRole("dialog", { name: "Har stemt" });
+  await expect(hasVoted.getByRole("listitem")).toHaveText([/Træner Tom/]);
+  await expect(hasVoted).not.toContainText("Emil");
+  await page.keyboard.press("Escape");
+  await expect(hasVoted).toBeHidden();
 
   // Pressed the moment the page opens: with the feed behind a <Suspense> this left the
   // button pending for good now and then (see tests/unit/no-suspense.test.ts).
@@ -120,6 +127,11 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   await expect(page.getByText("2 har stemt")).toBeVisible();
   // Emil and Victor have a vote each and lead, in the order they were written; the rest follow.
   await expect(page.locator("li").filter({ hasText: /· \d+%$/ })).toHaveText([/^Emil/, /^Victor.*din stemme/, /^Frederik/, /^Oliver/, /^Lucas/]);
+  // "2 har stemt" sits to the right of "Vis alle", on the same row.
+  const showAll = (await page.getByRole("button", { name: "Vis alle 6 svar" }).boundingBox())!;
+  const count = (await page.getByRole("button", { name: "2 har stemt" }).boundingBox())!;
+  expect(count.x).toBeGreaterThan(showAll.x + showAll.width);
+  expect(Math.abs(count.y + count.height / 2 - (showAll.y + showAll.height / 2))).toBeLessThan(2);
   await page.getByRole("button", { name: "Vis alle 6 svar" }).click();
   await expect(page.getByText(/^Mads/)).toBeVisible();
 

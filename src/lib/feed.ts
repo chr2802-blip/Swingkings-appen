@@ -44,9 +44,9 @@ export const MAX_PINNED_SHOWN = 20;
  *
  * This is where an anonymous poll stays anonymous on the way to the phone: its votes
  * have no voter to send, and the only per-person fact read is whether the *viewer* has a
- * ballot. An open poll's voters are named; nothing about a poll's results reaches the
- * browser before the viewer has voted or the poll has closed, so it cannot be read out
- * of the page either.
+ * ballot. A poll with names on says who has voted; nothing about its results — the counts,
+ * or what anybody chose — reaches the browser before the viewer has voted or the poll has
+ * closed, so it cannot be read out of the page either.
  */
 export async function feedPosts(
   teamId: string,
@@ -148,6 +148,7 @@ export function pollView(
     matchLabel: poll.match ? `${poll.match.opponent ?? poll.match.title} · ${kickoffLabel(poll.match.startsAt)}` : null,
     ballots: poll.ballots.length,
     hasVoted,
+    voters: poll.anonymous ? [] : whoVoted(poll.votes),
     myChoices: poll.anonymous ? [] : poll.votes.filter((v) => v.voterId === viewer.id).map((v) => v.optionId),
     canClose: authorId === viewer.id || viewer.canAdminister,
     options: sortByVotes(
@@ -169,6 +170,18 @@ export function pollView(
       }),
     ),
   };
+}
+
+/**
+ * Everybody who has voted in a poll with names on, each once, by name — without what they
+ * chose, so it may be shown to somebody who has not voted yet. An anonymous poll's votes
+ * have no voter, and its ballots are never listed: a name appearing as a count goes up
+ * would tell what was voted.
+ */
+function whoVoted(votes: PollRow["votes"]) {
+  const voters = new Map<string, NonNullable<PollRow["votes"][number]["voter"]>>();
+  for (const vote of votes) if (vote.voter) voters.set(vote.voter.id, vote.voter);
+  return [...voters.values()].sort((a, b) => a.name.localeCompare(b.name, "da") || a.id.localeCompare(b.id));
 }
 
 /** A post shows this many of the faces that liked it; the rest are a number. */

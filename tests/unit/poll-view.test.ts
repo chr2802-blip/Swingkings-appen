@@ -35,6 +35,21 @@ describe("pollView", () => {
       [0, 0, false, []],
       [0, 0, false, []],
     ]);
+    // Who has voted is told, each once and by name — but not what they chose.
+    expect(view.voters).toEqual([anna, bo]);
+    expect(view.myChoices).toEqual([]);
+  });
+
+  it("names each voter once however many answers they ticked", () => {
+    const several = poll({
+      multipleChoice: true,
+      votes: [
+        { optionId: "o2", voterId: "bo", voter: bo },
+        { optionId: "o1", voterId: "bo", voter: bo },
+        { optionId: "o1", voterId: "anna", voter: anna },
+      ],
+    });
+    expect(pollView(several, "anna", { id: "carl", canAdminister: false }, now).voters).toEqual([anna, bo]);
   });
 
   it("shows a voter the counts, the shares and who voted for what", () => {
@@ -54,7 +69,7 @@ describe("pollView", () => {
       ],
     });
     const view = pollView(anonymous, "anna", { id: "carl", canAdminister: true }, now);
-    expect(view).toMatchObject({ open: false, myChoices: [], canClose: true });
+    expect(view).toMatchObject({ open: false, myChoices: [], canClose: true, voters: [] });
     expect(view.options.map((o) => [o.votes, o.voters])).toEqual([
       [1, []],
       [1, []],
