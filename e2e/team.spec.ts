@@ -42,6 +42,10 @@ test("a coach removes a player, who no longer reaches the team", async ({ page, 
   // Nothing that cannot be undone happens on the first press: it asks first.
   await page.getByRole("dialog", { name: "Fjern Bo fra holdet?" }).getByRole("button", { name: "Fjern fra holdet" }).click();
   await expect.poll(() => db.teamMember.count({ where: { teamId: team.id, userId: bo.id } })).toBe(0);
+  // The page has taken the answer in before it is left: a navigation started while the
+  // action's own refresh is still on its way is aborted.
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(row).toHaveCount(0);
 
   await loginAs(bo);
   await page.goto("/oversigt");
