@@ -143,6 +143,50 @@ test("the fine box's + becomes the drawer's ×, and closes it again", async ({ p
   await expect(plus).toHaveAttribute("aria-expanded", "false");
 });
 
+test("the + stays above its drawer while the drawer slides away, and goes under the dialog a row opens", async ({
+  page,
+  loginAs,
+}) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/boder");
+  const plus = page.getByRole("button", { name: "Opret" });
+  const menu = page.getByRole("dialog", { name: "Opret" });
+
+  // Every frame from the press until the drawer has left the page: is the + over it?
+  const aboveUntilGone = () =>
+    page.evaluate(
+      () =>
+        new Promise<boolean[]>((resolve) => {
+          const layer = (element: Element) => Number(getComputedStyle(element).zIndex);
+          const button = document.querySelector(".app-create") as HTMLElement;
+          const frames: boolean[] = [];
+          const look = () => {
+            const drawer = document.querySelector('[role="dialog"][aria-label="Opret"]');
+            if (!drawer) return resolve(frames);
+            frames.push(layer(button) > layer(drawer.parentElement!));
+            requestAnimationFrame(look);
+          };
+          button.click();
+          look();
+        }),
+    );
+
+  await plus.click();
+  await expect(menu.getByRole("button", { name: "Giv bøde" })).toBeVisible();
+  const frames = await aboveUntilGone();
+  expect(frames.length).toBeGreaterThan(1);
+  expect(frames).not.toContain(false);
+  // And down again once it has gone, under the next sheet to open.
+  await expect(plus).toHaveClass(/z-\[45\]/);
+
+  // A row hands over to its dialog: the + is not left on top of that.
+  await plus.click();
+  await menu.getByRole("button", { name: "Giv bøde" }).click();
+  await expect(plus).toHaveClass(/z-\[45\]/);
+  await expect(page.getByRole("dialog", { name: "Giv bøde" })).toBeVisible();
+});
+
 test("at the end of a page the bars come back, and a window changing height moves nothing", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
   await db.match.createMany({
