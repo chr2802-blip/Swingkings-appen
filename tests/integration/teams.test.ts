@@ -8,6 +8,8 @@ import {
   deleteTeam,
   removeMember,
   revokeInviteLink,
+  setMemberDues,
+  setMemberRole,
   switchTeam,
   updateMember,
   updateTeam,
@@ -177,6 +179,16 @@ describe("members", () => {
     expect((await prisma.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).duesPaidAt).toBeNull();
   });
 
+  it("keeps the role when the form does not carry one", async () => {
+    const { team, admin, treasurer } = await makeSquad();
+    await signIn(admin);
+    expect(await updateMember(undefined, formData({ userId: treasurer.id, shirtNumber: "4", takesTasks: ["off", "on"] }))).toEqual({ ok: true });
+    expect(await prisma.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: treasurer.id } })).toMatchObject({
+      role: "TREASURER",
+      shirtNumber: 4,
+    });
+  });
+
   it("refuses a shirt number that is not a number", async () => {
     const { admin, anna } = await makeSquad();
     await signIn(admin);
@@ -222,6 +234,67 @@ describe("members", () => {
     expect(await prisma.taskAssignee.count({ where: { taskId: open.id } })).toBe(0);
     expect(await prisma.taskAssignee.count({ where: { taskId: done.id } })).toBe(1);
     expect(await prisma.fine.count({ where: { playerId: anna.id } })).toBe(1);
+  });
+});
+
+describe("the members table", () => {
+  const membership = (teamId: string, userId: string) =>
+    prisma.teamMember.findUniqueOrThrow({ where: { userId_teamId: { userId, teamId } } });
+
+  it("sets a member's place in the role stack, leaving shirt number and jobs alone", async () => {
+    const { team, admin, anna } = await makeSquad();
+    await prisma.teamMember.updateMany({ where: { teamId: team.id, userId: anna.id }, data: { shirtNumber: 9, takesTasks: false } });
+    await signIn(admin);
+    expect(await setMemberRole(undefined, formData({ userId: anna.id, role: "TREASURER" }))).toEqual({ ok: true });
+    expect(await membership(team.id, anna.id)).toMatchObject({ role: "TREASURER", shirtNumber: 9, takesTasks: false });
+    await setMemberRole(undefined, formData({ userId: anna.id, role: "ADMIN" }));
+    expect((await membership(team.id, anna.id)).role).toBe("ADMIN");
+    // With two admins, either may step down.
+    expect(await setMemberRole(undefined, formData({ userId: admin.id, role: "TREASURER" }))).toEqual({ ok: true });
+  });
+
+  it("refuses a role that is not one, and never leaves the team without an admin", async () => {
+    const { team, admin } = await makeSquad();
+    await signIn(admin);
+    expect((await setMemberRole(undefined, formData({ userId: admin.id, role: "SUPER_ADMIN" })))?.ok).toBe(false);
+    expect(await setMemberRole(undefined, formData({ userId: admin.id, role: "TREASURER" }))).toEqual({
+      ok: false,
+      error: "Holdet skal have mindst én admin.",
+    });
+    expect((await membership(team.id, admin.id)).role).toBe("ADMIN");
+  });
+
+  it("ticks kontingent with the day it was paid, keeps that day and clears it", async () => {
+    const { team, admin, anna } = await makeSquad();
+    await signIn(admin);
+    expect(await setMemberDues(undefined, formData({ userId: anna.id, paid: "on" }))).toEqual({ ok: true });
+    const paidAt = (await membership(team.id, anna.id)).duesPaidAt;
+    expect(paidAt).not.toBeNull();
+    await setMemberDues(undefined, formData({ userId: anna.id, paid: "on" }));
+    expect((await membership(team.id, anna.id)).duesPaidAt).toEqual(paidAt);
+    await setMemberDues(undefined, formData({ userId: anna.id, paid: "off" }));
+    expect((await membership(team.id, anna.id)).duesPaidAt).toBeNull();
+    expect((await setMemberDues(undefined, formData({ userId: anna.id, paid: "ja" })))?.ok).toBe(false);
+  });
+
+  it("lets only an admin tick roles and kontingent", async () => {
+    const { team, treasurer, anna } = await makeSquad();
+    for (const who of [treasurer, anna]) {
+      await signIn(who);
+      await expectDenied(() => setMemberRole(undefined, formData({ userId: anna.id, role: "ADMIN" })));
+      await expectDenied(() => setMemberDues(undefined, formData({ userId: anna.id, paid: "on" })));
+    }
+    expect(await membership(team.id, anna.id)).toMatchObject({ role: "PLAYER", duesPaidAt: null });
+  });
+
+  it("cannot reach somebody on another team", async () => {
+    const { admin } = await makeSquad();
+    const other = await makeSquad("Andre");
+    await signIn(admin);
+    const gone = { ok: false, error: "Spilleren er ikke på holdet længere." };
+    expect(await setMemberRole(undefined, formData({ userId: other.anna.id, role: "ADMIN" }))).toEqual(gone);
+    expect(await setMemberDues(undefined, formData({ userId: other.anna.id, paid: "on" }))).toEqual(gone);
+    expect(await membership(other.team.id, other.anna.id)).toMatchObject({ role: "PLAYER", duesPaidAt: null });
   });
 });
 

@@ -1,37 +1,18 @@
 "use client";
 
-import type { MemberRole } from "@prisma/client";
 import { FormDialog } from "@/components/form-dialog";
-import { Field, Input, Select } from "@/components/ui";
+import { Field, Input } from "@/components/ui";
 import { updateMember } from "@/app/actions/teams";
-import { ROLE_DESCRIPTION, ROLE_LABEL } from "@/lib/access";
 
-const ROLES: MemberRole[] = ["PLAYER", "TREASURER", "ADMIN"];
-
+/** Shirt number and the job rota. Role and kontingent are ticked in the members table. */
 export function MemberDialog({
   member,
 }: {
-  member: { userId: string; name: string; role: MemberRole; shirtNumber: number | null; takesTasks: boolean; duesPaid: boolean };
+  member: { userId: string; name: string; shirtNumber: number | null; takesTasks: boolean };
 }) {
   return (
     <FormDialog trigger="Ret" triggerVariant="ghost" title={member.name} action={updateMember} submitLabel="Gem" size="drawer">
       <input type="hidden" name="userId" value={member.userId} />
-      <Field label="Rolle" htmlFor="role">
-        <Select id="role" name="role" defaultValue={member.role}>
-          {ROLES.map((role) => (
-            <option key={role} value={role}>
-              {ROLE_LABEL[role]}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <ul className="space-y-1 text-xs text-slate-500">
-        {ROLES.map((role) => (
-          <li key={role}>
-            <strong className="font-medium text-slate-700">{ROLE_LABEL[role]}:</strong> {ROLE_DESCRIPTION[role]}
-          </li>
-        ))}
-      </ul>
       <Field label="Trøjenummer" htmlFor="shirtNumber">
         <Input id="shirtNumber" name="shirtNumber" type="number" inputMode="numeric" min={0} max={999} defaultValue={member.shirtNumber ?? ""} />
       </Field>
@@ -39,11 +20,6 @@ export function MemberDialog({
         <input type="hidden" name="takesTasks" value="off" />
         <input type="checkbox" name="takesTasks" value="on" defaultChecked={member.takesTasks} className="h-4 w-4 accent-[var(--accent)]" />
         Med i den automatiske opgavefordeling
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="hidden" name="duesPaid" value="off" />
-        <input type="checkbox" name="duesPaid" value="on" defaultChecked={member.duesPaid} className="h-4 w-4 accent-[var(--accent)]" />
-        Kontingent betalt for sæsonen
       </label>
     </FormDialog>
   );

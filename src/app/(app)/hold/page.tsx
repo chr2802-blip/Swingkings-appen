@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam, ROLE_DESCRIPTION, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
+import { canAdministerTeam, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { readInZone } from "@/lib/time";
@@ -14,6 +14,8 @@ import { SyncButton } from "@/components/sync-button";
 import { TeamSettingsForm } from "@/components/team-settings-form";
 import { InviteLinkForm } from "@/components/invite-link-form";
 import { MemberDialog } from "@/components/member-dialog";
+import { MemberRights } from "@/components/member-rights";
+import { RIGHT_CELL, RIGHT_COLUMNS } from "@/lib/role-stack";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
 import { removeMember, revokeInviteLink } from "@/app/actions/teams";
@@ -53,27 +55,43 @@ export default async function TeamSettingsPage() {
       <section id="medlemmer" className="scroll-mt-24">
         <SectionTitle>Medlemmer og roller</SectionTitle>
         <Card className="mb-3 space-y-1 text-sm text-slate-600">
-          {(["PLAYER", "TREASURER", "ADMIN"] as const).map((role) => (
-            <p key={role}>
-              <strong className="font-medium text-slate-800">{ROLE_LABEL[role]}:</strong> {ROLE_DESCRIPTION[role]}
-            </p>
-          ))}
+          <p>
+            Alle er <strong className="font-medium text-slate-800">{ROLE_LABEL.PLAYER}</strong>, og rettighederne bygger
+            oven på hinanden. <strong className="font-medium text-slate-800">Bøder</strong> ({ROLE_LABEL.TREASURER.toLowerCase()}):
+            bødekataloget og nulstilling. <strong className="font-medium text-slate-800">{ROLE_LABEL.ADMIN}</strong>: alt,
+            også medlemmer, invitationer og ny sæson — og altid Bøder.
+          </p>
+          <p>
+            <strong className="font-medium text-slate-800">Betalt</strong>: kontingent for sæsonen, som hele holdet kan se.
+          </p>
         </Card>
         <Card padded={false}>
+          <div className="flex items-center gap-x-1 border-b border-slate-100 py-2 pl-4 pr-2 text-xs font-medium text-slate-500">
+            <span className="min-w-0 flex-1 truncate">
+              {roster.filter((m) => m.duesPaid).length}/{roster.length} betalt
+            </span>
+            {RIGHT_COLUMNS.map((column) => (
+              <span key={column} className={RIGHT_CELL}>
+                {column}
+              </span>
+            ))}
+            <span className="w-9 shrink-0" aria-hidden />
+          </div>
           <ul className="divide-y divide-slate-100">
             {roster.map((member) => (
-              <li key={member.userId} className="flex items-center gap-3 px-4 py-3">
-                <Avatar name={member.name} photoId={member.photoId} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    <PlayerLink userId={member.userId}>{member.name}</PlayerLink>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge tone={member.role === "PLAYER" ? undefined : "accent"}>{ROLE_LABEL[member.role]}</Badge>
-                    {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
-                    {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
+              <li key={member.userId} className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2.5 pl-4 pr-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="hidden sm:contents">
+                    <Avatar name={member.name} photoId={member.photoId} size="sm" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      <PlayerLink userId={member.userId}>{member.name}</PlayerLink>
+                    </p>
+                    {member.superAdmin && <p className="truncate text-xs text-[var(--accent-text)]">{SUPER_ADMIN_LABEL}</p>}
                   </div>
                 </div>
+                <MemberRights userId={member.userId} name={member.name} role={member.role} duesPaid={member.duesPaid} />
                 <ActionMenu icon label={`Handlinger for ${member.name}`} title={member.name}>
                   <MemberDialog member={member} />
                   {member.userId !== user.id && (

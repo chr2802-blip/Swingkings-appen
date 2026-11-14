@@ -113,7 +113,8 @@ export async function revokeInviteLink(_prev: ActionResult, formData: FormData):
 
 const memberSchema = z.object({
   userId: z.string().min(1),
-  role: z.enum(ROLES),
+  // Left out by the dialog: roles are ticked in the members table (setMemberRole).
+  role: z.enum(ROLES).optional(),
   shirtNumber: z
     .string()
     .trim()
@@ -135,7 +136,7 @@ export async function updateMember(_prev: ActionResult, formData: FormData): Pro
   const member = await db.teamMember.findFirst({ where: { userId: form.fields.userId } });
   if (!member) return fail("Spilleren er ikke på holdet længere.");
 
-  if (member.role === "ADMIN" && form.fields.role !== "ADMIN") {
+  if (member.role === "ADMIN" && form.fields.role && form.fields.role !== "ADMIN") {
     const admins = await db.teamMember.count({ where: { role: "ADMIN" } });
     if (admins <= 1) return fail("Holdet skal have mindst én admin.");
   }
@@ -146,12 +147,51 @@ export async function updateMember(_prev: ActionResult, formData: FormData): Pro
   await db.teamMember.updateMany({
     where: { userId: form.fields.userId },
     data: {
-      role: form.fields.role,
+      ...(form.fields.role ? { role: form.fields.role } : {}),
       shirtNumber: form.fields.shirtNumber,
       takesTasks: formData.getAll("takesTasks").includes("on"),
       ...(duesPaid === undefined ? {} : { duesPaidAt: duesPaid ? (member.duesPaidAt ?? new Date()) : null }),
     },
   });
+  revalidatePath("/hold", "layout");
+  return ok();
+}
+
+const memberRoleSchema = z.object({ userId: z.string().min(1), role: z.enum(ROLES) });
+
+/**
+ * One tick in the members table: a member's place in the stack spiller → bødekasseformand
+ * → admin. The page works out which step a tick means; this only refuses losing the last admin.
+ */
+export async function setMemberRole(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  assertTeamAdmin(user, user.teamId);
+  const form = readForm(memberRoleSchema, formData);
+  if (!form.ok) return fail("Vælg en rolle.");
+  const db = teamDb(user.teamId);
+  const member = await db.teamMember.findFirst({ where: { userId: form.fields.userId } });
+  if (!member) return fail("Spilleren er ikke på holdet længere.");
+  if (member.role === "ADMIN" && form.fields.role !== "ADMIN") {
+    if ((await db.teamMember.count({ where: { role: "ADMIN" } })) <= 1) return fail("Holdet skal have mindst én admin.");
+  }
+  await db.teamMember.updateMany({ where: { userId: form.fields.userId }, data: { role: form.fields.role } });
+  revalidatePath("/hold", "layout");
+  return ok();
+}
+
+const memberDuesSchema = z.object({ userId: z.string().min(1), paid: z.enum(["on", "off"]) });
+
+/** The kontingent tick in the members table; a paid day already set is kept. */
+export async function setMemberDues(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  assertTeamAdmin(user, user.teamId);
+  const form = readForm(memberDuesSchema, formData);
+  if (!form.ok) return fail("Kunne ikke læse krydset.");
+  const db = teamDb(user.teamId);
+  const member = await db.teamMember.findFirst({ where: { userId: form.fields.userId } });
+  if (!member) return fail("Spilleren er ikke på holdet længere.");
+  const duesPaidAt = form.fields.paid === "on" ? (member.duesPaidAt ?? new Date()) : null;
+  await db.teamMember.updateMany({ where: { userId: form.fields.userId }, data: { duesPaidAt } });
   revalidatePath("/hold", "layout");
   return ok();
 }
