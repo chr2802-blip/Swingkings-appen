@@ -130,9 +130,11 @@ describe("createDemoTeam", () => {
 
   it("brings its own pictures, each one in a post or a chat message", async () => {
     const team = await createDemoTeam();
-    expect(await prisma.photo.count({ where: { teamId: team.id } })).toBe(9);
-    expect(await prisma.photo.count({ where: { teamId: team.id, postPhotos: { none: {} }, chatMessages: { none: {} } } })).toBe(0);
-    expect(await prisma.chatMessage.count({ where: { teamId: team.id, photoId: { not: null } } })).toBe(2);
+    expect(await prisma.photo.count({ where: { teamId: team.id } })).toBe(10);
+    expect(await prisma.photo.count({ where: { teamId: team.id, postPhotos: { none: {} }, chatPhotos: { none: {} } } })).toBe(0);
+    expect(await prisma.chatMessage.count({ where: { teamId: team.id, photos: { some: {} } } })).toBe(2);
+    const warmUp = await prisma.chatMessage.findFirstOrThrow({ where: { teamId: team.id, body: "Billede fra opvarmningen 📸" }, include: { photos: true } });
+    expect(warmUp.photos.map((photo) => photo.position).sort()).toEqual([0, 1]);
     const album = await prisma.post.findFirstOrThrow({ where: { teamId: team.id, body: { startsWith: "5-2 over Herlev" } }, include: { photos: true } });
     expect(album.photos.map((photo) => photo.position).sort()).toEqual([0, 1, 2]);
     await removeDemoTeam();

@@ -23,6 +23,7 @@ const NO_TEAM_ID: Record<string, { refuse: true; because: string } | { refuse: f
   PostLike: { refuse: true, because: "reached through its post" },
   PostComment: { refuse: true, because: "reached through its post" },
   PostPhoto: { refuse: true, because: "reached through its post" },
+  ChatPhoto: { refuse: true, because: "reached through its chat message" },
   PollOption: { refuse: true, because: "reached through its poll" },
   PollVote: { refuse: true, because: "reached through its poll" },
   PollBallot: { refuse: true, because: "reached through its poll" },

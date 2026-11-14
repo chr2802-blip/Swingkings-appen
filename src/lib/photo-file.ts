@@ -17,6 +17,9 @@
 /** The form field every picture-carrying form posts its chosen picture under. */
 export const PHOTO_FIELD = "photoId";
 
+/** How many pictures one chat message carries at most. */
+export const MAX_CHAT_PHOTOS = 10;
+
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
 export type PhotoType = (typeof PHOTO_TYPES)[number];

@@ -80,7 +80,7 @@ const UNCLAIMED = {
   teams: { none: {} },
   users: { none: {} },
   postPhotos: { none: {} },
-  chatMessages: { none: {} },
+  chatPhotos: { none: {} },
 } as const;
 
 export type PhotoChoice = { ok: true; photoId: string | null | undefined } | { ok: false; error: string };
@@ -166,7 +166,7 @@ export async function sweepUnclaimedPhotos(teamId: string) {
 }
 
 /**
- * Reads every picture a form is attaching (a feed post takes several), in the order
+ * Reads every picture a form is attaching (a feed post or a chat message takes several), in the order
  * chosen. Each id is looked up through `teamDb`, so another team's picture is not found.
  */
 export async function readPhotoChoices(
@@ -175,9 +175,11 @@ export async function readPhotoChoices(
   max: number,
   /** The pictures the post already has: they may be sent again, which keeps them. */
   current: string[] = [],
+  /** What the pictures are on, for the error: "opslag", "besked". */
+  per = "opslag",
 ): Promise<{ ok: true; photoIds: string[] } | { ok: false; error: string }> {
   const ids = [...new Set(formData.getAll(PHOTO_FIELD).map((v) => String(v).trim()).filter(Boolean))];
-  if (ids.length > max) return { ok: false, error: `Højst ${max} billeder pr. opslag.` };
+  if (ids.length > max) return { ok: false, error: `Højst ${max} billeder pr. ${per}.` };
   const added = ids.filter((id) => !current.includes(id));
   if (added.length === 0) return { ok: true, photoIds: ids };
   const found = await teamDb(teamId).photo.findMany({ where: { id: { in: added }, ...UNCLAIMED }, select: { id: true } });

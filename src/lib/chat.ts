@@ -6,7 +6,8 @@ export const CHAT_PAGE = 60;
 export type ChatItem = {
   id: string;
   body: string;
-  photoId: string | null;
+  /** Its pictures, in the order they were chosen. */
+  photoIds: string[];
   createdAt: string;
   author: { id: string; name: string; photoId: string | null };
 };
@@ -19,10 +20,14 @@ export async function latestMessages(teamId: string): Promise<ChatItem[]> {
     select: {
       id: true,
       body: true,
-      photoId: true,
       createdAt: true,
       author: { select: { id: true, name: true, photoId: true } },
+      photos: { orderBy: { position: "asc" }, select: { photoId: true } },
     },
   });
-  return rows.reverse().map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+  return rows.reverse().map(({ photos, ...row }) => ({
+    ...row,
+    photoIds: photos.map((photo) => photo.photoId),
+    createdAt: row.createdAt.toISOString(),
+  }));
 }

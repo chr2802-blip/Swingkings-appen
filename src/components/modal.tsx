@@ -11,7 +11,7 @@ export const EXIT_MS = 200;
 // up — so the page is locked while any is mounted, and unlocked by the last to go.
 let locks = 0;
 let unlocked = "";
-function lockScroll() {
+export function lockScroll() {
   if (locks++ === 0) {
     unlocked = document.body.style.overflow;
     document.body.style.overflow = "hidden";

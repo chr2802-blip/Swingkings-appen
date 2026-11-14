@@ -154,7 +154,8 @@ const CHAT_NOW: readonly (readonly [string, string])[] = [
   ["Victor", "Jeg har to pladser"],
 ];
 /** The chat messages that carry a picture, by their text. */
-const CHAT_PICTURES = ["Billede fra opvarmningen 📸", "Holdbillede fra i dag"];
+/** Chat messages that carry pictures, and how many. */
+const CHAT_PICTURES: Record<string, number> = { "Billede fra opvarmningen 📸": 2, "Holdbillede fra i dag": 1 };
 
 /** The feed, oldest first: days ago, who, what, how many pictures, comments (who, what). */
 const POSTS: readonly (readonly [number, string, string, number, readonly (readonly [string, string])[]])[] = [
@@ -440,12 +441,19 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   // --- Chat ---------------------------------------------------------------------------------
   const messages: Prisma.ChatMessageCreateManyInput[] = [];
   for (const [daysAgo, hour, minute, author, body] of CHAT) {
-    messages.push({ teamId, authorId: who(author).id, body, createdAt: day(-daysAgo, hour, minute), photoId: CHAT_PICTURES.includes(body) ? await picture() : null });
+    messages.push({ teamId, authorId: who(author).id, body, createdAt: day(-daysAgo, hour, minute) });
   }
   for (const [index, [author, body]] of CHAT_NOW.entries()) {
     messages.push({ teamId, authorId: who(author).id, body, createdAt: new Date(now.getTime() - (CHAT_NOW.length - index) * 600_000) });
   }
-  await prisma.chatMessage.createMany({ data: messages });
+  const sent = await prisma.chatMessage.createManyAndReturn({ data: messages, select: { id: true, body: true } });
+  const chatPhotos: Prisma.ChatPhotoCreateManyInput[] = [];
+  for (const message of sent) {
+    for (let position = 0; position < (CHAT_PICTURES[message.body] ?? 0); position++) {
+      chatPhotos.push({ messageId: message.id, photoId: await picture(), position });
+    }
+  }
+  await prisma.chatPhoto.createMany({ data: chatPhotos });
 
   // --- Feed: posts, pictures, likes and comments ----------------------------------------------
   const posts = await prisma.post.createManyAndReturn({

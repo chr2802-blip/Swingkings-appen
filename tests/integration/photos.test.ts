@@ -69,7 +69,7 @@ describe("choosing pictures in a form", () => {
     const avatar = await makePhoto(team.id, { createdAt: hourAgo });
     const inChat = await makePhoto(team.id, { createdAt: hourAgo });
     await prisma.user.update({ where: { id: anna.id }, data: { photoId: avatar.id } });
-    await prisma.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "", photoId: inChat.id } });
+    await prisma.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "", photos: { create: { photoId: inChat.id, position: 0 } } } });
 
     expect(await sweepUnclaimedPhotos(team.id)).toBe(1);
     expect((await prisma.photo.findMany({ select: { id: true } })).map((p) => p.id).sort()).toEqual([fresh.id, avatar.id, inChat.id].sort());

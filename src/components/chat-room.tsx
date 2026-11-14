@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { sendChatMessage, deleteChatMessage } from "@/app/actions/social";
-import { Avatar, Photo, photoUrl } from "@/components/photo";
+import { Avatar, Photo } from "@/components/photo";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { PlayerLink } from "@/components/player-link";
 import { uploadPhoto } from "@/components/photo-field";
 import { PhotoError } from "@/lib/downscale";
+import { MAX_CHAT_PHOTOS, PHOTO_FIELD } from "@/lib/photo-file";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { followTeamSignal } from "@/components/team-signal";
 import { stampLabel } from "@/lib/time";
@@ -19,9 +21,10 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
   const [messages, setMessages] = useState(initial);
   const [live, setLive] = useState(false);
   const [text, setText] = useState("");
-  const [photoId, setPhotoId] = useState<string | null>(null);
+  const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState<{ done: number; of: number } | null>(null);
+  const [viewing, setViewing] = useState<{ photoIds: string[]; index: number } | null>(null);
   const [pending, startTransition] = useTransition();
   const bottom = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -77,31 +80,37 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
     bottom.current?.scrollIntoView({ block: "end" });
   }, []);
 
-  async function attach(file: File | undefined) {
-    if (!file) return;
-    setUploading(true);
-    setError(null);
-    try {
-      setPhotoId(await uploadPhoto(file));
-    } catch (cause) {
-      setError(cause instanceof PhotoError ? cause.message : "Billedet kunne ikke uploades.");
-    } finally {
-      setUploading(false);
-      if (fileInput.current) fileInput.current.value = "";
+  /** Each picture is shrunk and uploaded the moment it is picked, one after the other, in the order chosen. */
+  async function attach(files: FileList | null) {
+    if (!files?.length) return;
+    const room = MAX_CHAT_PHOTOS - photoIds.length;
+    const picked = [...files].slice(0, room);
+    setError(files.length > room ? `Højst ${MAX_CHAT_PHOTOS} billeder pr. besked.` : null);
+    setUploading({ done: 0, of: picked.length });
+    for (const [index, file] of picked.entries()) {
+      try {
+        const id = await uploadPhoto(file);
+        setPhotoIds((current) => [...current, id]);
+      } catch (cause) {
+        setError(cause instanceof PhotoError ? cause.message : "Et billede kunne ikke uploades.");
+      }
+      setUploading({ done: index + 1, of: picked.length });
     }
+    setUploading(null);
+    if (fileInput.current) fileInput.current.value = "";
   }
 
   function send(event?: React.FormEvent) {
     event?.preventDefault();
-    if (!text.trim() && !photoId) return;
+    if (uploading || (!text.trim() && photoIds.length === 0)) return;
     const data = new FormData();
     data.set("body", text);
-    data.set("photoId", photoId ?? "");
+    for (const id of photoIds) data.append(PHOTO_FIELD, id);
     startTransition(async () => {
       const result = await sendChatMessage(undefined, data);
       if (result?.ok) {
         setText("");
-        setPhotoId(null);
+        setPhotoIds([]);
         setError(null);
         await refresh();
       } else if (result) {
@@ -149,10 +158,8 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
                     own ? "bg-[var(--accent)] text-white" : "border border-slate-200 bg-white"
                   }`}
                 >
-                  {message.photoId && (
-                    <a href={photoUrl(message.photoId)} target="_blank" rel="noreferrer">
-                      <Photo photoId={message.photoId} alt="Billede i chatten" size="thumb" className="max-h-72 w-full object-cover" />
-                    </a>
+                  {message.photoIds.length > 0 && (
+                    <ChatPhotos photoIds={message.photoIds} onOpen={(index) => setViewing({ photoIds: message.photoIds, index })} />
                   )}
                   {message.body && <p className="px-3.5 py-2 text-sm whitespace-pre-line">{message.body}</p>}
                 </div>
@@ -175,13 +182,30 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
         onSubmit={send}
         className="app-composer sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] -mx-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg md:bottom-4"
       >
-        {photoId && (
-          <div className="mb-2 flex items-center gap-2">
-            <Photo photoId={photoId} alt="Valgt billede" size="thumb" className="h-14 w-14 rounded-lg object-cover" />
-            <button type="button" onClick={() => setPhotoId(null)} className="text-xs text-slate-500 underline">
-              Fjern billede
-            </button>
-          </div>
+        {(photoIds.length > 0 || uploading) && (
+          <ul className="scrollbar-hidden mb-2 flex gap-2 overflow-x-auto pt-1" aria-label="Valgte billeder">
+            {photoIds.map((id, index) => (
+              <li key={id} className="relative shrink-0">
+                <Photo photoId={id} alt={`Valgt billede ${index + 1}`} size="thumb" className="h-16 w-16 rounded-lg object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPhotoIds((current) => current.filter((x) => x !== id))}
+                  aria-label={`Fjern billede ${index + 1}`}
+                  className="press-icon absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/80 text-white"
+                >
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3">
+                    <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </li>
+            ))}
+            {uploading && (
+              <li className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-lg bg-slate-100 text-[10px] text-slate-500">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+                {uploading.done + 1}/{uploading.of}
+              </li>
+            )}
+          </ul>
         )}
         {error && (
           <p role="alert" className="mb-2 px-1 text-xs text-red-600">
@@ -189,11 +213,20 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
           </p>
         )}
         <div className="flex items-end gap-2">
-          <input ref={fileInput} type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            aria-label="Vælg billeder"
+            tabIndex={-1}
+            onChange={(e) => attach(e.target.files)}
+          />
           <button
             type="button"
-            aria-label="Vedhæft billede"
-            disabled={uploading}
+            aria-label="Vedhæft billeder"
+            disabled={uploading !== null || photoIds.length >= MAX_CHAT_PHOTOS}
             onClick={() => fileInput.current?.click()}
             className="press-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50"
           >
@@ -225,7 +258,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
           />
           <button
             type="submit"
-            disabled={pending || uploading || (!text.trim() && !photoId)}
+            disabled={pending || uploading !== null || (!text.trim() && photoIds.length === 0)}
             aria-label="Send"
             className="press-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white disabled:opacity-40"
           >
@@ -235,6 +268,53 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
           </button>
         </div>
       </form>
+      {viewing && (
+        <PhotoViewer photoIds={viewing.photoIds} index={viewing.index} alt="Billede i chatten" onClose={() => setViewing(null)} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A message's pictures inside its bubble: one on its own, two side by side, more as a
+ * grid of four with "+n" on the last. Pressing one opens them all in the viewer, there.
+ */
+function ChatPhotos({ photoIds, onOpen }: { photoIds: string[]; onOpen: (index: number) => void }) {
+  const count = photoIds.length;
+  if (count === 1) {
+    return (
+      <button type="button" onClick={() => onOpen(0)} className="block w-full cursor-zoom-in">
+        <Photo photoId={photoIds[0]!} alt="Billede i chatten" size="thumb" className="max-h-72 w-full object-cover" />
+      </button>
+    );
+  }
+  const shown = photoIds.slice(0, 4);
+  return (
+    <div className="grid w-60 max-w-full grid-cols-2 gap-0.5 bg-white">
+      {shown.map((id, index) => {
+        const more = index === shown.length - 1 ? count - shown.length : 0;
+        const wide = count === 3 && index === 0;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onOpen(index)}
+            className={`relative cursor-zoom-in ${wide ? "col-span-2" : ""}`}
+          >
+            <Photo
+              photoId={id}
+              alt={`Billede i chatten (${index + 1} af ${count})`}
+              size="thumb"
+              className={`w-full object-cover ${wide ? "aspect-[2/1]" : count === 2 ? "aspect-[3/4]" : "aspect-square"}`}
+            />
+            {more > 0 && (
+              <span className="absolute inset-0 flex items-center justify-center bg-slate-900/50 text-xl font-semibold text-white">
+                +{more}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
