@@ -412,20 +412,32 @@ model TaskTemplate {
   @@index([teamId])
 }
 
+/// A message in the team chat: some words, pictures (`ChatPhoto` rows), or both.
 model ChatMessage {
   id        String   @id @default(cuid())
   teamId    String
   authorId  String
   body      String
-  photoId   String?
   createdAt DateTime @default(now())
 
-  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  photo  Photo? @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  team   Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  photos ChatPhoto[]
 
   @@index([teamId, createdAt])
   @@index([authorId])
+}
+
+/// One of a chat message's pictures. Reached through its message.
+model ChatPhoto {
+  messageId String
+  photoId   String
+  position  Int
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  photo   Photo       @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, photoId])
   @@index([photoId])
 }
 
@@ -434,11 +446,11 @@ model ChatMessage {
  * Its pictures are `PostPhoto` rows, in the order they were chosen.
  */
 model Post {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   teamId    String
   authorId  String
   body      String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   /// When the words or pictures were last changed after posting; the feed says "redigeret".
   editedAt  DateTime?
   /// Pinned posts lie at the top of the feed, the latest pinned first. Anybody on the team pins and unpins.
@@ -624,10 +636,10 @@ model Photo {
 
   team Team @relation("PhotoTeam", fields: [teamId], references: [id], onDelete: Cascade)
 
-  teams        Team[]        @relation("TeamPhoto")
-  users        User[]        @relation("UserPhoto")
-  postPhotos   PostPhoto[]
-  chatMessages ChatMessage[]
+  teams      Team[]      @relation("TeamPhoto")
+  users      User[]      @relation("UserPhoto")
+  postPhotos PostPhoto[]
+  chatPhotos ChatPhoto[]
 
   @@index([teamId, createdAt])
 }

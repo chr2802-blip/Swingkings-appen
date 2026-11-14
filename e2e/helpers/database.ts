@@ -2,6 +2,7 @@ import { PrismaClient, type MemberRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
 import { E2E_AUTH_SECRET, e2eDatabaseUrl } from "./env";
+import { DEMO_PICTURE, demoPicture } from "../../src/lib/demo-pictures";
 
 /** The browser suite's own client, on the `_e2e` database. Seeds and inspects; the app writes. */
 export const db = new PrismaClient({ datasources: { db: { url: e2eDatabaseUrl() } } });
@@ -52,4 +53,21 @@ export async function sessionCookie(userId: string) {
     .setExpirationTime("1h")
     .sign(new TextEncoder().encode(E2E_AUTH_SECRET));
   return { name: "swingkings_session", value, domain: "127.0.0.1", path: "/", httpOnly: true, sameSite: "Lax" as const };
+}
+
+/** A stored picture on a team, drawn rather than shipped (`src/lib/demo-pictures.ts`). */
+export async function picture(teamId: string, scene = 0) {
+  const { full, thumb } = demoPicture(scene);
+  return db.photo.create({
+    data: {
+      teamId,
+      contentType: "image/png",
+      width: DEMO_PICTURE.width,
+      height: DEMO_PICTURE.height,
+      bytes: Buffer.from(full),
+      thumbWidth: DEMO_PICTURE.thumbWidth,
+      thumbHeight: DEMO_PICTURE.thumbHeight,
+      thumbBytes: Buffer.from(thumb),
+    },
+  });
 }

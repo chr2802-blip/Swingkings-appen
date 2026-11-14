@@ -8,7 +8,8 @@ import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { MAX_MESSAGE, optionalId, readForm } from "@/lib/form";
-import { readPhotoChoice, readPhotoChoices, discardPhoto, discardPhotos } from "@/lib/photos";
+import { readPhotoChoices, discardPhotos } from "@/lib/photos";
+import { MAX_CHAT_PHOTOS } from "@/lib/photo-file";
 import { teamRoster } from "@/lib/roster";
 import { castVote } from "@/lib/voting";
 import { cleanOptions, MAX_POLL_OPTIONS, MAX_POST_PHOTOS } from "@/lib/polls";
@@ -26,16 +27,21 @@ export async function sendChatMessage(_prev: ActionResult, formData: FormData): 
   const user = await requireTeamUser();
   const text = body.safeParse(formData.get("body") ?? undefined);
   if (!text.success) return fail(`Beskeden er for lang (højst ${MAX_MESSAGE} tegn).`);
-  const photo = await readPhotoChoice(formData, user.teamId);
-  if (!photo.ok) return fail(photo.error);
-  if (!text.data && !photo.photoId) return fail("Skriv en besked eller vælg et billede.");
+  const photos = await readPhotoChoices(formData, user.teamId, MAX_CHAT_PHOTOS, [], "besked");
+  if (!photos.ok) return fail(photos.error);
+  if (!text.data && photos.photoIds.length === 0) return fail("Skriv en besked eller vælg et billede.");
 
   const limit = await checkRateLimit("chat", user.id);
   if (!limit.allowed) return fail("Du sender meget hurtigt. Vent lidt.");
   await recordAttempt("chat", user.id);
 
   await teamDb(user.teamId).chatMessage.create({
-    data: { teamId: user.teamId, authorId: user.id, body: text.data ?? "", photoId: photo.photoId ?? null },
+    data: {
+      teamId: user.teamId,
+      authorId: user.id,
+      body: text.data ?? "",
+      photos: { create: photos.photoIds.map((photoId, position) => ({ photoId, position })) },
+    },
   });
   announce(user.teamId, CHAT_POSTED);
 
@@ -45,7 +51,11 @@ export async function sendChatMessage(_prev: ActionResult, formData: FormData): 
     user.id,
     {
       title: `${user.name} · ${user.teamName}`,
-      body: text.data ? text.data.slice(0, 140) : "📷 Sendte et billede",
+      body: text.data
+        ? text.data.slice(0, 140)
+        : photos.photoIds.length === 1
+          ? "📷 Sendte et billede"
+          : `📷 Sendte ${photos.photoIds.length} billeder`,
       url: "/chat",
       // One notification per team chat, replaced rather than stacked.
       tag: `chat-${user.teamId}`,
@@ -58,11 +68,14 @@ export async function sendChatMessage(_prev: ActionResult, formData: FormData): 
 export async function deleteChatMessage(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const message = await db.chatMessage.findFirst({ where: { id: String(formData.get("id") ?? "") } });
+  const message = await db.chatMessage.findFirst({
+    where: { id: String(formData.get("id") ?? "") },
+    include: { photos: { select: { photoId: true } } },
+  });
   if (!message) return ok();
   if (message.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din besked.");
   await db.chatMessage.deleteMany({ where: { id: message.id } });
-  await discardPhoto(user.teamId, message.photoId);
+  await discardPhotos(user.teamId, message.photos.map((photo) => photo.photoId));
   announce(user.teamId, CHAT_POSTED);
   revalidatePath("/chat");
   return ok();

@@ -27,11 +27,37 @@ describe("chat", () => {
     expect(await sendChatMessage(undefined, formData({ body: " Hej holdet " }))).toEqual({ ok: true });
     expect(await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: photo.id }))).toEqual({ ok: true });
     const messages = await latestMessages(team.id);
-    expect(messages.map((m) => [m.body, m.photoId])).toEqual([
-      ["Hej holdet", null],
-      ["", photo.id],
+    expect(messages.map((m) => [m.body, m.photoIds])).toEqual([
+      ["Hej holdet", []],
+      ["", [photo.id]],
     ]);
     expect(typeof messages[0]!.createdAt).toBe("string");
+  });
+
+  it("sends several pictures in one message, in the order chosen, with words or without", async () => {
+    const { team, anna } = await makeSquad();
+    const [a, b, c] = [await makePhoto(team.id), await makePhoto(team.id), await makePhoto(team.id)];
+    await signIn(anna);
+    expect(await sendChatMessage(undefined, formData({ body: "Fra kampen", [PHOTO_FIELD]: [c.id, a.id, b.id] }))).toEqual({ ok: true });
+    const [message] = await latestMessages(team.id);
+    expect(message).toMatchObject({ body: "Fra kampen", photoIds: [c.id, a.id, b.id] });
+    expect(await prisma.chatMessage.count()).toBe(1);
+  });
+
+  it("refuses more than ten pictures, and a picture already in another message", async () => {
+    const { team, anna } = await makeSquad();
+    const eleven = await Promise.all(Array.from({ length: 11 }, () => makePhoto(team.id)));
+    await signIn(anna);
+    expect(await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: eleven.map((p) => p.id) }))).toEqual({
+      ok: false,
+      error: "Højst 10 billeder pr. besked.",
+    });
+    expect(await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: [eleven[0]!.id] }))).toEqual({ ok: true });
+    expect(await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: [eleven[1]!.id, eleven[0]!.id] }))).toEqual({
+      ok: false,
+      error: "Et af billederne findes ikke længere.",
+    });
+    expect(await prisma.chatMessage.count()).toBe(1);
   });
 
   it("refuses an empty message, an overlong one and another team's picture", async () => {
@@ -42,7 +68,7 @@ describe("chat", () => {
     expect((await sendChatMessage(undefined, formData({ body: "x".repeat(4001) })))?.ok).toBe(false);
     expect(await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: (await makePhoto(other.team.id)).id }))).toEqual({
       ok: false,
-      error: "Billedet findes ikke længere.",
+      error: "Et af billederne findes ikke længere.",
     });
   });
 
@@ -67,18 +93,39 @@ describe("chat", () => {
     expect(messages.some((m) => m.body === "fremmed")).toBe(false);
   });
 
-  it("deletes your own message and its picture; an admin may delete anybody's", async () => {
+  it("deletes your own message and all its pictures; an admin may delete anybody's", async () => {
     const { team, anna, bo, admin } = await makeSquad();
-    const photo = await makePhoto(team.id);
-    const mine = await prisma.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "", photoId: photo.id } });
+    const [photo, second] = [await makePhoto(team.id), await makePhoto(team.id)];
+    const mine = await prisma.chatMessage.create({
+      data: {
+        teamId: team.id,
+        authorId: anna.id,
+        body: "",
+        photos: { create: [{ photoId: photo.id, position: 0 }, { photoId: second.id, position: 1 }] },
+      },
+    });
     const bos = await prisma.chatMessage.create({ data: { teamId: team.id, authorId: bo.id, body: "Bo" } });
     await signIn(anna);
     expect(await deleteChatMessage(undefined, formData({ id: bos.id }))).toEqual({ ok: false, error: "Det er ikke din besked." });
     await deleteChatMessage(undefined, formData({ id: mine.id }));
     expect(await prisma.photo.count()).toBe(0);
+    expect(await prisma.chatPhoto.count()).toBe(0);
     await signIn(admin);
     await deleteChatMessage(undefined, formData({ id: bos.id }));
     expect(await prisma.chatMessage.count()).toBe(0);
+  });
+
+  it("leaves another team's message and its pictures alone", async () => {
+    const { admin } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const theirs = await makePhoto(other.team.id);
+    const message = await prisma.chatMessage.create({
+      data: { teamId: other.team.id, authorId: other.anna.id, body: "", photos: { create: { photoId: theirs.id, position: 0 } } },
+    });
+    await signIn(admin);
+    await deleteChatMessage(undefined, formData({ id: message.id }));
+    expect(await prisma.chatMessage.count({ where: { id: message.id } })).toBe(1);
+    expect(await prisma.photo.count({ where: { id: theirs.id } })).toBe(1);
   });
 });
 
