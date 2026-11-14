@@ -3,6 +3,8 @@
 import { useState, useTransition, type FormEvent } from "react";
 import type { ActionResult } from "@/lib/action-result";
 import { Avatar } from "@/components/photo";
+import { Modal, ModalBody } from "@/components/modal";
+import { PlayerLink } from "@/components/player-link";
 import { Badge, Button } from "@/components/ui";
 import { useChangingVote } from "@/components/post-menu";
 import { vote } from "@/app/actions/social";
@@ -43,12 +45,14 @@ export type PollViewData = {
  * more than four, so nothing scrolls. With one answer allowed each answer is a button and
  * pressing it is the vote; with several, they are ticked and sent with "Stem". After
  * voting — or once it is closed — the results, most votes first, their bars growing in.
- * Who voted for what, voting again and closing the poll are in the post's ⋯ menu
- * (`PostMenu`).
+ * Pressing "x har stemt" under the results lists who voted for what — never in an
+ * anonymous poll, and not before the results are shown. Voting again and closing the
+ * poll are in the post's ⋯ menu (`PostMenu`).
  */
 export function PollView({ poll }: { poll: PollViewData }) {
   const { changing, setChanging } = useChangingVote();
   const [showAll, setShowAll] = useState(false);
+  const [showVotes, setShowVotes] = useState(false);
   const [state, setState] = useState<ActionResult>(undefined);
   const [pending, startTransition] = useTransition();
   /** The answer just pressed, while its vote is on the way. */
@@ -72,6 +76,8 @@ export function PollView({ poll }: { poll: PollViewData }) {
   }
 
   const showResults = (poll.hasVoted || !poll.open) && !changing;
+  const canSeeVotes = (poll.hasVoted || !poll.open) && !poll.anonymous && poll.ballots > 0;
+  const voted = poll.ballots === 1 ? "1 har stemt" : `${poll.ballots} har stemt`;
   const twoColumns = poll.options.length > 4;
   const answer = `press-card flex h-full w-full cursor-pointer items-center rounded-xl border border-slate-200 bg-white text-left text-sm ${
     twoColumns ? "gap-2 px-2.5 py-2" : "gap-2.5 px-3 py-2.5"
@@ -201,11 +207,58 @@ export function PollView({ poll }: { poll: PollViewData }) {
       )}
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <span>
-          {poll.ballots === 1 ? "1 har stemt" : `${poll.ballots} har stemt`}
-          {poll.hasVoted && poll.anonymous && " · du har stemt"}
-        </span>
+        {canSeeVotes ? (
+          <button
+            type="button"
+            onClick={() => setShowVotes(true)}
+            className="press-button -mx-1 rounded-md px-1 py-0.5 font-medium text-[var(--accent-text)] underline-offset-2 hover:underline"
+          >
+            {voted}
+          </button>
+        ) : (
+          <span>
+            {voted}
+            {poll.hasVoted && poll.anonymous && " · du har stemt"}
+          </span>
+        )}
       </div>
+      {canSeeVotes && (
+        <Modal open={showVotes} onClose={() => setShowVotes(false)} title="Stemmer" size="drawer">
+          <Votes poll={poll} />
+        </Modal>
+      )}
     </div>
+  );
+}
+
+/** Who voted for each answer, most votes first. Never offered for an anonymous poll. */
+function Votes({ poll }: { poll: PollViewData }) {
+  return (
+    <ModalBody>
+      <ul className="space-y-4">
+        {poll.options
+          .filter((option) => option.votes > 0)
+          .map((option, index) => (
+            <li key={option.id} className="animate-row-in" style={{ animationDelay: `${index * 60}ms` }}>
+              <p className="flex items-baseline justify-between gap-3 text-sm font-semibold">
+                <span className="min-w-0 break-words">{option.text}</span>
+                <span className="shrink-0 font-normal text-slate-500">
+                  {option.votes === 1 ? "1 stemme" : `${option.votes} stemmer`}
+                </span>
+              </p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {option.voters.map((voter) => (
+                  <li key={voter.id}>
+                    <PlayerLink userId={voter.id} className="flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pr-3 pl-1 text-sm">
+                      <Avatar name={voter.name} photoId={voter.photoId} size="xs" />
+                      {voter.name}
+                    </PlayerLink>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+      </ul>
+    </ModalBody>
   );
 }
