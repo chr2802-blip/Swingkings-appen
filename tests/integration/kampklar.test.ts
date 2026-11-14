@@ -51,6 +51,26 @@ describe("applyCalendar", () => {
     expect(moved.startsAt.toISOString()).toBe("2026-10-18T12:30:00.000Z");
   });
 
+  it("brings nothing back from before the season began, and still updates what it kept", async () => {
+    const team = await makeTeam();
+    await applyCalendar(team.id, team.name, [event("kept", "Swingkings - AB", "2026-10-02T12:00:00Z")], null, now);
+    await prisma.team.update({ where: { id: team.id }, data: { seasonStartedAt: new Date("2026-10-01T00:00:00Z") } });
+
+    const result = await applyCalendar(
+      team.id,
+      team.name,
+      [
+        event("last-season", "Vanløse - Swingkings", "2026-09-20T12:00:00Z"),
+        event("kept", "Swingkings - AB", "2026-10-03T12:00:00Z"),
+        event("next", "Swingkings - B.93", "2026-10-20T12:00:00Z"),
+      ],
+      null,
+      now,
+    );
+    expect(result).toMatchObject({ created: 1, updated: 1 });
+    expect((await prisma.match.findMany({ where: { teamId: team.id }, select: { externalUid: true }, orderBy: { startsAt: "asc" } })).map((m) => m.externalUid)).toEqual(["kept", "next"]);
+  });
+
   it("marks an upcoming match that left the feed as cancelled, and leaves hand-made ones alone", async () => {
     const team = await makeTeam();
     await prisma.match.create({ data: { teamId: team.id, title: "Pokal", startsAt: new Date("2026-10-30T12:00:00Z") } });

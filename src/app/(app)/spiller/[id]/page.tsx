@@ -94,6 +94,11 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-semibold tracking-tight">{person.name}</h1>
             {badges.length > 0 && <p className="truncate text-xs text-slate-500">{badges.join(" · ")}</p>}
+            {member && (
+              <p className="mt-1">
+                {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 gap-2">
             {self && (

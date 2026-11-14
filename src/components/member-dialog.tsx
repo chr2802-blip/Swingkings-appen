@@ -11,7 +11,7 @@ const ROLES: MemberRole[] = ["PLAYER", "TREASURER", "ADMIN"];
 export function MemberDialog({
   member,
 }: {
-  member: { userId: string; name: string; role: MemberRole; shirtNumber: number | null; takesTasks: boolean };
+  member: { userId: string; name: string; role: MemberRole; shirtNumber: number | null; takesTasks: boolean; duesPaid: boolean };
 }) {
   return (
     <FormDialog trigger="Ret" triggerVariant="ghost" title={member.name} action={updateMember} submitLabel="Gem" size="drawer">
@@ -39,6 +39,11 @@ export function MemberDialog({
         <input type="hidden" name="takesTasks" value="off" />
         <input type="checkbox" name="takesTasks" value="on" defaultChecked={member.takesTasks} className="h-4 w-4 accent-[var(--accent)]" />
         Med i den automatiske opgavefordeling
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="hidden" name="duesPaid" value="off" />
+        <input type="checkbox" name="duesPaid" value="on" defaultChecked={member.duesPaid} className="h-4 w-4 accent-[var(--accent)]" />
+        Kontingent betalt for sæsonen
       </label>
     </FormDialog>
   );

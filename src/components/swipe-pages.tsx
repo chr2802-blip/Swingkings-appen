@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { stayOnPage } from "./page-transition";
 
@@ -12,6 +12,19 @@ export type SwipePage = {
   action?: React.ReactNode;
   children: React.ReactNode;
 };
+
+/** Turns to page `index`, as a swipe or a tap on its name would. For buttons inside a page. */
+const TurnTo = createContext<((index: number) => void) | null>(null);
+
+/** A button inside one of the pages that turns to another — "Næste", "Tilbage". */
+export function TurnButton({ to, className, children }: { to: number; className?: string; children: React.ReactNode }) {
+  const turn = useContext(TurnTo);
+  return (
+    <button type="button" className={className} onClick={() => turn?.(to)}>
+      {children}
+    </button>
+  );
+}
 
 /** How far a finger moves before it counts as going one way or the other. */
 const INTENT_PX = 6;
@@ -35,7 +48,16 @@ const ARRIVE_MS = 1500;
  * Until the script has run there is no row, only the page asked for — so the first paint
  * is right whichever address was opened.
  */
-export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial?: number }) {
+export function SwipePages({
+  pages,
+  initial = 0,
+  label = "Bødekassens sider",
+}: {
+  pages: SwipePage[];
+  initial?: number;
+  /** What the row of names is called to a screen reader. */
+  label?: string;
+}) {
   // `active` is the page the scroller rests on; `shown` is the one nearest right now, mid-swipe.
   const [active, setActive] = useState(initial);
   const [shown, setShown] = useState(initial);
@@ -194,9 +216,9 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
   }, [open, settle, underline, pages.length]);
 
   return (
-    <>
+    <TurnTo.Provider value={goTo}>
       <div ref={names} className="mb-3 flex min-h-9 scroll-mt-24 items-center justify-between gap-3">
-        <div role="tablist" aria-label="Bødekassens sider" className="relative flex min-w-0 gap-4">
+        <div role="tablist" aria-label={label} className="relative flex min-w-0 gap-4">
           {pages.map((page, index) => (
             <button
               key={page.href}
@@ -254,6 +276,6 @@ export function SwipePages({ pages, initial = 0 }: { pages: SwipePage[]; initial
           );
         })}
       </div>
-    </>
+    </TurnTo.Provider>
   );
 }

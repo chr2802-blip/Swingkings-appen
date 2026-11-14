@@ -16,6 +16,7 @@ import { notifyLater } from "@/lib/notify";
 function refresh() {
   revalidatePath("/boder", "layout");
   revalidatePath("/oversigt");
+  revalidatePath("/hold/saeson");
 }
 
 /* ── The catalogue ─────────────────────────────────────────────────────────────── */

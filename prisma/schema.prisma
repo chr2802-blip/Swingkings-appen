@@ -91,6 +91,12 @@ model Team {
   calendarSyncedAt DateTime?
   /// Made by "Opret testhold" (`src/lib/demo-team.ts`); the only team "Slet testhold" removes.
   isDemo           Boolean   @default(false)
+  /**
+   * When the current season began ("Start ny sæson", `src/lib/season.ts`); null until the
+   * first, when the season counts from `createdAt`. The KampKlar sync brings nothing back
+   * from before it.
+   */
+  seasonStartedAt  DateTime?
   createdAt        DateTime  @default(now())
 
   members         TeamMember[]
@@ -106,6 +112,7 @@ model Team {
   posts           Post[]
   polls           Poll[]
   activitySignups ActivitySignup[]
+  seasons         Season[]
   photos          Photo[]          @relation("PhotoTeam")
   photo           Photo?           @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
 
@@ -175,6 +182,8 @@ model TeamMember {
   takesTasks  Boolean    @default(true)
   /// When this person last had the feed in view; posts after it are "nye opslag".
   feedSeenAt  DateTime?
+  /// When an admin marked this season's kontingent (membership fee) paid; null while it is not. A new season clears it.
+  duesPaidAt  DateTime?
   createdAt   DateTime   @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -573,6 +582,25 @@ model ActivitySignup {
   @@unique([matchId, userId])
   @@index([teamId])
   @@index([userId])
+}
+
+/**
+ * A season that has ended, as "Start ny sæson" summed it up before it deleted the fines,
+ * challenges and finished activities (`src/lib/season.ts`). `summary` is a
+ * `SeasonSummary`, with names copied in: the people in it may have left the team.
+ */
+model Season {
+  id        String   @id @default(cuid())
+  teamId    String
+  name      String
+  startedAt DateTime
+  endedAt   DateTime
+  summary   Json
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, endedAt])
 }
 
 /// That somebody has voted in a poll — and nothing about what. Reached through its poll.

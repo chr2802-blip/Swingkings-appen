@@ -6,7 +6,7 @@ import { teamDb } from "@/lib/team-db";
 import { readInZone } from "@/lib/time";
 import { teamRoster } from "@/lib/roster";
 import { taskCandidates } from "@/lib/tasks";
-import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
+import { Badge, ButtonLink, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { TemplateDialog } from "@/components/template-dialog";
@@ -71,6 +71,7 @@ export default async function TeamSettingsPage() {
                   <div className="flex flex-wrap gap-1.5">
                     <Badge tone={member.role === "PLAYER" ? undefined : "accent"}>{ROLE_LABEL[member.role]}</Badge>
                     {member.superAdmin && <Badge tone="accent">{SUPER_ADMIN_LABEL}</Badge>}
+                    {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
                   </div>
                 </div>
                 <ActionMenu icon label={`Handlinger for ${member.name}`} title={member.name}>
@@ -162,6 +163,22 @@ export default async function TeamSettingsPage() {
           </Card>
         </section>
       )}
+
+      <section id="saeson" className="scroll-mt-24">
+        <SectionTitle>Sæson</SectionTitle>
+        <Card className="space-y-3">
+          <p className="text-sm text-slate-500">
+            Når sæsonen er slut: gem et resumé, slet bøder, udfordringer og afsluttede aktiviteter, og nulstil
+            kontingentet. Guiden viser først, hvad der sker.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href="/hold/saeson">Start ny sæson</ButtonLink>
+            <ButtonLink href="/hold/saesoner" variant="secondary">
+              Tidligere sæsoner
+            </ButtonLink>
+          </div>
+        </Card>
+      </section>
 
       <section>
         <SectionTitle>Inviter til holdet</SectionTitle>

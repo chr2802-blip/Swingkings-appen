@@ -62,6 +62,8 @@ export async function fetchCalendar(rawUrl: string): Promise<{ ok: true; text: s
  *   (`TaskTemplate.autoAdd`), handed out fairly.
  * - An upcoming entry that has disappeared from the feed is marked cancelled rather than
  *   deleted: tasks and fines may already hang off it.
+ * - Nothing from before the season began is brought in: "Start ny sæson" deleted the
+ *   activities that had taken place, and the feed still lists them.
  */
 export async function applyCalendar(
   teamId: string,
@@ -70,10 +72,13 @@ export async function applyCalendar(
   actorId: string | null,
   now: Date = new Date(),
 ): Promise<Extract<SyncResult, { ok: true }>> {
-  const existing = await prisma.match.findMany({
-    where: { teamId, source: "KAMPKLAR" },
-    select: { id: true, externalUid: true, startsAt: true, cancelledAt: true },
-  });
+  const [existing, team] = await Promise.all([
+    prisma.match.findMany({
+      where: { teamId, source: "KAMPKLAR" },
+      select: { id: true, externalUid: true, startsAt: true, cancelledAt: true },
+    }),
+    prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { seasonStartedAt: true } }),
+  ]);
   const byUid = new Map(existing.map((row) => [row.externalUid, row]));
   const seen = new Set<string>();
   let created = 0;
@@ -104,6 +109,8 @@ export async function applyCalendar(
         data: { ...data, cancelledAt: event.cancelled ? (row.cancelledAt ?? now) : null },
       });
       updated++;
+    } else if (team.seasonStartedAt && event.startsAt < team.seasonStartedAt) {
+      continue;
     } else {
       const match = await prisma.match.create({
         data: { ...data, teamId, source: "KAMPKLAR", externalUid: event.uid },
