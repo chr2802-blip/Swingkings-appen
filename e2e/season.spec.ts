@@ -7,13 +7,10 @@ test("a coach marks a player's kontingent paid, and the whole team sees it", asy
   const { team, admin, anna } = await squad();
   await loginAs(admin);
   await page.goto("/hold");
-  const row = page.getByRole("listitem").filter({ has: page.getByText("Anna", { exact: true }) });
-  await expect(row.getByText("Mangler kontingent")).toBeVisible();
-  await row.getByRole("button", { name: "Handlinger for Anna" }).click();
-  await page.getByRole("dialog", { name: "Anna" }).getByRole("button", { name: "Ret" }).click();
-  const form = page.getByRole("dialog", { name: "Anna" });
-  await form.getByLabel("Kontingent betalt for sæsonen").check();
-  await form.getByRole("button", { name: "Gem" }).click();
+  const paid = page.getByRole("checkbox", { name: "Kontingent betalt for Anna" });
+  await expect(paid).toHaveAttribute("aria-checked", "false");
+  await paid.click();
+  await expect(paid).toHaveAttribute("aria-checked", "true");
   await expect
     .poll(async () => (await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).duesPaidAt)
     .not.toBeNull();
