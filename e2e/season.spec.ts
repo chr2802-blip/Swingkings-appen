@@ -25,7 +25,7 @@ test("a coach marks a player's kontingent paid, and the whole team sees it", asy
   await expect(boRow.getByText("Mangler kontingent")).toBeVisible();
 });
 
-test("a coach goes through the season guide, starts a new season and lands on its summary", async ({ page, loginAs }) => {
+test("a coach goes through the season one step at a time, by swipe and by button, and starts the next", async ({ page, loginAs }) => {
   const { team, admin, treasurer, anna, bo } = await squad();
   await db.fine.createMany({
     data: [
@@ -41,14 +41,62 @@ test("a coach goes through the season guide, starts a new season and lands on it
   await page.goto("/hold");
   await page.getByRole("link", { name: "Start ny sæson" }).click();
   await expect(page).toHaveURL(/\/hold\/saeson$/);
-  await expect(page.getByText(/40 kr\.? står stadig udestående hos 2 spillere/)).toBeVisible();
-  await expect(page.getByText("1 afsluttet aktivitet slettes", { exact: false })).toBeVisible();
+  const tab = (name: string) => page.getByRole("tab", { name });
+  const shown = page.getByRole("tabpanel");
+  // The address changes once the row has come to rest on a step; mid-turn every step is
+  // out to be swiped across, so ask which one is shown only after that.
+  const at = async (slug: string, name: string) => {
+    await expect(page).toHaveURL(new RegExp(`\\?trin=${slug}$`));
+    await expect(tab(name)).toHaveAttribute("aria-selected", "true");
+    await expect(shown).toHaveAccessibleName(name);
+  };
+  await expect(shown).toHaveCount(1);
+  await expect(shown).toHaveAccessibleName("Bøder");
 
-  await page.getByRole("button", { name: "Start ny sæson" }).click();
-  const dialog = page.getByRole("dialog", { name: "Start ny sæson" });
-  await dialog.getByLabel("Navn på sæsonen der slutter").fill("Sæson 2026");
-  await dialog.getByLabel("Jeg forstår, at det ikke kan fortrydes").check();
-  await dialog.getByRole("button", { name: "Start ny sæson" }).click();
+  // Step 1: Bo pays, and is reset right here.
+  await expect(shown.getByText(/40 kr\.? står udestående hos 2 spillere/)).toBeVisible();
+  await shown.getByRole("listitem").filter({ hasText: "Bo" }).getByRole("button", { name: "Nulstil" }).click();
+  await page.getByRole("dialog", { name: "Nulstil Bos bøder?" }).getByRole("button", { name: "Nulstil" }).click();
+  await expect(shown.getByText(/30 kr\.? står udestående hos 1 spiller/)).toBeVisible();
+
+  // A finger across the screen turns the page, either way.
+  const cdp = await page.context().newCDPSession(page);
+  // Across the middle of the step shown, well inside the row that swipes.
+  const swipe = async (dx: number) => {
+    const from = dx < 0 ? 350 : 60;
+    const box = (await shown.boundingBox())!;
+    const y = box.y + Math.min(box.height / 2, 150);
+    const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number) =>
+      cdp.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y }] });
+    await touch("touchStart", from);
+    for (let step = 1; step <= 15; step++) await touch("touchMove", from + (dx * step) / 15);
+    await touch("touchEnd");
+  };
+  await swipe(-290);
+  await at("kampklar", "KampKlar");
+  await expect(shown.getByText("1 afsluttet aktivitet slettes", { exact: false })).toBeVisible();
+  await swipe(290);
+  await at("boder", "Bøder");
+
+  // Without a finger: Næste and Tilbage.
+  await shown.getByRole("button", { name: "Næste" }).click();
+  await at("kampklar", "KampKlar");
+  await shown.getByRole("button", { name: "Næste" }).click();
+  await at("spillere", "Spillere");
+  await expect(shown.getByRole("listitem").filter({ hasText: "Anna" }).getByText("Kontingent betalt")).toBeVisible();
+  await shown.getByRole("button", { name: "Tilbage" }).click();
+  await at("kampklar", "KampKlar");
+  await tab("Start").click();
+  await at("start", "Start");
+  await expect(shown.getByText("heraf 30 kr ikke nulstillet", { exact: false })).toBeVisible();
+
+  // A reload stays on the step it was on.
+  await page.reload();
+  await at("start", "Start");
+
+  await shown.getByLabel("Navn på sæsonen der slutter").fill("Sæson 2026");
+  await shown.getByLabel("Jeg forstår, at det ikke kan fortrydes").check();
+  await shown.getByRole("button", { name: "Start ny sæson" }).click();
 
   await expect(page).toHaveURL(/\/hold\/saesoner$/);
   await expect(page.getByRole("heading", { name: "Sæson 2026" })).toBeVisible();
