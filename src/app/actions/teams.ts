@@ -13,6 +13,7 @@ import { generateLinkToken, hashLinkToken, joinPath } from "@/lib/invite-links";
 import { LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import { discardReplaced, readPhotoChoice, removeStored } from "@/lib/photos";
 import { normalizeCalendarUrl } from "@/lib/ical";
+import { normalizeBox, normalizeBoxLink } from "@/lib/pay";
 import { THEMES } from "@/lib/theme";
 import { createDemoTeam, removeDemoTeam } from "@/lib/demo-team";
 
@@ -33,6 +34,14 @@ const teamSchema = z.object({
   theme: z.enum(THEMES.map((t) => t.value) as [string, ...string[]]).optional(),
   finePriceKr: wholeNumber("Prisen for én bøde skal være et helt antal kroner (1–1000).", 1, 1000),
   calendarUrl: z.string().trim().max(2000).optional(),
+  mobilePayBox: z.string().trim().max(40).optional(),
+  mobilePayLink: z.string().trim().max(500).optional(),
+  duesKr: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? Number(v) : null))
+    .refine((v) => v === null || (Number.isInteger(v) && v >= 1 && v <= 100_000), "Kontingentet skal være et helt antal kroner."),
 });
 
 export async function updateTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -48,6 +57,17 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
     calendarUrl = url.toString();
   }
 
+  let mobilePayBox: string | null = null;
+  if (form.fields.mobilePayBox) {
+    mobilePayBox = normalizeBox(form.fields.mobilePayBox);
+    if (!mobilePayBox) return fail("Boxnummeret er bogstaver og tal, fx 9162TV.");
+  }
+  let mobilePayLink: string | null = null;
+  if (form.fields.mobilePayLink) {
+    mobilePayLink = normalizeBoxLink(form.fields.mobilePayLink);
+    if (!mobilePayLink) return fail("Linket skal være boxens eget fra MobilePay: https://qr.mobilepay.dk/box/…/pay-in");
+  }
+
   const before = await prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { photoId: true } });
   const photo = await readPhotoChoice(formData, user.teamId, before.photoId);
   if (!photo.ok) return fail(photo.error);
@@ -58,6 +78,10 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
       name: form.fields.name,
       finePriceKr: form.fields.finePriceKr,
       calendarUrl,
+      // Left alone by a form that does not carry the fields.
+      ...(formData.has("mobilePayBox") ? { mobilePayBox } : {}),
+      ...(formData.has("mobilePayLink") ? { mobilePayLink } : {}),
+      ...(formData.has("duesKr") ? { duesKr: form.fields.duesKr } : {}),
       ...(form.fields.theme ? { theme: form.fields.theme as (typeof THEMES)[number]["value"] } : {}),
       ...(photo.photoId !== undefined ? { photoId: photo.photoId } : {}),
     },

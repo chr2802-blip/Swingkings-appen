@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { teamDb } from "./team-db";
 import { balances, fineKings } from "./money";
+import { payTarget } from "./pay";
 import { teamRoster } from "./roster";
 import { kickoffLabel, startOfMonthInZone } from "./time";
 
@@ -8,7 +9,7 @@ import { kickoffLabel, startOfMonthInZone } from "./time";
 export async function fineBoard(teamId: string) {
   const db = teamDb(teamId);
   const [team, roster, fineTypes, fines] = await Promise.all([
-    prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { finePriceKr: true } }),
+    prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { finePriceKr: true, mobilePayBox: true, mobilePayLink: true, duesKr: true } }),
     teamRoster(teamId),
     db.fineType.findMany({ where: { archivedAt: null }, orderBy: [{ units: "asc" }, { name: "asc" }] }),
     db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true, clearedAt: true } }),
@@ -24,7 +25,7 @@ export async function fineBoard(teamId: string) {
     const users = await prisma.user.findMany({ where: { id: { in: gone } }, select: { id: true, name: true, photoId: true } });
     for (const u of users) people.set(u.id, { name: u.name, photoId: u.photoId, onTeam: false });
   }
-  return { finePriceKr: team.finePriceKr, roster, fineTypes, balances: board, people };
+  return { finePriceKr: team.finePriceKr, pay: payTarget(team), duesKr: team.duesKr, roster, fineTypes, balances: board, people };
 }
 
 /** Recent and upcoming matches, as a select's options. */

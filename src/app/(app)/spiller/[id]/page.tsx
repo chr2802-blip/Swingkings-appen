@@ -6,7 +6,8 @@ import { fineBoard, matchOptions } from "@/lib/fine-data";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
 import type { ChallengeStatus } from "@prisma/client";
 import { readInZone, relativeDay } from "@/lib/time";
-import { Badge, ButtonLink, Card, SectionTitle } from "@/components/ui";
+import { Badge, ButtonLink, buttonClass, Card, SectionTitle } from "@/components/ui";
+import { PayDialog } from "@/components/pay-dialog";
 import { DetailSheet } from "@/components/detail-sheet";
 import { Avatar } from "@/components/photo";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
@@ -95,8 +96,18 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <h1 className="truncate text-xl font-semibold tracking-tight">{person.name}</h1>
             {badges.length > 0 && <p className="truncate text-xs text-slate-500">{badges.join(" · ")}</p>}
             {member && (
-              <p className="mt-1">
+              <p className="mt-1 flex flex-wrap items-center gap-2">
                 {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
+                {self && !member.duesPaid && board.pay && (
+                  <PayDialog
+                    kind="dues"
+                    target={board.pay}
+                    amountKr={board.duesKr}
+                    name={person.name}
+                    trigger="Betal kontingent ›"
+                    triggerClassName="text-xs font-medium text-[var(--accent)]"
+                  />
+                )}
               </p>
             )}
           </div>
@@ -122,6 +133,16 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <Stat label={account.units === 1 ? "bøde" : "bøder"} value={String(account.units)} />
           <Stat label="i alt" value={kr(account.finedKr)} />
         </dl>
+        {self && account.owesKr > 0 && board.pay && (
+          <PayDialog
+            kind="fines"
+            target={board.pay}
+            amountKr={account.owesKr}
+            name={person.name}
+            trigger={`💸 Betal ${kr(account.owesKr)} med MobilePay`}
+            triggerClassName={buttonClass("primary", "mt-3 w-full")}
+          />
+        )}
       </div>
 
       <section>

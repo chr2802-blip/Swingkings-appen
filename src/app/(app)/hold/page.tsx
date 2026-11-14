@@ -26,7 +26,7 @@ export default async function TeamSettingsPage() {
   const [team, links, templates, roster, candidates] = await Promise.all([
     prisma.team.findUniqueOrThrow({
       where: { id: user.teamId },
-      select: { name: true, theme: true, finePriceKr: true, calendarUrl: true, calendarSyncedAt: true, photoId: true },
+      select: { name: true, theme: true, finePriceKr: true, calendarUrl: true, calendarSyncedAt: true, photoId: true, mobilePayBox: true, mobilePayLink: true, duesKr: true },
     }),
     db.inviteLink.findMany({
       where: { expiresAt: { gt: new Date() } },
