@@ -47,6 +47,21 @@ describe("updateTeam", () => {
     expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: null, duesKr: null });
   });
 
+  it("keeps the box's pay-in link without its query, refuses another address, and clears it", async () => {
+    const { team, admin } = await makeSquad();
+    const link = "https://qr.mobilepay.dk/box/b865a6da-62a7-4360-a406-b39a192c757e/pay-in";
+    await signIn(admin);
+    expect(await updateTeam(undefined, teamForm({ mobilePayLink: `${link}?amount=30` }))).toEqual({ ok: true });
+    expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).mobilePayLink).toBe(link);
+    expect(await updateTeam(undefined, teamForm({ mobilePayLink: "https://example.com/box/x/pay-in" }))).toEqual({
+      ok: false,
+      error: "Linket skal være boxens eget fra MobilePay: https://qr.mobilepay.dk/box/…/pay-in",
+    });
+    expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).mobilePayLink).toBe(link);
+    await updateTeam(undefined, teamForm({ mobilePayLink: "" }));
+    expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).mobilePayLink).toBeNull();
+  });
+
   it("refuses a box number that is not one, and a kontingent that is not whole kroner", async () => {
     const { team, admin } = await makeSquad();
     await signIn(admin);

@@ -95,6 +95,11 @@ model Team {
    * admin still marks kontingent paid and the treasurer still resets the fines.
    */
   mobilePayBox     String?
+  /**
+   * The box's own pay-in link (https://qr.mobilepay.dk/box/<id>/pay-in), from "Del" on the
+   * box in MobilePay. "Åbn MobilePay" opens it with the amount filled in (`payLink`).
+   */
+  mobilePayLink    String?
   /// What a season's kontingent costs in kroner, shown on "Betal kontingent"; null when not set.
   duesKr           Int?
   /// Made by "Opret testhold" (`src/lib/demo-team.ts`); the only team "Slet testhold" removes.

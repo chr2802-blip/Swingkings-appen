@@ -5,6 +5,7 @@ import { Badge, ButtonLink, buttonClass, Card, PageHeader } from "@/components/u
 import { PayDialog } from "@/components/pay-dialog";
 import { prisma } from "@/lib/prisma";
 import { kr } from "@/lib/money";
+import { payTarget } from "@/lib/pay";
 import { Avatar } from "@/components/photo";
 import { playerHref } from "@/components/player-link";
 import Link from "next/link";
@@ -14,10 +15,11 @@ export default async function RosterPage() {
   const admin = canAdministerTeam(user, user.teamId);
   const [roster, team] = await Promise.all([
     teamRoster(user.teamId),
-    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { mobilePayBox: true, duesKr: true } }),
+    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { mobilePayBox: true, mobilePayLink: true, duesKr: true } }),
   ]);
   const paid = roster.filter((m) => m.duesPaid).length;
   const me = roster.find((m) => m.userId === user.id);
+  const pay = payTarget(team);
   return (
     <div>
       <PageHeader
@@ -31,12 +33,12 @@ export default async function RosterPage() {
           )
         }
       />
-      {me && !me.duesPaid && team.mobilePayBox && (
+      {me && !me.duesPaid && pay && (
         <Card className="mb-4 flex items-center justify-between gap-3 text-sm">
           <span>Du mangler at betale kontingent{team.duesKr ? ` (${kr(team.duesKr)})` : ""}.</span>
           <PayDialog
             kind="dues"
-            box={team.mobilePayBox}
+            target={pay}
             amountKr={team.duesKr}
             name={me.name}
             trigger="Betal"

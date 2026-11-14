@@ -13,7 +13,7 @@ import { generateLinkToken, hashLinkToken, joinPath } from "@/lib/invite-links";
 import { LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import { discardReplaced, readPhotoChoice, removeStored } from "@/lib/photos";
 import { normalizeCalendarUrl } from "@/lib/ical";
-import { normalizeBox } from "@/lib/pay";
+import { normalizeBox, normalizeBoxLink } from "@/lib/pay";
 import { THEMES } from "@/lib/theme";
 import { createDemoTeam, removeDemoTeam } from "@/lib/demo-team";
 
@@ -35,6 +35,7 @@ const teamSchema = z.object({
   finePriceKr: wholeNumber("Prisen for én bøde skal være et helt antal kroner (1–1000).", 1, 1000),
   calendarUrl: z.string().trim().max(2000).optional(),
   mobilePayBox: z.string().trim().max(40).optional(),
+  mobilePayLink: z.string().trim().max(500).optional(),
   duesKr: z
     .string()
     .trim()
@@ -61,6 +62,11 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
     mobilePayBox = normalizeBox(form.fields.mobilePayBox);
     if (!mobilePayBox) return fail("Boxnummeret er bogstaver og tal, fx 9162TV.");
   }
+  let mobilePayLink: string | null = null;
+  if (form.fields.mobilePayLink) {
+    mobilePayLink = normalizeBoxLink(form.fields.mobilePayLink);
+    if (!mobilePayLink) return fail("Linket skal være boxens eget fra MobilePay: https://qr.mobilepay.dk/box/…/pay-in");
+  }
 
   const before = await prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { photoId: true } });
   const photo = await readPhotoChoice(formData, user.teamId, before.photoId);
@@ -74,6 +80,7 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
       calendarUrl,
       // Left alone by a form that does not carry the fields.
       ...(formData.has("mobilePayBox") ? { mobilePayBox } : {}),
+      ...(formData.has("mobilePayLink") ? { mobilePayLink } : {}),
       ...(formData.has("duesKr") ? { duesKr: form.fields.duesKr } : {}),
       ...(form.fields.theme ? { theme: form.fields.theme as (typeof THEMES)[number]["value"] } : {}),
       ...(photo.photoId !== undefined ? { photoId: photo.photoId } : {}),

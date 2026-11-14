@@ -98,10 +98,10 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             {member && (
               <p className="mt-1 flex flex-wrap items-center gap-2">
                 {member.duesPaid ? <Badge tone="green">Kontingent betalt</Badge> : <Badge tone="amber">Mangler kontingent</Badge>}
-                {self && !member.duesPaid && board.mobilePayBox && (
+                {self && !member.duesPaid && board.pay && (
                   <PayDialog
                     kind="dues"
-                    box={board.mobilePayBox}
+                    target={board.pay}
                     amountKr={board.duesKr}
                     name={person.name}
                     trigger="Betal kontingent ›"
@@ -133,10 +133,10 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <Stat label={account.units === 1 ? "bøde" : "bøder"} value={String(account.units)} />
           <Stat label="i alt" value={kr(account.finedKr)} />
         </dl>
-        {self && account.owesKr > 0 && board.mobilePayBox && (
+        {self && account.owesKr > 0 && board.pay && (
           <PayDialog
             kind="fines"
-            box={board.mobilePayBox}
+            target={board.pay}
             amountKr={account.owesKr}
             name={person.name}
             trigger={`💸 Betal ${kr(account.owesKr)} med MobilePay`}

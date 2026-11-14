@@ -1,6 +1,8 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 
+const BOX_LINK = "https://qr.mobilepay.dk/box/b865a6da-62a7-4360-a406-b39a192c757e/pay-in";
+
 test("a coach marks a player's kontingent paid, and the whole team sees it", async ({ page, loginAs }) => {
   const { team, admin, anna } = await squad();
   await loginAs(admin);
@@ -143,19 +145,22 @@ test("an admin sets the MobilePay Box, and a player sees where and how much to p
 
   await loginAs(admin);
   await page.goto("/hold");
-  await page.getByLabel("MobilePay Box").fill("9162tv");
+  await page.getByLabel("MobilePay Box", { exact: true }).fill("9162tv");
   await page.getByLabel("Kontingent pr. sæson (kr)").fill("600");
+  await page.getByLabel("Link til MobilePay Box").fill(`${BOX_LINK}?amount=30`);
   await page.getByRole("button", { name: "Gem" }).click();
   await expect(page.getByText("Gemt.")).toBeVisible();
-  expect(await db.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: "9162TV", duesKr: 600 });
+  expect(await db.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayBox: "9162TV", mobilePayLink: BOX_LINK, duesKr: 600 });
 
   await loginAs(anna);
   await page.goto("/boder");
   await page.getByRole("button", { name: /Betal dine bøder/ }).click();
   const fines = page.getByRole("dialog", { name: "Betal dine bøder" });
   await expect(fines.getByText("9162TV")).toBeVisible();
-  await expect(fines.getByText("30 kr")).toBeVisible();
+  await expect(fines.getByText("30 kr", { exact: true })).toBeVisible();
   await expect(fines.getByText("Bøder – Anna")).toBeVisible();
+  // MobilePay reads the amount in øre.
+  await expect(fines.getByRole("link", { name: "Åbn MobilePay med 30 kr" })).toHaveAttribute("href", `${BOX_LINK}?amount=3000`);
   await expect(fines.getByText(/nulstiller dine bøder/)).toBeVisible();
   await fines.getByRole("button", { name: "Luk" }).click();
   await expect(fines).toHaveCount(0);
@@ -168,8 +173,9 @@ test("an admin sets the MobilePay Box, and a player sees where and how much to p
   await expect(page.getByText("Du mangler at betale kontingent (600 kr).")).toBeVisible();
   await page.getByRole("button", { name: "Betal", exact: true }).click();
   const dues = page.getByRole("dialog", { name: "Betal kontingent" });
-  await expect(dues.getByText("600 kr")).toBeVisible();
+  await expect(dues.getByText("600 kr", { exact: true })).toBeVisible();
   await expect(dues.getByText("Kontingent – Anna")).toBeVisible();
+  await expect(dues.getByRole("link", { name: "Åbn MobilePay med 600 kr" })).toHaveAttribute("href", `${BOX_LINK}?amount=60000`);
 
   await page.goto(`/spiller/${anna.id}`);
   await expect(page.getByRole("button", { name: "💸 Betal 30 kr med MobilePay" })).toBeVisible();

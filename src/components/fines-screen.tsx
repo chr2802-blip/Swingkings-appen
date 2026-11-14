@@ -95,10 +95,10 @@ export async function FinesScreen({
             <p className="text-xs text-slate-500">{kr(totals.owed)} udestående</p>
           </div>
         </div>
-        {mine && mine.owesKr > 0 && board.mobilePayBox && (
+        {mine && mine.owesKr > 0 && board.pay && (
           <PayDialog
             kind="fines"
-            box={board.mobilePayBox}
+            target={board.pay}
             amountKr={mine.owesKr}
             name={user.name}
             triggerClassName="press-card flex w-full items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-left text-sm"

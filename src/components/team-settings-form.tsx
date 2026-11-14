@@ -17,6 +17,7 @@ export function TeamSettingsForm({
     calendarUrl: string | null;
     photoId: string | null;
     mobilePayBox: string | null;
+    mobilePayLink: string | null;
     duesKr: number | null;
   };
 }) {
@@ -51,6 +52,20 @@ export function TeamSettingsForm({
         hint="Hvor kontingent og bøder betales. Spillerne får en “Betal”-knap med boxnummer og beløb. Betalinger markeres stadig i hånden."
       >
         <Input id="mobilePayBox" name="mobilePayBox" placeholder="fx 9162TV" autoCapitalize="characters" defaultValue={team.mobilePayBox ?? ""} />
+      </Field>
+      <Field
+        label="Link til MobilePay Box"
+        htmlFor="mobilePayLink"
+        hint="I MobilePay: åbn boxen → Del, og kopiér linket hertil. Så åbner “Betal” MobilePay med beløbet udfyldt."
+      >
+        <Input
+          id="mobilePayLink"
+          name="mobilePayLink"
+          type="url"
+          inputMode="url"
+          placeholder="https://qr.mobilepay.dk/box/…/pay-in"
+          defaultValue={team.mobilePayLink ?? ""}
+        />
       </Field>
       <Field label="Kontingent pr. sæson (kr)" htmlFor="duesKr" hint="Vises på “Betal kontingent”. Tomt: intet beløb vises.">
         <Input id="duesKr" name="duesKr" type="number" inputMode="numeric" min={1} max={100000} defaultValue={team.duesKr ?? ""} />

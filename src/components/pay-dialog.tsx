@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Modal, ModalBody } from "@/components/modal";
-import { Button } from "@/components/ui";
+import { Button, buttonClass } from "@/components/ui";
 import { kr } from "@/lib/money";
-import { afterPaying, paymentMessage, type PayKind } from "@/lib/pay";
+import { afterPaying, payLink, paymentMessage, type PayKind, type PayTarget } from "@/lib/pay";
 
 /**
  * "Betal" for one's fines or kontingent: which MobilePay Box, how much and what to write.
@@ -12,14 +12,15 @@ import { afterPaying, paymentMessage, type PayKind } from "@/lib/pay";
  */
 export function PayDialog({
   kind,
-  box,
+  target,
   amountKr,
   name,
   trigger,
   triggerClassName,
 }: {
   kind: PayKind;
-  box: string;
+  /** The team's box number and pay-in link; either may be missing, not both. */
+  target: PayTarget;
   /** Null when the team has not said what kontingent costs. */
   amountKr: number | null;
   /** Whoever pays, as the message should name them. */
@@ -38,9 +39,14 @@ export function PayDialog({
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={title} size="drawer">
         <ModalBody className="space-y-4 text-sm text-slate-700">
-          <p>Betal med MobilePay til holdets box:</p>
+          {target.link && (
+            <a href={payLink(target.link, amountKr)} className={buttonClass("primary", "w-full")}>
+              Åbn MobilePay{amountKr !== null ? ` med ${kr(amountKr)}` : ""}
+            </a>
+          )}
+          <p>{target.link ? "Husk at skrive beskeden, så vi kan se, hvem der har betalt:" : "Betal med MobilePay til holdets box:"}</p>
           <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
-            <Row label="MobilePay Box" value={box} copy />
+            {target.box && <Row label="MobilePay Box" value={target.box} copy />}
             {amountKr !== null && <Row label="Beløb" value={kr(amountKr)} />}
             <Row label="Skriv i beskeden" value={message} copy />
           </dl>
