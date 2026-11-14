@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState } from "react";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
-import { Avatar } from "@/components/photo";
 import { Button, Field, Textarea } from "@/components/ui";
 import { DialogForm } from "@/components/form-dialog";
 import { MultiPhotoField } from "@/components/multi-photo-field";
@@ -27,12 +26,13 @@ export function useChangingVote() {
   return useContext(ChangingVote);
 }
 
-type Step = "menu" | "votes" | "delete" | "close";
+type Step = "menu" | "delete" | "close";
 
 /**
  * The ⋯ in a post's corner, with everything one can do to it: pin it to the top, edit it,
- * see who voted for what, vote again, close the poll and delete the post. Only what this
- * viewer may do is listed; pinning is for everybody, so there is always a button.
+ * vote again, close the poll and delete the post. Only what this viewer may do is listed;
+ * pinning is for everybody, so there is always a button. Who voted for what is not here:
+ * that opens from the poll's "x har stemt" (`PollView`).
  */
 export function PostMenu({
   postId,
@@ -56,8 +56,6 @@ export function PostMenu({
   const { setChanging } = useChangingVote();
   const pin = useFormAction(pinPost, { onSuccess: () => setOpen(false) });
 
-  const revealed = poll !== null && (poll.hasVoted || !poll.open);
-  const canSeeVotes = revealed && !poll.anonymous && poll.ballots > 0;
   const canChangeVote = poll !== null && poll.open && poll.hasVoted && !poll.anonymous;
   const canClose = poll !== null && poll.open && poll.canClose;
 
@@ -68,7 +66,6 @@ export function PostMenu({
   };
   const titles: Record<Step, string> = {
     menu: "Opslag",
-    votes: "Stemmer",
     delete: "Slet opslaget?",
     close: "Luk afstemningen?",
   };
@@ -120,13 +117,6 @@ export function PostMenu({
                   </button>
                 </li>
               )}
-              {canSeeVotes && (
-                <li>
-                  <button type="button" className={item} onClick={() => setStep("votes")}>
-                    <span aria-hidden>📊</span> Se stemmer
-                  </button>
-                </li>
-              )}
               {canChangeVote && (
                 <li>
                   <button
@@ -158,7 +148,6 @@ export function PostMenu({
             </ul>
           </ModalBody>
         )}
-        {step === "votes" && poll && <Votes poll={poll} />}
         {step === "delete" && (
           <Confirm action={deletePost} fields={{ id: postId }} label="Slet" onBack={() => setStep("menu")} onDone={close} />
         )}
@@ -188,36 +177,6 @@ export function PostMenu({
         </Modal>
       )}
     </>
-  );
-}
-
-/** Who voted for each answer, most votes first. Never offered for an anonymous poll. */
-function Votes({ poll }: { poll: PollViewData }) {
-  return (
-    <ModalBody>
-      <ul className="space-y-4">
-        {poll.options
-          .filter((option) => option.votes > 0)
-          .map((option, index) => (
-            <li key={option.id} className="animate-row-in" style={{ animationDelay: `${index * 60}ms` }}>
-              <p className="flex items-baseline justify-between gap-3 text-sm font-semibold">
-                <span className="min-w-0 break-words">{option.text}</span>
-                <span className="shrink-0 font-normal text-slate-500">
-                  {option.votes === 1 ? "1 stemme" : `${option.votes} stemmer`}
-                </span>
-              </p>
-              <ul className="mt-2 flex flex-wrap gap-1.5">
-                {option.voters.map((voter) => (
-                  <li key={voter.id} className="flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pr-3 pl-1 text-sm">
-                    <Avatar name={voter.name} photoId={voter.photoId} size="xs" />
-                    {voter.name}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-      </ul>
-    </ModalBody>
   );
 }
 

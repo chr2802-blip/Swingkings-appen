@@ -211,6 +211,11 @@ test("a fine in the history opens with what it was for, who gave it and when, an
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
   await expect(sheet.getByText("“Flest mål”")).toBeVisible();
   await expect(sheet.getByText(/2 bøder flyttet fra Anna til Bo · godkendt af Træner/)).toBeVisible();
+  // One card tells it all: the fine's own facts sit under the challenge, not repeated beside it.
+  await expect(sheet.getByText("Udestående")).toBeVisible();
+  await expect(sheet.getByText("Pris pr. bøde")).toHaveCount(0);
+  await expect(sheet.getByText("Givet af")).toHaveCount(0);
+  await expect(sheet.getByText("Udfordringen", { exact: true })).toHaveCount(0);
 });
 
 test("a treasurer resets a player, and a player cannot", async ({ page, loginAs }) => {
@@ -316,7 +321,7 @@ test("the board, the history and the catalogue are swiped between under the over
   // Only the page shown is there to read and to tab through.
   await expect(shown).toHaveCount(1);
   await expect(shown).toHaveAccessibleName("Bødetavlen");
-  await expect(page.getByText("Hvad koster hvad.")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Ny bøde" })).toBeHidden();
   await expect(page.getByRole("button", { name: "Nulstil alle" })).toBeVisible();
 
   // A finger dragged across the screen: real touch input, so the browser does the scrolling.

@@ -3,6 +3,8 @@
 import { useState, useTransition, type FormEvent } from "react";
 import type { ActionResult } from "@/lib/action-result";
 import { Avatar } from "@/components/photo";
+import { Modal, ModalBody } from "@/components/modal";
+import { PlayerLink } from "@/components/player-link";
 import { Badge, Button } from "@/components/ui";
 import { useChangingVote } from "@/components/post-menu";
 import { vote } from "@/app/actions/social";
@@ -32,6 +34,8 @@ export type PollViewData = {
   matchLabel: string | null;
   ballots: number;
   hasVoted: boolean;
+  /** Everybody who has voted, without what they chose — always empty in an anonymous poll. */
+  voters: { id: string; name: string; photoId: string | null }[];
   /** What the viewer chose, in an open (non-anonymous) poll. */
   myChoices: string[];
   canClose: boolean;
@@ -43,12 +47,15 @@ export type PollViewData = {
  * more than four, so nothing scrolls. With one answer allowed each answer is a button and
  * pressing it is the vote; with several, they are ticked and sent with "Stem". After
  * voting — or once it is closed — the results, most votes first, their bars growing in.
- * Who voted for what, voting again and closing the poll are in the post's ⋯ menu
- * (`PostMenu`).
+ * Pressing "x har stemt" — on the right of "Vis alle", or in its place when there is none —
+ * lists who voted for what; before the viewer has voted in an open poll it lists who has
+ * voted and not what they chose. Never in an anonymous poll. Voting again and closing
+ * the poll are in the post's ⋯ menu (`PostMenu`).
  */
 export function PollView({ poll }: { poll: PollViewData }) {
   const { changing, setChanging } = useChangingVote();
   const [showAll, setShowAll] = useState(false);
+  const [showVotes, setShowVotes] = useState(false);
   const [state, setState] = useState<ActionResult>(undefined);
   const [pending, startTransition] = useTransition();
   /** The answer just pressed, while its vote is on the way. */
@@ -72,6 +79,9 @@ export function PollView({ poll }: { poll: PollViewData }) {
   }
 
   const showResults = (poll.hasVoted || !poll.open) && !changing;
+  const revealed = poll.hasVoted || !poll.open;
+  const canSeeVoters = !poll.anonymous && poll.voters.length > 0;
+  const voted = poll.ballots === 1 ? "1 har stemt" : `${poll.ballots} har stemt`;
   const twoColumns = poll.options.length > 4;
   const answer = `press-card flex h-full w-full cursor-pointer items-center rounded-xl border border-slate-200 bg-white text-left text-sm ${
     twoColumns ? "gap-2 px-2.5 py-2" : "gap-2.5 px-3 py-2.5"
@@ -114,17 +124,6 @@ export function PollView({ poll }: { poll: PollViewData }) {
               </div>
             </li>
           ))}
-          {poll.options.length > RESULTS_SHOWN && (
-            <li>
-              <button
-                type="button"
-                onClick={() => setShowAll((value) => !value)}
-                className="press-button px-1 text-sm font-medium text-[var(--accent-text)]"
-              >
-                {showAll ? "Vis færre" : `Vis alle ${poll.options.length} svar`}
-              </button>
-            </li>
-          )}
         </ul>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-2">
@@ -200,12 +199,87 @@ export function PollView({ poll }: { poll: PollViewData }) {
         </form>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <span>
-          {poll.ballots === 1 ? "1 har stemt" : `${poll.ballots} har stemt`}
-          {poll.hasVoted && poll.anonymous && " · du har stemt"}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        {showResults && poll.options.length > RESULTS_SHOWN && (
+          <button
+            type="button"
+            onClick={() => setShowAll((value) => !value)}
+            className="press-button px-1 text-sm font-medium text-[var(--accent-text)]"
+          >
+            {showAll ? "Vis færre" : `Vis alle ${poll.options.length} svar`}
+          </button>
+        )}
+        {canSeeVoters ? (
+          <button
+            type="button"
+            onClick={() => setShowVotes(true)}
+            className="press-button rounded-md px-1 text-sm font-medium text-[var(--accent-text)] underline-offset-2 hover:underline"
+          >
+            {voted}
+          </button>
+        ) : (
+          <span className="px-1 text-xs text-slate-500">
+            {voted}
+            {poll.hasVoted && poll.anonymous && " · du har stemt"}
+          </span>
+        )}
       </div>
+      {canSeeVoters && (
+        <Modal open={showVotes} onClose={() => setShowVotes(false)} title={revealed ? "Stemmer" : "Har stemt"} size="drawer">
+          {revealed ? <Votes poll={poll} /> : <Voters poll={poll} />}
+        </Modal>
+      )}
     </div>
+  );
+}
+
+/** Who has voted, and not what: all that is told before the viewer has voted in an open poll. */
+function Voters({ poll }: { poll: PollViewData }) {
+  return (
+    <ModalBody>
+      <ul aria-label="Har stemt" className="space-y-3">
+        {poll.voters.map((voter) => (
+          <li key={voter.id}>
+            <PlayerLink userId={voter.id} className="flex items-center gap-3 text-sm font-medium">
+              <Avatar name={voter.name} photoId={voter.photoId} size="sm" />
+              {voter.name}
+            </PlayerLink>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-xs text-slate-500">Hvad de har stemt, kan du se, når du selv har stemt.</p>
+    </ModalBody>
+  );
+}
+
+/** Who voted for each answer, most votes first. Never offered for an anonymous poll. */
+function Votes({ poll }: { poll: PollViewData }) {
+  return (
+    <ModalBody>
+      <ul className="space-y-4">
+        {poll.options
+          .filter((option) => option.votes > 0)
+          .map((option, index) => (
+            <li key={option.id} className="animate-row-in" style={{ animationDelay: `${index * 60}ms` }}>
+              <p className="flex items-baseline justify-between gap-3 text-sm font-semibold">
+                <span className="min-w-0 break-words">{option.text}</span>
+                <span className="shrink-0 font-normal text-slate-500">
+                  {option.votes === 1 ? "1 stemme" : `${option.votes} stemmer`}
+                </span>
+              </p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {option.voters.map((voter) => (
+                  <li key={voter.id}>
+                    <PlayerLink userId={voter.id} className="flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pr-3 pl-1 text-sm">
+                      <Avatar name={voter.name} photoId={voter.photoId} size="xs" />
+                      {voter.name}
+                    </PlayerLink>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+      </ul>
+    </ModalBody>
   );
 }

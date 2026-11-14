@@ -17,10 +17,16 @@ test("a post with words shows in the feed, and a teammate likes and comments", a
   await expect(page.getByText("Sikke en sejr i dag!")).toBeVisible();
   await page.getByRole("button", { name: /Synes godt om|Like|👍|❤/ }).first().click();
   await expect.poll(() => db.postLike.count()).toBe(1);
-  // Who liked it is shown as a face, not written out as a name.
-  const likers = page.getByRole("img", { name: "Bo synes godt om opslaget" });
+  // Who liked it is shown as a face, not written out as a name; pressing the face names them.
+  const likers = page.getByRole("button", { name: "Bo synes godt om opslaget" });
   await expect(likers).toBeVisible();
   await expect(likers).toHaveText("B");
+  await likers.click();
+  const liked = page.getByRole("dialog", { name: "Synes godt om" });
+  await expect(liked.getByRole("listitem")).toHaveText([/Bo$/]);
+  await expect(liked.getByRole("link", { name: /Bo$/ })).toHaveAttribute("href", `/spiller/${bo.id}`);
+  await page.keyboard.press("Escape");
+  await expect(liked).toBeHidden();
   await page.getByRole("button", { name: "0 kommentarer" }).click();
   const comments = page.getByRole("dialog", { name: "Kommentarer" });
   await expect(comments.getByText("Ingen kommentarer endnu")).toBeVisible();
@@ -50,6 +56,8 @@ test("a poll hides its result until you have voted", async ({ page, loginAs }) =
   await loginAs(bo);
   await page.goto("/oversigt");
   await expect(page.getByText("0 har stemt")).toBeVisible();
+  // Nobody has voted yet, so there is nobody to list: the count is words, not a button.
+  await expect(page.getByRole("button", { name: /har stemt/ })).toHaveCount(0);
   // One answer allowed: pressing it is the vote, and there is no "Stem" to press.
   await expect(page.getByRole("button", { name: "Stem", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Lørdag" }).click();
@@ -105,6 +113,13 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   await expect(page.getByRole("dialog").getByRole("list").getByRole("button")).toHaveText([/Fastgør øverst/]);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
+  // Before voting in the open poll, "1 har stemt" says who has voted — and not for whom.
+  await page.getByRole("button", { name: "1 har stemt" }).click();
+  const hasVoted = page.getByRole("dialog", { name: "Har stemt" });
+  await expect(hasVoted.getByRole("listitem")).toHaveText([/Træner Tom/]);
+  await expect(hasVoted).not.toContainText("Emil");
+  await page.keyboard.press("Escape");
+  await expect(hasVoted).toBeHidden();
 
   // Pressed the moment the page opens: with the feed behind a <Suspense> this left the
   // button pending for good now and then (see tests/unit/no-suspense.test.ts).
@@ -112,6 +127,11 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   await expect(page.getByText("2 har stemt")).toBeVisible();
   // Emil and Victor have a vote each and lead, in the order they were written; the rest follow.
   await expect(page.locator("li").filter({ hasText: /· \d+%$/ })).toHaveText([/^Emil/, /^Victor.*din stemme/, /^Frederik/, /^Oliver/, /^Lucas/]);
+  // "2 har stemt" sits to the right of "Vis alle", on the same row.
+  const showAll = (await page.getByRole("button", { name: "Vis alle 6 svar" }).boundingBox())!;
+  const count = (await page.getByRole("button", { name: "2 har stemt" }).boundingBox())!;
+  expect(count.x).toBeGreaterThan(showAll.x + showAll.width);
+  expect(Math.abs(count.y + count.height / 2 - (showAll.y + showAll.height / 2))).toBeLessThan(2);
   await page.getByRole("button", { name: "Vis alle 6 svar" }).click();
   await expect(page.getByText(/^Mads/)).toBeVisible();
 
@@ -119,9 +139,14 @@ test("a poll's many answers sit in two columns, its result leads with the most v
   const menu = page.getByRole("dialog");
   await expect(menu.getByRole("button", { name: "Luk afstemning" })).toHaveCount(0);
   await expect(menu.getByRole("button", { name: "Slet opslag" })).toHaveCount(0);
-  await menu.getByRole("button", { name: "Se stemmer" }).click();
-  await expect(page.getByRole("dialog", { name: "Stemmer" })).toContainText("Træner Tom");
-  await expect(page.getByRole("dialog", { name: "Stemmer" })).toContainText("Bo");
+  // Who voted for what is no longer an action in the menu: it opens from "2 har stemt".
+  await expect(menu.getByRole("button", { name: "Se stemmer" })).toHaveCount(0);
+  await expect(menu.getByRole("list").getByRole("button")).toHaveText([/Fastgør øverst/, /Skift stemme/]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await page.getByRole("button", { name: "2 har stemt" }).click();
+  const votes = page.getByRole("dialog", { name: "Stemmer" });
+  await expect(votes.getByRole("link")).toHaveText([/Træner Tom/, /Bo/]);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -174,6 +199,37 @@ test("a poll with several answers is ticked and sent with Stem", async ({ page, 
   await page.getByRole("button", { name: "Stem", exact: true }).click();
   await expect(page.getByText("1 har stemt")).toBeVisible();
   expect((await db.pollVote.findMany({ include: { option: true }, orderBy: { option: { position: "asc" } } })).map((v) => v.option.text)).toEqual(["Mandag", "Fredag"]);
+});
+
+test("an anonymous poll never names who voted", async ({ page, loginAs }) => {
+  const { team, admin, anna, bo } = await squad();
+  const post = await db.post.create({
+    data: {
+      teamId: team.id,
+      authorId: anna.id,
+      poll: {
+        create: {
+          teamId: team.id,
+          question: "Skal vi skifte træner?",
+          anonymous: true,
+          options: { create: ["Ja", "Nej"].map((text, position) => ({ text, position })) },
+        },
+      },
+    },
+    include: { poll: { include: { options: { orderBy: { position: "asc" } } } } },
+  });
+  const poll = post.poll!;
+  await db.pollVote.create({ data: { pollId: poll.id, optionId: poll.options[0]!.id } });
+  await db.pollBallot.create({ data: { pollId: poll.id, userId: admin.id } });
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "Nej" }).click();
+  // The result is shown, but the count stays words: there is nobody to list.
+  await expect(page.getByText("2 har stemt · du har stemt")).toBeVisible();
+  await expect(page.getByRole("button", { name: /har stemt/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await expect(page.getByRole("dialog").getByRole("list").getByRole("button")).toHaveText([/Fastgør øverst/]);
 });
 
 test("the author edits a post's words, an admin edits anybody's, and a teammate cannot", async ({ page, loginAs }) => {

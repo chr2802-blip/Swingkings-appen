@@ -2,6 +2,7 @@ import { likersView, type feedPosts } from "@/lib/feed";
 import { stampLabel } from "@/lib/time";
 import { Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
+import { LikersDrawer } from "@/components/likers-drawer";
 import { PlayerLink } from "@/components/player-link";
 import { PhotoCarousel } from "@/components/photo-carousel";
 import { PollView } from "@/components/poll-view";
@@ -82,20 +83,13 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
                 canDelete: comment.author.id === viewerId || admin,
               }))}
             />
-            {/* Who liked it, as overlapping faces; the names are read out and shown on hover. */}
+            {/* Who liked it, as overlapping faces; pressing them lists everybody. */}
             {likers.faces.length > 0 && (
-              <div role="img" aria-label={likers.label} title={likers.label} className="ml-auto flex shrink-0 items-center pl-2">
-                {likers.faces.map((like) => (
-                  <Avatar
-                    key={like.userId}
-                    name={like.user.name}
-                    photoId={like.user.photoId}
-                    size="xs"
-                    className="-ml-1.5 ring-2 ring-white first:ml-0"
-                  />
-                ))}
-                {likers.more > 0 && <span className="ml-1.5 text-xs text-slate-500">+{likers.more}</span>}
-              </div>
+              <LikersDrawer
+                likers={post.likes.map((like) => ({ id: like.userId, name: like.user.name, photoId: like.user.photoId }))}
+                shown={likers.faces.length}
+                label={likers.label}
+              />
             )}
           </div>
         </div>
