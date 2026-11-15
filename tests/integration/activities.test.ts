@@ -28,6 +28,7 @@ import { KIND_LABEL, activityName, signupSummary } from "@/lib/activity";
 import { teamRoster } from "@/lib/roster";
 import { formData, makeMatch, makeSquad, signIn } from "../helpers/factories";
 import { captureRedirect, expectDenied, expectRedirect } from "../helpers/expect";
+import { afterQueue } from "../helpers/next-mocks";
 
 const ics = (...events: string[]) => ["BEGIN:VCALENDAR", "VERSION:2.0", ...events, "END:VCALENDAR"].join("\r\n");
 const vevent = (uid: string, summary: string, start: string) =>
@@ -101,6 +102,26 @@ describe("saveActivity", () => {
     expect(await edit(synced.id)).toEqual({ ok: false, error: "Aktiviteten kommer fra KampKlar og rettes der." });
     expect(await edit(theirs.id)).toEqual({ ok: false, error: "Aktiviteten findes ikke længere." });
     expect(await prisma.match.findUniqueOrThrow({ where: { id: theirs.id } })).toMatchObject({ title: "Swingkings - B.93" });
+  });
+
+  it("moves a hand-made activity's open jobs with it and tells the rest of the team", async () => {
+    const { team, anna } = await makeSquad();
+    const fest = await makeMatch(team.id, { title: "Fest", startsAt: new Date("2030-06-01T17:00:00Z") });
+    const grill = await prisma.task.create({ data: { teamId: team.id, matchId: fest.id, title: "Grill", dueAt: new Date("2030-05-31T17:00:00Z") } });
+    await signIn(anna);
+    process.env.VAPID_PRIVATE_KEY = "test";
+    try {
+      // The same time again is no move.
+      expect(await saveActivity(undefined, formData({ id: fest.id, title: "Fest", startsAt: "2030-06-01T19:00" }))).toEqual({ ok: true });
+      expect(afterQueue).toHaveLength(0);
+      // Two days later, in Copenhagen's summer time.
+      expect(await saveActivity(undefined, formData({ id: fest.id, title: "Fest", startsAt: "2030-06-03T19:00" }))).toEqual({ ok: true });
+      expect(afterQueue).toHaveLength(1);
+    } finally {
+      delete process.env.VAPID_PRIVATE_KEY;
+      afterQueue.length = 0;
+    }
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: grill.id } })).dueAt?.toISOString()).toBe("2030-06-02T17:00:00.000Z");
   });
 
   it("refuses a nameless activity, a name too long and a time it cannot read", async () => {
