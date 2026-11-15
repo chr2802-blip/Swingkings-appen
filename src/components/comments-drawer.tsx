@@ -5,7 +5,8 @@ import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
-import { CommentForm, type ReplyTarget } from "@/components/comment-form";
+import { CommentForm, type CommentMember, type ReplyTarget } from "@/components/comment-form";
+import { mentionSegments } from "@/lib/mentions";
 import { deleteComment } from "@/app/actions/social";
 
 export type CommentView = {
@@ -25,7 +26,18 @@ export type CommentView = {
  * Answers sit indented under the comment they answer; "Svar" turns the box into an answer.
  * The drawer stays open while comments are added or deleted, as the page renders anew.
  */
-export function CommentsDrawer({ postId, comments }: { postId: string; comments: CommentView[] }) {
+export function CommentsDrawer({
+  postId,
+  comments,
+  members,
+  viewerId,
+}: {
+  postId: string;
+  comments: CommentView[];
+  /** The team, to tag in a comment and to make the tagged names links. */
+  members: CommentMember[];
+  viewerId: string;
+}) {
   const [open, setOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const count = comments.length;
@@ -60,12 +72,12 @@ export function CommentsDrawer({ postId, comments }: { postId: string; comments:
                 const replies = repliesTo(comment.id);
                 return (
                   <li key={comment.id}>
-                    <Comment comment={comment} onReply={setReplyTo} />
+                    <Comment comment={comment} members={members} onReply={setReplyTo} />
                     {replies.length > 0 && (
                       <ul aria-label={`Svar til ${comment.author.name}`} className="mt-3 space-y-3 pl-10">
                         {replies.map((reply) => (
                           <li key={reply.id}>
-                            <Comment comment={reply} onReply={setReplyTo} small />
+                            <Comment comment={reply} members={members} onReply={setReplyTo} small />
                           </li>
                         ))}
                       </ul>
@@ -77,14 +89,28 @@ export function CommentsDrawer({ postId, comments }: { postId: string; comments:
           )}
         </ModalBody>
         <ModalFooter>
-          <CommentForm postId={postId} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSent={() => setReplyTo(null)} />
+          <CommentForm
+            postId={postId}
+            members={members}
+            viewerId={viewerId}
+            replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSent={() => setReplyTo(null)} />
         </ModalFooter>
       </Modal>
     </>
   );
 }
 
-function Comment({ comment, onReply, small = false }: { comment: CommentView; onReply: (to: ReplyTarget) => void; small?: boolean }) {
+function Comment({
+  comment,
+  members,
+  onReply,
+  small = false,
+}: {
+  comment: CommentView;
+  members: CommentMember[];
+  onReply: (to: ReplyTarget) => void;
+  small?: boolean;
+}) {
   return (
     <div className="flex items-start gap-2.5">
       <PlayerLink userId={comment.author.id} className="shrink-0" aria-label={comment.author.name}>
@@ -95,7 +121,17 @@ function Comment({ comment, onReply, small = false }: { comment: CommentView; on
           <p className="text-[13px] font-semibold">
             <PlayerLink userId={comment.author.id}>{comment.author.name}</PlayerLink>
           </p>
-          <p className="text-sm break-words whitespace-pre-line">{comment.body}</p>
+          <p className="text-sm break-words whitespace-pre-line">
+            {mentionSegments(comment.body, members).map((segment, index) =>
+              segment.userId ? (
+                <PlayerLink key={index} userId={segment.userId} className="font-semibold text-[var(--accent-text)]">
+                  {segment.text}
+                </PlayerLink>
+              ) : (
+                segment.text
+              ),
+            )}
+          </p>
         </div>
         <div className="mt-1 flex items-center gap-3 px-3 text-xs text-slate-500">
           <span>{comment.stamp}</span>

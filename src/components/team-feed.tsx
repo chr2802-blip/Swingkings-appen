@@ -22,6 +22,7 @@ export async function TeamFeed({ user }: { user: TeamUser }) {
     feedPosts(user.teamId, { id: user.id, canAdminister: admin }),
     teamRoster(user.teamId),
   ]);
+  const members = roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId }));
   // Changes on every render, so the posts `FeedMore` fetched are fetched again when an
   // action (a like, a comment) has the page rendered anew.
   const renderedAt = Date.now();
@@ -40,7 +41,7 @@ export async function TeamFeed({ user }: { user: TeamUser }) {
       ) : (
         <div className="space-y-6">
           {posts.map((post) => (
-            <FeedPostCard key={post.id} post={post} viewerId={user.id} admin={admin} />
+            <FeedPostCard key={post.id} post={post} viewerId={user.id} admin={admin} members={members} />
           ))}
           <FeedMore after={nextFeedCursor(posts, FEED_PAGE)} renderedAt={renderedAt} />
         </div>

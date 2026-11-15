@@ -18,6 +18,7 @@ import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { notifyLater } from "@/lib/notify";
+import { mentionedIds } from "@/lib/mentions";
 
 const body = z.string().trim().max(MAX_MESSAGE).optional().transform((v) => v || null);
 
@@ -317,7 +318,7 @@ export async function toggleLike(_prev: ActionResult, formData: FormData): Promi
  * A comment on a post, or an answer to one (`parentId`). Answers sit one level deep: an
  * answer to an answer goes under the comment that started the thread. Whoever is answered
  * hears of it, and so does whoever started the thread, without being named in the words;
- * the post's author hears of every comment.
+ * whoever is tagged ("@Bo") hears of it; the post's author hears of every comment.
  */
 export async function addComment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -325,7 +326,6 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   if (!post) return fail("Opslaget findes ikke.");
   const text = z.string().trim().min(1, "Skriv en kommentar.").max(1000).safeParse(formData.get("body") ?? "");
   if (!text.success) return fail(text.error.issues[0]?.message ?? "Skriv en kommentar.");
-
   const answering = String(formData.get("parentId") ?? "");
   let replyTo: { id: string; authorId: string; parent: { id: string; authorId: string } | null } | null = null;
   if (answering) {
@@ -340,14 +340,14 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
 
   await prisma.postComment.create({ data: { postId: post.id, authorId: user.id, body: text.data, parentId: thread?.id ?? null } });
   const preview = text.data.slice(0, 140);
-  if (replyTo && thread) {
-    const answered = [replyTo.authorId, thread.authorId];
-    notifyLater(answered, user.id, { title: `${user.name} svarede på din kommentar`, body: preview, url: "/oversigt#feed" });
-    // The post's author is told as for any comment, unless already told above.
-    if (!answered.includes(post.authorId)) {
-      notifyLater([post.authorId], user.id, { title: `${user.name} kommenterede dit opslag`, body: preview, url: "/oversigt#feed" });
-    }
-  } else {
+  // Each person hears of it once, in the most particular words that fit them: answered,
+  // then tagged, then the post's author. Who is tagged is read from the words against
+  // this team's roster, so nobody on another team can be tagged.
+  const answered = replyTo && thread ? [replyTo.authorId, thread.authorId] : [];
+  const tagged = mentionedIds(text.data, await teamRoster(user.teamId)).filter((id) => !answered.includes(id));
+  notifyLater(answered, user.id, { title: `${user.name} svarede på din kommentar`, body: preview, url: "/oversigt#feed" });
+  notifyLater(tagged, user.id, { title: `${user.name} nævnte dig i en kommentar`, body: preview, url: "/oversigt#feed" });
+  if (!answered.includes(post.authorId) && !tagged.includes(post.authorId)) {
     notifyLater([post.authorId], user.id, { title: `${user.name} kommenterede dit opslag`, body: preview, url: "/oversigt#feed" });
   }
   revalidatePath("/oversigt");
