@@ -5,7 +5,7 @@ test("a coach ticks roles as a stack: Bøder, then Admin, and back down", async 
   const { team, admin, anna } = await squad();
   const role = async () => (await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).role;
   await loginAs(admin);
-  await page.goto("/hold/spillere");
+  await page.goto("/hold/rettigheder");
   const fines = page.getByRole("checkbox", { name: "Bøder for Anna" });
   const adminTick = page.getByRole("checkbox", { name: "Admin for Anna" });
   await expect(fines).toHaveAttribute("aria-checked", "false");
@@ -30,7 +30,7 @@ test("a coach ticks roles as a stack: Bøder, then Admin, and back down", async 
 test("the last admin cannot untick themselves, and is told why", async ({ page, loginAs }) => {
   const { team, admin } = await squad();
   await loginAs(admin);
-  await page.goto("/hold/spillere");
+  await page.goto("/hold/rettigheder");
   const own = page.getByRole("checkbox", { name: `Admin for ${admin.name}` });
   await own.click();
   await expect(page.getByRole("alert").filter({ hasText: "Holdet skal have mindst én admin." })).toBeVisible();
@@ -38,22 +38,28 @@ test("the last admin cannot untick themselves, and is told why", async ({ page, 
   expect((await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: admin.id } })).role).toBe("ADMIN");
 });
 
-test("everybody but an admin sees the plain roster, with no ticks", async ({ page, loginAs }) => {
-  const { treasurer, anna } = await squad();
+test("everybody but an admin is kept out of the rights tab, and has no Spillere in the menu", async ({ page, loginAs }) => {
+  const { team, treasurer, anna } = await squad();
   for (const who of [treasurer, anna]) {
     await loginAs(who);
-    await page.goto("/hold/spillere");
-    await expect(page.getByRole("link").filter({ hasText: "Bo" }).getByText("Mangler kontingent")).toBeVisible();
+    await page.goto("/hold/rettigheder");
+    await expect(page).toHaveURL(/\/oversigt$/);
     await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await page.goto("/hold/spillere");
+    await expect(page).toHaveURL(/\/oversigt$/);
+    await page.getByRole("button", { name: team.name }).click();
+    await expect(page.getByRole("link", { name: "Min profil" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Spillere" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Holdindstillinger" })).toHaveCount(0);
   }
 });
 
-test("the table lives on Spillere, not in the team settings", async ({ page, loginAs }) => {
+test("the table is a tab of the team settings, beside Holdet", async ({ page, loginAs }) => {
   const { admin } = await squad();
   await loginAs(admin);
   await page.goto("/hold");
   await expect(page.getByRole("heading", { name: "Holdindstillinger" })).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Admin for Anna" })).toHaveCount(0);
-  await page.goto("/hold/spillere");
-  await expect(page.getByRole("checkbox", { name: "Admin for Anna" })).toBeVisible();
+  await page.getByRole("tab", { name: "Rettigheder" }).click();
+  await expect(page).toHaveURL(/\/hold\/rettigheder$/);
+  await expect(page.getByRole("tabpanel", { name: "Rettigheder" }).getByRole("checkbox", { name: "Admin for Anna" })).toBeVisible();
 });

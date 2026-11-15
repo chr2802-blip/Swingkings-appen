@@ -4,9 +4,9 @@ import { db, squad } from "./helpers/database";
 const BOX_LINK = "https://qr.mobilepay.dk/box/b865a6da-62a7-4360-a406-b39a192c757e/pay-in";
 
 test("a coach marks a player's kontingent paid, and the whole team sees it", async ({ page, loginAs }) => {
-  const { team, admin, anna } = await squad();
+  const { team, admin, anna, bo } = await squad();
   await loginAs(admin);
-  await page.goto("/hold/spillere");
+  await page.goto("/hold/rettigheder");
   const paid = page.getByRole("checkbox", { name: "Kontingent betalt for Anna" });
   await expect(paid).toHaveAttribute("aria-checked", "false");
   await paid.click();
@@ -15,13 +15,12 @@ test("a coach marks a player's kontingent paid, and the whole team sees it", asy
     .poll(async () => (await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).duesPaidAt)
     .not.toBeNull();
 
+  await expect(page.getByText("1/4 betalt")).toBeVisible();
   await loginAs(anna);
-  await page.goto("/hold/spillere");
-  await expect(page.getByText("1 af 4 har betalt kontingent", { exact: false })).toBeVisible();
-  const annaRow = page.getByRole("link").filter({ has: page.getByText("Anna", { exact: true }) });
-  await expect(annaRow.getByText("Kontingent betalt")).toBeVisible();
-  const boRow = page.getByRole("link").filter({ has: page.getByText("Bo", { exact: true }) });
-  await expect(boRow.getByText("Mangler kontingent")).toBeVisible();
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByText("Kontingent betalt")).toBeVisible();
+  await page.goto(`/spiller/${bo.id}`);
+  await expect(page.getByText("Mangler kontingent")).toBeVisible();
 });
 
 test("a coach goes through the season one step at a time, by swipe and by button, and starts the next", async ({ page, loginAs }) => {
@@ -160,11 +159,6 @@ test("an admin pastes the box's link, and a player's Betal opens MobilePay with 
   await expect(page.getByText("Du skylder")).toBeVisible();
   await expect(page.getByRole("link", { name: /Betal/ })).toHaveCount(0);
 
-  await page.goto("/hold/spillere");
-  await expect(page.getByText("Du mangler at betale kontingent (600 kr).")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Betal", exact: true })).toHaveAttribute("href", dues);
-  await expect(page.getByText(/En admin markerer dit kontingent/)).toBeVisible();
-
   await page.goto(`/spiller/${anna.id}`);
   await expect(page.getByRole("link", { name: "💸 Betal 30 kr med MobilePay" })).toHaveAttribute("href", fines);
   await expect(page.getByText(/nulstiller dine bøder/)).toBeVisible();
@@ -174,9 +168,9 @@ test("an admin pastes the box's link, and a player's Betal opens MobilePay with 
 
   // Once marked paid, kontingent asks no more; and nobody is asked to pay for somebody else.
   await db.teamMember.updateMany({ where: { teamId: team.id, userId: anna.id }, data: { duesPaidAt: new Date() } });
-  await page.goto("/hold/spillere");
-  await expect(page.getByRole("heading", { name: "Spillere", level: 1 })).toBeVisible();
-  await expect(page.getByText(/Du mangler at betale kontingent/)).toHaveCount(0);
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByText("Kontingent betalt")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Betal kontingent/ })).toHaveCount(0);
   await page.goto(`/spiller/${treasurer.id}`);
   await expect(page.getByRole("heading", { name: "Kasserer Kim", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: /Betal/ })).toHaveCount(0);

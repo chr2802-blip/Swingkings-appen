@@ -252,3 +252,36 @@ test("with reduced motion a page neither comes in nor steps aside", async ({ pag
   await expect(shown).toHaveAttribute("data-motion", "forward");
   expect(await shown.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
 });
+
+test("a detail page has a back arrow that goes back to where you came from", async ({ page, loginAs }) => {
+  const { team, anna, bo, treasurer } = await squad();
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: new Date(Date.now() + 10 * 86_400_000) } });
+  await db.fine.create({ data: { teamId: team.id, playerId: bo.id, reason: "For sent", units: 1, unitPriceKr: 10, issuedById: treasurer.id } });
+  await loginAs(anna);
+
+  // The tabs have none.
+  await page.goto("/aktiviteter");
+  await expect(page.getByRole("link", { name: "Tilbage" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: /Afslutningsfest/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${party.id}$`));
+  await page.getByRole("link", { name: "Tilbage" }).click();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+
+  // Back from a player goes to the fines it was opened from, not to the page above it.
+  await page.goto("/boder");
+  await page.getByRole("link", { name: /\bBo\b/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}$`));
+  await page.getByRole("link", { name: "Tilbage" }).click();
+  await expect(page).toHaveURL(/\/boder$/);
+});
+
+test("a detail page opened straight from a link goes up to the page above it", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: new Date(Date.now() + 10 * 86_400_000) } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await page.getByRole("link", { name: "Tilbage" }).click();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect(page.getByRole("link", { name: "Tilbage" })).toHaveCount(0);
+});

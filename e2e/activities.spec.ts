@@ -154,9 +154,9 @@ test("old links to matches and the task list land in their new homes", async ({ 
   await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}$`));
   await page.goto("/opgaver");
   await expect(page).toHaveURL(/\/oversigt$/);
-  // The standard jobs moved to the team settings, which a player sees as the roster.
+  // The standard jobs moved to the team settings, which send a player to the overview.
   await page.goto("/aktiviteter/standardopgaver");
-  await expect(page).toHaveURL(/\/hold\/spillere$/);
+  await expect(page).toHaveURL(/\/oversigt$/);
 });
 
 test("a player puts a job on an activity for a teammate, who marks it done", async ({ page, loginAs }) => {
@@ -257,7 +257,7 @@ test("an admin keeps the team's standard jobs under the team settings; a player 
 
   await loginAs(anna);
   await page.goto("/hold/opgaver");
-  await expect(page).toHaveURL(/\/hold\/spillere$/);
+  await expect(page).toHaveURL(/\/oversigt$/);
   await expect(page.getByRole("button", { name: "Ny standardopgave" })).toHaveCount(0);
 });
 

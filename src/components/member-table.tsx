@@ -12,7 +12,7 @@ import { removeMember } from "@/app/actions/teams";
 
 /**
  * The admin's view of the roster: a tick for Bøder, Admin and kontingent per member,
- * saved on the press, and a menu for the rest. Everybody else sees the plain list.
+ * saved on the press, and a menu for the rest: the Rettigheder tab of the team settings.
  */
 export function MemberTable({ roster, userId }: { roster: RosterMember[]; userId: string }) {
   return (
