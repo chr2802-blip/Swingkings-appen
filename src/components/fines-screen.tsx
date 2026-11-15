@@ -92,7 +92,6 @@ export async function FinesScreen({
           <div className="px-4 py-3">
             <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">I kassen</p>
             <p className="text-3xl font-semibold">{kr(totals.fined)}</p>
-            <p className="text-xs text-slate-500">{kr(totals.owed)} udestående</p>
           </div>
         </div>
         {mine && mine.owesKr > 0 && board.payLink && (

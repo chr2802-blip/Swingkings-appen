@@ -245,13 +245,14 @@ test("the overview stays on top: what you owe, what is in the box and the way to
 
   await loginAs(anna);
   await page.goto("/boder");
-  // Six fines given, one of them reset: 60 kr in all, 50 kr still owed, 10 of them Anna's.
+  // Six fines given, one of them reset: 60 kr in all, 10 kr of it still Anna's.
   const mine = page.getByRole("link", { name: /Du skylder/ });
   await expect(mine).toContainText("10 kr");
   await expect(mine).toContainText("1 bøde");
   const box = page.getByText("I kassen").locator("..");
   await expect(box).toContainText("60 kr");
-  await expect(box).toContainText("50 kr udestående");
+  // The box shows what has been fined, not what is still owed.
+  await expect(box).not.toContainText("udestående");
   // A row on the board opens the player's page, and says so at its end as the history's rows do.
   await expect(page.getByRole("link", { name: /Bo .*40 kr/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Bo .*40 kr/ }).locator("[aria-hidden]").last()).toHaveText("›");
