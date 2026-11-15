@@ -32,13 +32,18 @@ export async function sendPushToUsers(
     tag?: string;
     /** Stays on screen until it is dealt with, where the platform honours it. */
     requireInteraction?: boolean;
+    /**
+     * Replaces the notification with the same tag without a sound or a buzz. Safari on
+     * iPhone cannot do that — it would buzz every time — so Apple's devices are left out.
+     */
+    quiet?: boolean;
   },
 ) {
   if (!configure() || userIds.length === 0) return 0;
 
-  const subscriptions = await prisma.pushSubscription.findMany({
-    where: { userId: { in: userIds } },
-  });
+  const subscriptions = (await prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } })).filter(
+    (sub) => !payload.quiet || !isApplePush(sub.endpoint),
+  );
 
   let delivered = 0;
   await Promise.all(
@@ -60,4 +65,14 @@ export async function sendPushToUsers(
   );
 
   return delivered;
+}
+
+/** Safari's push service, which shows every push as a new alert. */
+export function isApplePush(endpoint: string) {
+  try {
+    const host = new URL(endpoint).hostname;
+    return host === "push.apple.com" || host.endsWith(".push.apple.com");
+  } catch {
+    return false;
+  }
 }

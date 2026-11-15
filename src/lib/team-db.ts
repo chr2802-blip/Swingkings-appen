@@ -31,6 +31,7 @@ const NO_TEAM_ID: Record<string, { refuse: true; because: string } | { refuse: f
   Team: { refuse: false },
   LoginAttempt: { refuse: false },
   PushSubscription: { refuse: false },
+  PushPause: { refuse: false },
 };
 
 function decide(model: string): "scope" | "refuse" | "pass" {

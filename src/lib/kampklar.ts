@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { safeFetch } from "./safe-fetch";
 import { classify, normalizeCalendarUrl, parseCalendar, type CalendarEvent } from "./ical";
-import { addTemplatesToActivity, announceActivityMoves, moveTaskDeadlines, type ActivityMove } from "./tasks";
+import { addTemplatesToActivity, moveTaskDeadlines } from "./tasks";
 
 /** Past this, a calendar feed is not a team's season. */
 const MAX_FEED_BYTES = 2_000_000;
@@ -57,7 +57,8 @@ export async function fetchCalendar(rawUrl: string): Promise<{ ok: true; text: s
  *
  * - An entry is matched to a row by its UID, so a moved match is updated rather than
  *   added twice, and a row typed in by hand is never touched. A moved activity takes its
- *   open jobs' deadlines along, and the team hears about it if it has not taken place.
+ *   open jobs' deadlines along. The sync sends no notifications at all — not for new
+ *   activities, moved ones or the jobs it hands out.
  * - Every entry becomes an activity — matches, trainings and the rest of KampKlar's feed.
  *   Only a new upcoming **match** gets the standard jobs marked to be added automatically
  *   (`TaskTemplate.autoAdd`), handed out fairly.
@@ -86,7 +87,6 @@ export async function applyCalendar(
   let updated = 0;
   let cancelled = 0;
   let tasksAdded = 0;
-  const moves: ActivityMove[] = [];
 
   for (const event of events) {
     if (seen.has(event.uid)) continue;
@@ -112,11 +112,9 @@ export async function applyCalendar(
       });
       updated++;
       if (row.startsAt.getTime() !== event.startsAt.getTime()) {
+        // The jobs keep their distance to the start. Nobody is told: the sync is silent,
+        // and the new time is on the activity for whoever looks.
         await moveTaskDeadlines(teamId, row.id, row.startsAt, event.startsAt);
-        const upcoming = row.startsAt > now || event.startsAt > now;
-        if (upcoming && !event.cancelled) {
-          moves.push({ id: row.id, kind, title, opponent, from: row.startsAt, to: event.startsAt });
-        }
       }
     } else if (team.seasonStartedAt && event.startsAt < team.seasonStartedAt) {
       continue;
@@ -127,7 +125,8 @@ export async function applyCalendar(
       });
       created++;
       if (kind === "MATCH" && !event.cancelled && match.startsAt > now) {
-        tasksAdded += (await addTemplatesToActivity(teamId, match, actorId, "auto")).length;
+        // Silent: whoever gets a job sees it in the app, without a push for each new match.
+        tasksAdded += (await addTemplatesToActivity(teamId, match, actorId, "auto", { notify: false })).length;
       }
     }
   }
@@ -140,7 +139,6 @@ export async function applyCalendar(
   }
 
   await prisma.team.update({ where: { id: teamId }, data: { calendarSyncedAt: now } });
-  await announceActivityMoves(teamId, moves, actorId);
   return { ok: true, created, updated, cancelled, tasksAdded };
 }
 

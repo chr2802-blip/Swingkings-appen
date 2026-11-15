@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { presentsCronSecret } from "@/lib/cron-secret";
 import { sendPushToUsers } from "@/lib/push";
 import { syncTeamCalendar } from "@/lib/kampklar";
+import { clearOldPushPauses } from "@/lib/grouped-push";
 import { OPEN_TASK, taskUrl } from "@/lib/tasks";
 import { deadlineLabel, endOfDayInZone } from "@/lib/time";
 
@@ -17,7 +18,8 @@ const SYNC_BUDGET_MS = 30_000;
  * which is why it uses `prisma` directly rather than `teamDb`.
  *
  * 1. Reminds each assignee of an open job due by tomorrow evening — once a day at most.
- * 2. Reads every team's KampKlar calendar (the one read longest ago first), so a moved or
+ * 2. Forgets the chat and comment push pauses that are long over.
+ * 3. Reads every team's KampKlar calendar (the one read longest ago first), so a moved or
  *    new match shows up without anybody pressing "Hent fra KampKlar".
  */
 export async function GET(request: Request) {
@@ -50,6 +52,7 @@ export async function GET(request: Request) {
   if (due.length) {
     await prisma.task.updateMany({ where: { id: { in: due.map((t) => t.id) } }, data: { lastNotifiedAt: now } });
   }
+  await clearOldPushPauses(now);
   // The reminders are what people notice, so they go first; the calendars use what is left
   // of the time, and a team not reached today is reached tomorrow.
   const started = Date.now();

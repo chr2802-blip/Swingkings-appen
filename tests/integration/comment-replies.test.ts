@@ -27,6 +27,9 @@ async function thread() {
   const squad = await makeSquad();
   const { team, admin, anna } = squad;
   const post = await prisma.post.create({ data: { teamId: team.id, authorId: admin.id, body: "Kampen i går" } });
+  // The post's author has a phone with notifications on: their comment pushes are grouped
+  // (`src/lib/grouped-push.ts`), and go only where there is a device to hear them.
+  await prisma.pushSubscription.create({ data: { userId: admin.id, endpoint: "https://fcm.googleapis.com/fcm/send/admin", p256dh: "B".repeat(87), auth: "a".repeat(22) } });
   const comment = await prisma.postComment.create({ data: { postId: post.id, authorId: anna.id, body: "Flot sejr" } });
   return { ...squad, post, comment };
 }
@@ -42,7 +45,11 @@ describe("answering a comment", () => {
     expect(reply.parentId).toBe(comment.id);
     expect(pushed).toEqual([
       { to: [anna.id], payload: { title: "Bo svarede på din kommentar", body: "Enig!", url: "/oversigt#feed" } },
-      { to: [admin.id], payload: { title: "Bo kommenterede dit opslag", body: "Enig!", url: "/oversigt#feed" } },
+      // Anna's comment was not news to the author yet either: both are counted.
+      {
+        to: [admin.id],
+        payload: { title: "2 nye kommentarer på dit opslag", body: "Bo og Anna\nBo: Enig!", url: "/oversigt#feed", tag: `comments-${post.id}`, quiet: false },
+      },
     ]);
 
     const [read] = await feedPosts(team.id, { id: bo.id, canAdminister: false });
@@ -62,7 +69,16 @@ describe("answering a comment", () => {
     expect((await prisma.postComment.findFirstOrThrow({ where: { body: "Også mig" } })).parentId).toBe(comment.id);
     expect(pushed).toEqual([
       { to: [bo.id, anna.id], payload: { title: "Kasserer svarede på din kommentar", body: "Også mig", url: "/oversigt#feed" } },
-      { to: [admin.id], payload: { title: "Kasserer kommenterede dit opslag", body: "Også mig", url: "/oversigt#feed" } },
+      {
+        to: [admin.id],
+        payload: {
+          title: "3 nye kommentarer på dit opslag",
+          body: "Kasserer, Bo og Anna\nKasserer: Også mig",
+          url: "/oversigt#feed",
+          tag: `comments-${post.id}`,
+          quiet: false,
+        },
+      },
     ]);
   });
 

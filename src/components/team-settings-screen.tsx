@@ -14,6 +14,7 @@ import { TemplateDialog } from "@/components/template-dialog";
 import { SyncButton } from "@/components/sync-button";
 import { TeamSettingsForm } from "@/components/team-settings-form";
 import { InviteLinkForm } from "@/components/invite-link-form";
+import { TeamNoticeForm } from "@/components/team-notice-form";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
 import { revokeInviteLink } from "@/app/actions/teams";
@@ -22,7 +23,8 @@ import { deleteTaskTemplate } from "@/app/actions/activities";
 /**
  * The team settings, as tabs like the fine box: the team itself (name, crest, colour and
  * the season), payment (the price of a fine, the MobilePay box, kontingent), jobs (the
- * KampKlar link, the standard jobs and how they have been shared) and invitations. Each
+ * KampKlar link, the standard jobs and how they have been shared), invitations, and a
+ * notification of the admin's own to one person or the whole team. Each
  * tab has its own address — the one opened is the one shown — and its own form, and all are read at once, so a swipe
  * never waits on the server. Admins only; anybody else is sent to the squad.
  */
@@ -226,6 +228,25 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
                   </ul>
                 )}
               </Card>
+            ),
+          },
+          {
+            href: "/hold/besked",
+            title: "Besked",
+            children: (
+              <section>
+                <SectionTitle>Send notifikation</SectionTitle>
+                <Card className="space-y-4">
+                  <p className="text-sm text-slate-500">
+                    En besked direkte på telefonen til én eller hele holdet — fx “Husk kontingent”. Den når kun dem, der
+                    har slået notifikationer til.
+                  </p>
+                  <TeamNoticeForm
+                    members={roster.filter((m) => m.userId !== user.id).map((m) => ({ userId: m.userId, name: m.name }))}
+                    hasMobilePay={Boolean(team.mobilePayLink)}
+                  />
+                </Card>
+              </section>
             ),
           },
         ]}

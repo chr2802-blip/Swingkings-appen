@@ -128,3 +128,26 @@ test("the roster lists everybody on the team with their role", async ({ page, lo
   for (const name of ["Anna", "Bo", "Kasserer Kim", "Træner Tom"]) await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
   await expect(page.getByRole("main").getByText("Bødekasseformand").first()).toBeVisible();
 });
+
+test("a coach sends a reminder to one player, opening MobilePay with the kontingent filled in", async ({ page, loginAs }) => {
+  const { team, admin, anna } = await squad();
+  await db.team.update({ where: { id: team.id }, data: { mobilePayLink: "https://qr.mobilepay.dk/box/b865a6da-62a7-4360-a406-b39a192c757e/pay-in", duesKr: 600 } });
+  await db.pushSubscription.create({ data: { userId: anna.id, endpoint: "https://8.8.8.8/push/anna", p256dh: "B".repeat(87), auth: "a".repeat(22) } });
+  await loginAs(admin);
+  await page.goto("/hold/besked");
+  const tab = page.getByRole("tabpanel", { name: "Besked" });
+  await tab.getByLabel("Til", { exact: true }).selectOption({ label: "Anna" });
+  await tab.getByLabel("Åbner", { exact: true }).selectOption({ label: "MobilePay: betal kontingent" });
+  await tab.getByLabel("Overskrift", { exact: true }).fill("Husk kontingent");
+  await tab.getByRole("textbox", { name: "Besked" }).fill("Senest fredag.");
+  await tab.getByRole("button", { name: "Send notifikation" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Sendt til Anna." })).toBeVisible();
+
+  // An outside link that is not https is refused before anything is sent.
+  await tab.getByLabel("Åbner", { exact: true }).selectOption({ label: "Et andet link…" });
+  await tab.getByLabel("Link", { exact: true }).fill("https://localhost");
+  await tab.getByLabel("Overskrift", { exact: true }).fill("Stævne");
+  await tab.getByRole("textbox", { name: "Besked" }).fill("Se mere her.");
+  await tab.getByRole("button", { name: "Send notifikation" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Linket skal være en hel adresse, der starter med https://" })).toBeVisible();
+});
