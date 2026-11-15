@@ -19,10 +19,15 @@ afterEach(() => {
   delete process.env.VAPID_PRIVATE_KEY;
 });
 
+/** The post's author hears of comments through the grouped push, which needs a device to send to. */
+const listening = (userId: string) =>
+  prisma.pushSubscription.create({ data: { userId, endpoint: `https://fcm.googleapis.com/fcm/send/${userId}`, p256dh: "B".repeat(87), auth: "a".repeat(22) } });
+
 describe("tagging in a comment", () => {
   it("notifies the tagged teammates and the post's author, each once", async () => {
     const { team, anna, bo, treasurer } = await makeSquad();
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr!" } });
+    await listening(anna.id);
     await signIn(bo);
     expect(await addComment(undefined, formData({ postId: post.id, body: "@Kasserer @Kasserer så du det?" }))).toEqual({ ok: true });
     await runAfter();
@@ -35,6 +40,7 @@ describe("tagging in a comment", () => {
   it("tells a tagged author only that they were tagged, and never the writer", async () => {
     const { team, anna, bo } = await makeSquad();
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr!" } });
+    await listening(anna.id);
     await signIn(bo);
     await addComment(undefined, formData({ postId: post.id, body: "@Anna @Bo" }));
     await runAfter();
@@ -57,6 +63,7 @@ describe("tagging in a comment", () => {
   it("without a tag, only the author hears of it, as before", async () => {
     const { team, anna, bo } = await makeSquad();
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr!" } });
+    await listening(anna.id);
     await signIn(bo);
     await addComment(undefined, formData({ postId: post.id, body: "Flot, Kasserer" }));
     await runAfter();
@@ -68,6 +75,7 @@ describe("tagging in a comment", () => {
     const other = await makeSquad("Andre");
     await makeMember(other.team.id, "Søren");
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr!" } });
+    await listening(anna.id);
     await signIn(bo);
     await addComment(undefined, formData({ postId: post.id, body: "@Søren kom og se" }));
     await runAfter();

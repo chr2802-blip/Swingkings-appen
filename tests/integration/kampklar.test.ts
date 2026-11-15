@@ -11,7 +11,7 @@ vi.mock("@/lib/push", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { applyCalendar } from "@/lib/kampklar";
-import { addTemplatesToActivity } from "@/lib/tasks";
+import { addTemplatesToActivity, announceActivityMoves } from "@/lib/tasks";
 import { afterQueue } from "../helpers/next-mocks";
 import type { CalendarEvent } from "@/lib/ical";
 import { MAX_SEPARATE_MOVE_PUSHES } from "@/lib/tasks";
@@ -138,7 +138,7 @@ describe("a moved activity", () => {
     return { team, anna, bo, match };
   }
 
-  it("takes its open jobs' deadlines along and tells the team, but leaves done jobs alone", async () => {
+  it("takes its open jobs' deadlines along without telling anybody, and leaves done jobs alone", async () => {
     const { team, anna, bo, match } = await syncedMatch();
     const open = await prisma.task.findFirstOrThrow({ where: { matchId: match.id } });
     await prisma.task.update({ where: { id: open.id }, data: { lastNotifiedAt: now } });
@@ -158,18 +158,8 @@ describe("a moved activity", () => {
     expect((await prisma.task.findUniqueOrThrow({ where: { id: done.id } })).dueAt?.toISOString()).toBe("2026-10-16T18:00:00.000Z");
     expect((await prisma.task.findUniqueOrThrow({ where: { id: loose.id } })).dueAt).toBeNull();
 
-    // Everybody but whoever pressed "Hent fra KampKlar".
-    expect(pushed).toEqual([
-      {
-        to: [bo.id],
-        payload: {
-          title: "Kampen er flyttet 📅",
-          body: "Mod B.93: nu søn. 18. okt. kl. 12:00 (før lør. 17. okt. kl. 14:30).",
-          url: `/aktiviteter/${match.id}`,
-          tag: `activity-${match.id}`,
-        },
-      },
-    ]);
+    // The sync is silent: the new time is on the activity for whoever looks.
+    expect(pushed).toEqual([]);
   });
 
   it("says nothing when the time is unchanged, the activity is cancelled or it has taken place", async () => {
@@ -185,15 +175,20 @@ describe("a moved activity", () => {
     expect((await prisma.task.findFirstOrThrow({ where: { teamId: team.id } })).dueAt?.toISOString()).toBe("2026-10-19T12:30:00.000Z");
   });
 
-  it("sends one summary when many activities move at once", async () => {
+  it("sends one summary when many activities are moved at once by hand", async () => {
     const team = await makeTeam("Swingkings");
     const anna = await makeMember(team.id, "Anna");
     const count = MAX_SEPARATE_MOVE_PUSHES + 1;
-    const days = Array.from({ length: count }, (_, i) => 20 + i);
-    await applyCalendar(team.id, team.name, days.map((d) => event(`t${d}`, "Træning", `2026-10-${d}T17:00:00Z`)), null, now);
+    const moves = Array.from({ length: count }, (_, i) => ({
+      id: `t${i}`,
+      kind: "TRAINING" as const,
+      title: "Træning",
+      opponent: null,
+      from: new Date(`2026-10-${20 + i}T17:00:00Z`),
+      to: new Date(`2026-10-${20 + i}T18:00:00Z`),
+    }));
     process.env.VAPID_PRIVATE_KEY = "test";
-
-    await applyCalendar(team.id, team.name, days.map((d) => event(`t${d}`, "Træning", `2026-10-${d}T18:00:00Z`)), null, now);
+    await announceActivityMoves(team.id, moves, null);
     await runAfter();
     expect(pushed).toEqual([
       {
