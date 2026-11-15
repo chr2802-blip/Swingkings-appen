@@ -10,12 +10,15 @@ import { playerHref } from "@/components/player-link";
 import { StripeBand } from "@/components/crest";
 import { ScrollBars } from "@/components/scroll-bars";
 import { PageTransition } from "@/components/page-transition";
+import { ChatButton } from "@/components/chat-button";
+import { unreadChatCount } from "@/lib/chat";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const showAdmin = user.role === "SUPER_ADMIN";
   // Your own page is your profile; somebody on no team has only the settings.
   const profileHref = user.teamId ? playerHref(user.id) : "/profil";
+  const unread = user.teamId ? await unreadChatCount(user.teamId, user.id) : 0;
 
   return (
     <div className="min-h-screen overflow-x-clip">
@@ -34,10 +37,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             />
           </div>
           <NavLinks showAdmin={showAdmin} />
-          <Link href={profileHref} className="press-icon ml-auto flex items-center gap-2 text-sm text-[var(--band-soft)]" aria-label="Min profil">
-            <span className="hidden sm:inline">{user.name}</span>
-            <Avatar name={user.name} photoId={user.photoId} size="sm" />
-          </Link>
+          <div className="ml-auto flex items-center gap-3">
+            {user.teamId && <ChatButton initialUnread={unread} />}
+            {/* On a phone the profile is a tab in the bar below, which somebody on no team does not have. */}
+            <Link
+              href={profileHref}
+              className={`press-icon items-center gap-2 text-sm text-[var(--band-soft)] ${user.teamId ? "hidden md:flex" : "flex"}`}
+              aria-label="Min profil"
+            >
+              <span className="hidden sm:inline">{user.name}</span>
+              <Avatar name={user.name} photoId={user.photoId} size="sm" />
+            </Link>
+          </div>
         </div>
         <StripeBand />
       </header>
@@ -47,7 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
 
       <ScrollBars />
-      {user.teamId && <BottomNav />}
+      {user.teamId && <BottomNav profileHref={profileHref} />}
     </div>
   );
 }

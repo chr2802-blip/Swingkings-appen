@@ -10,7 +10,9 @@ import { pageMotion } from "@/lib/page-motion";
 export function NavLinks({ showAdmin }: { showAdmin: boolean }) {
   const pathname = usePathname();
   const leaveHome = useLeaveHome(pathname);
-  const items = showAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
+  // The header's avatar is the profile here.
+  const tabs = NAV_ITEMS.filter((item) => !item.profile);
+  const items = showAdmin ? [...tabs, ADMIN_ITEM] : tabs;
   return (
     <nav className="hidden items-center gap-1 text-sm md:flex">
       {items.map((item) => {

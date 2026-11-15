@@ -207,9 +207,9 @@ test("back, and a swipe between the fine box's pages, bring nothing in", async (
   await expect(shown).toHaveAttribute("data-motion", "none");
 
   // And the next tap is a new page again.
-  await page.getByRole("navigation").last().getByRole("link", { name: "Chat" }).click();
-  await expect(page).toHaveURL(/\/chat$/);
-  await expect(shown).toHaveAttribute("data-motion", "forward");
+  await page.getByRole("navigation").last().getByRole("link", { name: "Hjem" }).click();
+  await expect(page).toHaveURL(/\/oversigt$/);
+  await expect(shown).toHaveAttribute("data-motion", "backward");
 });
 
 test("the page on screen dims while a tapped tab's page is on its way, and the new one starts from there", async ({ page, loginAs }) => {
@@ -222,11 +222,11 @@ test("the page on screen dims while a tapped tab's page is on its way, and the n
   // Hold the new page back until the old one has been seen to step aside.
   let release = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route(/\/chat(\?|$)/, async (route) => {
+  await page.route(/\/aktiviteter(\?|$)/, async (route) => {
     await held;
     await route.continue();
   });
-  await page.getByRole("navigation").last().getByRole("link", { name: "Chat" }).click();
+  await page.getByRole("navigation").last().getByRole("link", { name: "Aktiviteter" }).click();
   await expect(shown).toHaveAttribute("data-leaving", "forward");
   await expect(page).toHaveURL(/\/boder$/);
   // It dims where it stands; it does not move.
@@ -234,7 +234,7 @@ test("the page on screen dims while a tapped tab's page is on its way, and the n
   expect(await shown.evaluate((el) => getComputedStyle(el).translate)).toBe("none");
 
   release();
-  await expect(page).toHaveURL(/\/chat$/);
+  await expect(page).toHaveURL(/\/aktiviteter$/);
   await expect(shown).not.toHaveAttribute("data-leaving");
   await expect(shown).toHaveAttribute("data-motion", "forward");
   // The new page starts as dimmed as the old one was: the screen is never empty in between.
@@ -247,8 +247,8 @@ test("with reduced motion a page neither comes in nor steps aside", async ({ pag
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/boder");
   const shown = page.getByTestId("page");
-  await page.getByRole("navigation").last().getByRole("link", { name: "Chat" }).click();
-  await expect(page).toHaveURL(/\/chat$/);
+  await page.getByRole("navigation").last().getByRole("link", { name: "Aktiviteter" }).click();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
   await expect(shown).toHaveAttribute("data-motion", "forward");
   expect(await shown.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
 });

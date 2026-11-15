@@ -33,16 +33,20 @@ test("a player's page shows their fines, challenges and jobs, and no way to edit
   await expect(page.getByText("Kridte banen")).toBeVisible();
 });
 
-test("your own page is your profile: the header's picture opens it, and Rediger leads to the settings", async ({ page, loginAs }) => {
+test("your own page is your profile: the tab bar's Profil opens it, and Rediger leads to the settings", async ({ page, loginAs }) => {
   const { anna } = await squad();
   await loginAs(anna);
   await page.goto("/oversigt");
-  await page.getByRole("link", { name: "Min profil" }).click();
+  const profileTab = page.getByRole("navigation").last().getByRole("link", { name: "Profil" });
+  await profileTab.click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
+  await expect(profileTab).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Anna", level: 1 })).toBeVisible();
   await page.getByRole("link", { name: "Rediger" }).click();
   await expect(page).toHaveURL(/\/profil$/);
   await expect(page.getByLabel("Navn")).toHaveValue("Anna");
+  // The settings are in the same tab.
+  await expect(profileTab).toHaveAttribute("aria-current", "page");
   await page.getByRole("link", { name: "Se min side" }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
 });
