@@ -104,7 +104,7 @@ test("the bars follow the scroll and settle whichever way is nearer", async ({ p
   // Two thirds of the way back: they settle in.
   await page.evaluate(() => window.scrollBy(0, -60));
   await expect(html).not.toHaveAttribute("data-bars");
-  await expect(page.getByRole("link", { name: "Chat" })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("navigation").last().getByRole("link", { name: "Profil" })).toBeInViewport({ ratio: 1 });
 });
 
 test("a tapped tab lights up, and the highlight moves under it", async ({ page, loginAs }) => {
@@ -219,5 +219,5 @@ test("at the end of a page the bars come back, and a window changing height move
   await page.evaluate(() => window.scrollBy(0, -150));
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(html).not.toHaveAttribute("data-bars");
-  await expect(page.getByRole("link", { name: "Chat" })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("navigation").last().getByRole("link", { name: "Profil" })).toBeInViewport({ ratio: 1 });
 });

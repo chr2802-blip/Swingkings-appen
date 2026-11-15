@@ -4,7 +4,7 @@ import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLeaveHome } from "./home-banner";
-import { NAV_ITEMS, TAB_PATHS, isInTab } from "./nav-items";
+import { NAV_ITEMS, TAB_PATHS, isInTab, tabHref } from "./nav-items";
 import { PageLeaving } from "./page-transition";
 import { pageMotion } from "@/lib/page-motion";
 
@@ -19,13 +19,15 @@ type Pill = { x: number; y: number; moved: boolean };
  * holds until the address changes. One highlight glides between the tabs; until it has
  * been measured, the active tab draws its own, so the first paint is right.
  */
-export function BottomNav() {
+export function BottomNav({ profileHref }: { profileHref: string }) {
   const pathname = usePathname();
   const leaveHome = useLeaveHome(pathname);
   // The tab tapped while still on `from`; forgotten as soon as the address moves on.
   const [tapped, setTapped] = useState<{ href: string; from: string } | null>(null);
   const shown = tapped && tapped.from === pathname ? tapped.href : null;
-  const activeIndex = shown ? NAV_ITEMS.findIndex((item) => item.href === shown) : NAV_ITEMS.findIndex((item) => isInTab(item, pathname));
+  const activeIndex = shown
+    ? NAV_ITEMS.findIndex((item) => tabHref(item, profileHref) === shown)
+    : NAV_ITEMS.findIndex((item) => isInTab(item, pathname, profileHref));
 
   const list = useRef<HTMLUListElement>(null);
   const icons = useRef<(HTMLSpanElement | null)[]>([]);
@@ -65,6 +67,7 @@ export function BottomNav() {
         {NAV_ITEMS.map((item, index) => {
           const active = index === activeIndex;
           const Icon = item.icon;
+          const href = tabHref(item, profileHref);
           return (
             <Fragment key={item.href}>
               {/*
@@ -88,12 +91,12 @@ export function BottomNav() {
               )}
               <li className="relative min-w-0 flex-1">
                 <Link
-                  href={item.href}
+                  href={href}
                   onClick={(event) => {
                     if (!(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)) {
-                      setTapped({ href: item.href, from: pathname });
+                      setTapped({ href, from: pathname });
                     }
-                    leaveHome(event, item.href);
+                    leaveHome(event, href);
                   }}
                   aria-current={active ? "page" : undefined}
                   className="press-icon flex flex-col items-center gap-1 px-0.5 pt-2.5 pb-2"
@@ -113,7 +116,7 @@ export function BottomNav() {
                   >
                     {item.label}
                   </span>
-                  <PageLeaving motion={pageMotion(pathname, item.href, TAB_PATHS)} />
+                  <PageLeaving motion={pageMotion(pathname, href, TAB_PATHS)} />
                 </Link>
               </li>
             </Fragment>

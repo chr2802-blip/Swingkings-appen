@@ -458,8 +458,9 @@ test("the chat's message box goes down with the tab bar, leaving no empty strip 
   await page.goto("/chat");
   // Exact: "Besked 3" followed by a time stamp starting with 0 also reads "Besked 30…".
   await expect(page.getByText("Besked 30", { exact: true })).toBeVisible();
-  // The tab bar's highlight is placed once the page has hydrated and is listening to the scroll.
-  await expect(page.getByTestId("tab-pill")).toBeAttached();
+  // The chat has no tab to light up: the header's chat button says it has hydrated, with
+  // the scroll listener in place.
+  await expect(page.getByRole("banner").getByRole("link", { name: "Chat", exact: true })).toHaveAttribute("data-hydrated", "true");
   const box = page.locator("form").filter({ has: page.getByRole("textbox", { name: "Besked" }) });
   const { height } = page.viewportSize()!;
   const gapBelow = async () => {
@@ -480,7 +481,7 @@ test("the chat's message box goes down with the tab bar, leaving no empty strip 
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(page.locator("html")).not.toHaveAttribute("data-bars");
   await expect.poll(gapBelow).toBeGreaterThan(60);
-  await expect(page.getByRole("link", { name: "Chat" })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("navigation").last().getByRole("link", { name: "Profil" })).toBeInViewport({ ratio: 1 });
 });
 
 test("leaving the chat keeps the app running", async ({ page, loginAs }) => {
@@ -502,4 +503,37 @@ test("leaving the chat keeps the app running", async ({ page, loginAs }) => {
   await expect(page.getByRole("heading", { name: "Aktiviteter", level: 1 })).toBeVisible();
   expect(await page.evaluate(() => "stillTheSamePage" in window)).toBe(true);
   expect(errors).toEqual([]);
+});
+
+test("the header's chat button counts the unread messages, and the chat clears it", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  await db.chatMessage.createMany({
+    data: [
+      { teamId: team.id, authorId: bo.id, body: "Hvem kommer?" },
+      { teamId: team.id, authorId: bo.id, body: "Husk støvler" },
+    ],
+  });
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  const header = page.getByRole("banner");
+  await expect(header.getByRole("link", { name: "Chat, 2 ulæste" })).toBeVisible();
+  await expect(header.getByTestId("chat-unread")).toHaveText("2");
+
+  await header.getByRole("link", { name: "Chat, 2 ulæste" }).click();
+  await expect(page).toHaveURL(/\/chat$/);
+  await expect(page.getByText("Husk støvler")).toBeVisible();
+  await expect(header.getByRole("link", { name: "Chat", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(header.getByTestId("chat-unread")).toHaveCount(0);
+
+  // Left again: what was read stays read, and the chat is no longer a tab in the bar.
+  await page.getByRole("navigation").last().getByRole("link", { name: "Bøder" }).click();
+  await expect(page).toHaveURL(/\/boder$/);
+  await expect(header.getByRole("link", { name: "Chat", exact: true })).not.toHaveAttribute("aria-current");
+  await expect(header.getByTestId("chat-unread")).toHaveCount(0);
+  await expect(page.getByRole("navigation").last().getByRole("link", { name: "Chat" })).toHaveCount(0);
+
+  // A new message counts again.
+  await db.chatMessage.create({ data: { teamId: team.id, authorId: bo.id, body: "Ny besked" } });
+  await page.reload();
+  await expect(header.getByTestId("chat-unread")).toHaveText("1");
 });

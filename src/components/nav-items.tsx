@@ -3,6 +3,8 @@ export type NavItem = {
   /** Other paths that belong to this tab. */
   also?: string[];
   label: string;
+  /** The person's own tab: its link goes to their page, which also lights it up. */
+  profile?: boolean;
   icon: (props: { className?: string }) => React.ReactElement;
 };
 
@@ -49,11 +51,15 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    href: "/chat",
-    label: "Chat",
+    // Your own page (`/spiller/<id>`) in the tab bar; the settings belong to the same tab.
+    // The header's avatar is the way there on a desktop, so `NavLinks` leaves it out.
+    href: "/profil",
+    label: "Profil",
+    profile: true,
     icon: ({ className }) => (
       <svg viewBox="0 0 24 24" className={className} {...stroke}>
-        <path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12z" />
+        <circle cx="12" cy="8.5" r="4" />
+        <path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" />
       </svg>
     ),
   },
@@ -70,9 +76,19 @@ export const ADMIN_ITEM: NavItem = {
   ),
 };
 
-/** The tabs in the order they sit in the menu, for which way a page comes in (`pageMotion`). */
-export const TAB_PATHS = [...NAV_ITEMS, ADMIN_ITEM].map((item) => [item.href, ...(item.also ?? [])]);
+/**
+ * The tabs in the order they sit in the menu, for which way a page comes in (`pageMotion`).
+ * The profile is left out: one's own page and its settings open over wherever one was, as
+ * every person's page does, and "Rediger" opens the settings out of it.
+ */
+export const TAB_PATHS = [...NAV_ITEMS.filter((item) => !item.profile), ADMIN_ITEM].map((item) => [item.href, ...(item.also ?? [])]);
 
-export function isInTab(item: NavItem, pathname: string) {
-  return [item.href, ...(item.also ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
+/** Where a tab's link goes: the profile tab to the person's own page. */
+export function tabHref(item: NavItem, profileHref: string) {
+  return item.profile ? profileHref : item.href;
+}
+
+export function isInTab(item: NavItem, pathname: string, profileHref?: string) {
+  const own = item.profile && profileHref ? [profileHref] : [];
+  return [item.href, ...(item.also ?? []), ...own].some((h) => pathname === h || pathname.startsWith(`${h}/`));
 }
