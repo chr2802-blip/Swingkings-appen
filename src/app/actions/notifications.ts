@@ -20,7 +20,7 @@ import {
 } from "@/lib/team-notice";
 
 const noticeSchema = z.object({
-  to: z.string().min(1, "Vælg hvem der skal have den."),
+  to: z.enum(["alle", "valgte"], { error: "Vælg hvem der skal have den." }),
   title: requiredText("Skriv en overskrift.", MAX_NOTICE_TITLE),
   body: requiredText("Skriv en besked.", MAX_NOTICE_BODY),
   destination: z.enum(NOTICE_DESTINATIONS.map((d) => d.value) as [NoticeDestination, ...NoticeDestination[]], {
@@ -30,8 +30,8 @@ const noticeSchema = z.object({
 });
 
 /**
- * "Send notifikation" (admin, `/hold`): a push to one person on the team or to everybody
- * but the sender, opening the page or link the admin picked. Nothing is stored; the push
+ * "Send notifikation" (admin, `/hold`): a push to everybody on the team but the sender
+ * (`to=alle`), or to the players ticked (`to=valgte`, repeated `recipientId`), opening the page or link the admin picked. Nothing is stored; the push
  * goes after the response, like every other. Eight in a quarter of an hour per sender
  * (`takeAttempt("notice")`), so a slip of the finger cannot buzz the team all evening.
  */
@@ -43,11 +43,18 @@ export async function sendTeamNotice(_prev: ActionResult, formData: FormData): P
   const { to, title, body, destination, link } = form.fields;
 
   const everybody = to === "alle";
+  const picked = everybody ? [] : [...new Set(formData.getAll("recipientId").map(String).filter(Boolean))];
+  if (!everybody && picked.length === 0) return fail("Vælg mindst én spiller.");
   const members = await teamDb(user.teamId).teamMember.findMany({
-    where: everybody ? { userId: { not: user.id } } : { userId: to },
+    where: everybody ? { userId: { not: user.id } } : { userId: { in: picked } },
     select: { user: { select: { id: true, name: true } } },
   });
-  if (members.length === 0) return fail(everybody ? "Der er ingen andre på holdet endnu." : "Personen er ikke på holdet.");
+  if (everybody && members.length === 0) return fail("Der er ingen andre på holdet endnu.");
+  // Somebody on another team (or gone) reads as not found, and nothing is sent to the rest.
+  if (!everybody && members.length < picked.length) {
+    return fail(picked.length === 1 ? "Personen er ikke på holdet." : "En af de valgte er ikke på holdet.");
+  }
+  const one = !everybody && picked.length === 1;
 
   const team = await prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { mobilePayLink: true, duesKr: true } });
   const recipients = members.map((m) => ({ ...m.user, url: noticeUrl(destination, { recipient: m.user, team, link }) }));
@@ -70,7 +77,13 @@ export async function sendTeamNotice(_prev: ActionResult, formData: FormData): P
     ).map((row) => row.userId),
   );
   if (reachable.size === 0) {
-    return fail(everybody ? "Ingen på holdet har slået notifikationer til endnu." : "Personen har ikke slået notifikationer til.");
+    return fail(
+      everybody
+        ? "Ingen på holdet har slået notifikationer til endnu."
+        : one
+          ? "Personen har ikke slået notifikationer til."
+          : "Ingen af de valgte har slået notifikationer til.",
+    );
   }
   const limit = await takeAttempt("notice", user.id);
   if (!limit.allowed) return fail(`Du har sendt mange på kort tid. Prøv igen om ${limit.retryAfterMinutes} min.`);
@@ -86,7 +99,7 @@ export async function sendTeamNotice(_prev: ActionResult, formData: FormData): P
   );
 
   const missing = recipients.length - targets.length;
-  if (!everybody) return ok(`Sendt til ${targets[0]!.name}.`);
+  if (one) return ok(`Sendt til ${targets[0]!.name}.`);
   return ok(
     `Sendt til ${targets.length} ${targets.length === 1 ? "person" : "personer"}.` +
       (missing ? ` ${missing} har ikke slået notifikationer til.` : ""),

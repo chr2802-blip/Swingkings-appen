@@ -238,11 +238,11 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
                 <SectionTitle>Send notifikation</SectionTitle>
                 <Card className="space-y-4">
                   <p className="text-sm text-slate-500">
-                    En besked direkte på telefonen til én eller hele holdet — fx “Husk kontingent”. Den når kun dem, der
+                    En besked direkte på telefonen til hele holdet eller udvalgte spillere — fx “Husk kontingent”. Den når kun dem, der
                     har slået notifikationer til.
                   </p>
                   <TeamNoticeForm
-                    members={roster.filter((m) => m.userId !== user.id).map((m) => ({ userId: m.userId, name: m.name }))}
+                    members={roster.filter((m) => m.userId !== user.id)}
                     hasMobilePay={Boolean(team.mobilePayLink)}
                   />
                 </Card>

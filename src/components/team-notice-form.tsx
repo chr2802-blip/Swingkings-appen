@@ -3,23 +3,26 @@
 import { useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { useFormAction } from "@/components/use-form-action";
+import { PlayerChecklist } from "@/components/player-checklist";
 import { sendTeamNotice } from "@/app/actions/notifications";
 import { MAX_NOTICE_BODY, MAX_NOTICE_TITLE, NOTICE_DESTINATIONS, type NoticeDestination } from "@/lib/team-notice";
 
-/** "Send notifikation" on the team settings: to one person or everybody, opening where it is told. */
+/** "Send notifikation" on the team settings: to everybody or the players ticked, opening where it is told. */
 export function TeamNoticeForm({
   members,
   hasMobilePay,
 }: {
   /** Everybody on the team but the admin sending. */
-  members: { userId: string; name: string }[];
+  members: { userId: string; name: string; photoId: string | null; shirtNumber?: number | null }[];
   hasMobilePay: boolean;
 }) {
   const [destination, setDestination] = useState<NoticeDestination>("oversigt");
+  const [to, setTo] = useState<"alle" | "valgte">("alle");
   const { state, pending, handleSubmit } = useFormAction(sendTeamNotice, {
     onSuccess: (form) => {
       form.reset();
       setDestination("oversigt");
+      setTo("alle");
     },
   });
   const destinations = NOTICE_DESTINATIONS.filter((d) => hasMobilePay || d.value !== "mobilepay-kontingent");
@@ -27,13 +30,9 @@ export function TeamNoticeForm({
   return (
     <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
       <Field label="Til" htmlFor="notice-to">
-        <Select id="notice-to" name="to" defaultValue="alle">
+        <Select id="notice-to" name="to" value={to} onChange={(event) => setTo(event.target.value as typeof to)}>
           <option value="alle">Hele holdet</option>
-          {members.map((m) => (
-            <option key={m.userId} value={m.userId}>
-              {m.name}
-            </option>
-          ))}
+          <option value="valgte">Udvalgte spillere</option>
         </Select>
       </Field>
       <Field label="Åbner" htmlFor="notice-destination" hint="Hvor man lander, når man trykker på notifikationen.">
@@ -50,6 +49,12 @@ export function TeamNoticeForm({
           ))}
         </Select>
       </Field>
+      {to === "valgte" && (
+        <fieldset className="sm:col-span-2">
+          <legend className="mb-1.5 text-sm font-medium">Modtagere</legend>
+          <PlayerChecklist members={members} name="recipientId" />
+        </fieldset>
+      )}
       {destination === "link" && (
         <div className="sm:col-span-2">
           <Field label="Link" htmlFor="notice-link" hint="En hel adresse, der starter med https://">
