@@ -1,6 +1,6 @@
 /*
- * The service worker: push notifications, nothing else. Fines, challenges, new jobs and
- * chat messages arrive here as a JSON payload from `src/lib/push.ts`.
+ * The service worker: push notifications, nothing else. Fines, challenges, new jobs,
+ * chat messages and an admin's own notices arrive here as a JSON payload from `src/lib/push.ts`.
  */
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -29,7 +29,13 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || "/oversigt", self.location.origin).href;
+  const target = new URL(event.notification.data?.url || "/oversigt", self.location.origin);
+  const url = target.href;
+  // A link outside the app (MobilePay, a club page) opens on its own, and the app stays put.
+  if (target.origin !== self.location.origin) {
+    event.waitUntil(self.clients.openWindow(url));
+    return;
+  }
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
       for (const client of windows) {

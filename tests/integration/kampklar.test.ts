@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { applyCalendar } from "@/lib/kampklar";
+import { addTemplatesToActivity } from "@/lib/tasks";
+import { afterQueue } from "../helpers/next-mocks";
 import type { CalendarEvent } from "@/lib/ical";
 import { makeMember, makeTeam } from "../helpers/factories";
 
@@ -87,5 +89,23 @@ describe("applyCalendar", () => {
     await applyCalendar(ours.id, ours.name, [event("same-uid", "Swingkings - AB", "2026-10-20T12:00:00Z")], null, now);
     await applyCalendar(theirs.id, theirs.name, [event("same-uid", "Andet hold - AB", "2026-10-21T12:00:00Z")], null, now);
     expect(await prisma.match.count({ where: { externalUid: "same-uid" } })).toBe(2);
+  });
+
+  it("hands out the jobs on new matches without a push, while a job added by hand still sends one", async () => {
+    const team = await makeTeam();
+    await makeMember(team.id, "Anna");
+    await prisma.taskTemplate.create({ data: { teamId: team.id, title: "Tøjvask", people: 1 } });
+    process.env.VAPID_PRIVATE_KEY = "test";
+    try {
+      const result = await applyCalendar(team.id, team.name, [event("ny", "Swingkings - B.93", "2026-10-17T12:30:00Z")], null, now);
+      expect(result.tasksAdded).toBe(1);
+      expect(afterQueue).toHaveLength(0);
+
+      const match = await prisma.match.create({ data: { teamId: team.id, title: "Pokal", startsAt: new Date("2026-10-30T12:00:00Z") } });
+      await addTemplatesToActivity(team.id, match, null, "auto");
+      expect(afterQueue).toHaveLength(1);
+    } finally {
+      delete process.env.VAPID_PRIVATE_KEY;
+    }
   });
 });

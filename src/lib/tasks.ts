@@ -46,8 +46,17 @@ export type Job = {
   people: number;
 };
 
-/** Creates the jobs and hands each one out fairly. Returns the tasks with who got them. */
-export async function createDistributedTasks(teamId: string, jobs: Job[], createdById: string | null) {
+/**
+ * Creates the jobs and hands each one out fairly. Returns the tasks with who got them.
+ * `notify: false` hands them out without a push: the KampKlar sync does that, so a
+ * morning's new matches do not wake the team.
+ */
+export async function createDistributedTasks(
+  teamId: string,
+  jobs: Job[],
+  createdById: string | null,
+  { notify = true }: { notify?: boolean } = {},
+) {
   if (jobs.length === 0) return [];
   const picks = distribute(await taskCandidates(teamId), jobs);
   const tasks = await prisma.$transaction(
@@ -67,7 +76,7 @@ export async function createDistributedTasks(teamId: string, jobs: Job[], create
     ),
   );
   // Everybody hears about the job they were handed, except whoever handed it out.
-  for (const task of tasks) {
+  for (const task of notify ? tasks : []) {
     notifyLater(
       task.assignees.map((a) => a.userId),
       createdById,
@@ -99,6 +108,7 @@ export async function addTemplatesToActivity(
   activity: ActivityRef,
   createdById: string | null,
   which: string[] | "auto",
+  options: { notify?: boolean } = {},
 ) {
   if (Array.isArray(which) && which.length === 0) return [];
   const templates = await prisma.taskTemplate.findMany({
@@ -115,6 +125,7 @@ export async function addTemplatesToActivity(
       people: template.people,
     })),
     createdById,
+    options,
   );
 }
 

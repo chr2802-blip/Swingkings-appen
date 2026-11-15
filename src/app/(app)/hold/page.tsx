@@ -13,6 +13,7 @@ import { TemplateDialog } from "@/components/template-dialog";
 import { SyncButton } from "@/components/sync-button";
 import { TeamSettingsForm } from "@/components/team-settings-form";
 import { InviteLinkForm } from "@/components/invite-link-form";
+import { TeamNoticeForm } from "@/components/team-notice-form";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
 import { revokeInviteLink } from "@/app/actions/teams";
@@ -48,6 +49,20 @@ export default async function TeamSettingsPage() {
       <Card>
         <TeamSettingsForm team={team} />
       </Card>
+
+      <section id="notifikation" className="scroll-mt-24">
+        <SectionTitle>Send notifikation</SectionTitle>
+        <Card className="space-y-4">
+          <p className="text-sm text-slate-500">
+            En besked direkte på telefonen til én eller hele holdet — fx “Husk kontingent”. Den når kun dem, der har
+            slået notifikationer til.
+          </p>
+          <TeamNoticeForm
+            members={roster.filter((m) => m.userId !== user.id).map((m) => ({ userId: m.userId, name: m.name }))}
+            hasMobilePay={Boolean(team.mobilePayLink)}
+          />
+        </Card>
+      </section>
 
       <section id="standardopgaver" className="scroll-mt-24">
         <SectionTitle action={<TemplateDialog />}>Standardopgaver</SectionTitle>

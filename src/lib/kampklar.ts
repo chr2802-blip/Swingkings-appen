@@ -118,7 +118,8 @@ export async function applyCalendar(
       });
       created++;
       if (kind === "MATCH" && !event.cancelled && match.startsAt > now) {
-        tasksAdded += (await addTemplatesToActivity(teamId, match, actorId, "auto")).length;
+        // Silent: whoever gets a job sees it in the app, without a push for each new match.
+        tasksAdded += (await addTemplatesToActivity(teamId, match, actorId, "auto", { notify: false })).length;
       }
     }
   }
