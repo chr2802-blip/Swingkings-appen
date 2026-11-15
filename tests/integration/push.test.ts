@@ -5,13 +5,11 @@ import { prisma } from "@/lib/prisma";
 // told to answer like one that has gone away.
 const push = vi.hoisted(() => ({ sent: [] as { endpoint: string; payload: string; options: unknown }[], gone: new Set<string>(), broken: new Set<string>() }));
 vi.mock("web-push", () => ({
-  default: {
-    setVapidDetails: vi.fn(),
-    sendNotification: async (sub: { endpoint: string }, payload: string, options: unknown) => {
-      if (push.gone.has(sub.endpoint)) throw Object.assign(new Error("Gone"), { statusCode: 410 });
-      if (push.broken.has(sub.endpoint)) throw Object.assign(new Error("Boom"), { statusCode: 500 });
-      push.sent.push({ endpoint: sub.endpoint, payload, options });
-    },
+  setVapidDetails: vi.fn(),
+  sendNotification: async (sub: { endpoint: string }, payload: string, options: unknown) => {
+    if (push.gone.has(sub.endpoint)) throw Object.assign(new Error("Gone"), { statusCode: 410 });
+    if (push.broken.has(sub.endpoint)) throw Object.assign(new Error("Boom"), { statusCode: 500 });
+    push.sent.push({ endpoint: sub.endpoint, payload, options });
   },
 }));
 

@@ -4,11 +4,9 @@ import { prisma } from "@/lib/prisma";
 // The push services are stood in for: every send is recorded.
 const push = vi.hoisted(() => ({ sent: [] as { endpoint: string; payload: Record<string, unknown> }[] }));
 vi.mock("web-push", () => ({
-  default: {
-    setVapidDetails: vi.fn(),
-    sendNotification: async (sub: { endpoint: string }, payload: string) => {
-      push.sent.push({ endpoint: sub.endpoint, payload: JSON.parse(payload) });
-    },
+  setVapidDetails: vi.fn(),
+  sendNotification: async (sub: { endpoint: string }, payload: string) => {
+    push.sent.push({ endpoint: sub.endpoint, payload: JSON.parse(payload) });
   },
 }));
 
