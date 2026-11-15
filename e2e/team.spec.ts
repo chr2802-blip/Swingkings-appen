@@ -1,25 +1,64 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, member, squad } from "./helpers/database";
 
-test("a coach renames the team and changes the price of a fine", async ({ page, loginAs }) => {
+test("a coach renames the team, then changes the price of a fine on its own tab", async ({ page, loginAs }) => {
   const { team, admin } = await squad();
+  await db.team.update({ where: { id: team.id }, data: { calendarUrl: "https://kampklar.dk/feed/abc.ics" } });
   await loginAs(admin);
   await page.goto("/hold");
+  await expect(page.getByRole("tab", { name: "Holdet" })).toHaveAttribute("aria-selected", "true");
   await page.getByLabel("Holdets navn").fill("Swingkings Old Boys");
-  await page.getByLabel("Pris for én bøde (kr)").fill("15");
   await page.locator("label").filter({ hasText: /^Grøn$/ }).click();
   await expect(page.getByRole("radio", { name: "Grøn" })).toBeChecked();
   await page.getByRole("button", { name: "Gem" }).click();
   await expect(page.getByText("Gemt.")).toBeVisible();
-  expect(await db.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ name: "Swingkings Old Boys", finePriceKr: 15, theme: "GREEN" });
+  expect(await db.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ name: "Swingkings Old Boys", theme: "GREEN" });
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "GREEN");
+
+  // The tabs are turned like the fine box's, and the address follows.
+  await page.getByRole("tab", { name: "Betaling" }).click();
+  await expect(page).toHaveURL(/\/hold\/betaling$/);
+  await expect(page.getByRole("tabpanel")).toHaveAccessibleName("Betaling");
+  await page.getByLabel("Pris for én bøde (kr)").fill("15");
+  await page.getByRole("button", { name: "Gem" }).click();
+  await expect(page.getByText("Gemt.")).toBeVisible();
+  // Saving one tab leaves the others' settings as they were.
+  expect(await db.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({
+    name: "Swingkings Old Boys",
+    finePriceKr: 15,
+    calendarUrl: "https://kampklar.dk/feed/abc.ics",
+  });
+});
+
+test("each tab of the team settings has its own address, and no other does", async ({ page, loginAs }) => {
+  const { admin } = await squad();
+  await loginAs(admin);
+  for (const [fane, name] of [["betaling", "Betaling"], ["opgaver", "Opgaver"], ["inviter", "Inviter"]]) {
+    await page.goto(`/hold/${fane}`);
+    await expect(page.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel")).toHaveAccessibleName(name);
+  }
+  expect((await page.goto("/hold/noget-andet"))?.status()).toBe(404);
+  // The pages beside the tabs are still their own.
+  await page.goto("/hold/spillere");
+  await expect(page.getByRole("checkbox", { name: "Admin for Anna" })).toBeVisible();
+});
+
+test("the KampKlar link and the standard jobs share the Opgaver tab", async ({ page, loginAs }) => {
+  const { admin } = await squad();
+  await loginAs(admin);
+  await page.goto("/hold/opgaver");
+  await expect(page.getByRole("tabpanel")).toHaveAccessibleName("Opgaver");
+  await expect(page.getByRole("button", { name: "Ny standardopgave" })).toBeVisible();
+  await expect(page.getByLabel("Kalenderlink fra DBU KampKlar")).toBeVisible();
+  await expect(page.getByLabel("Holdets navn")).toBeHidden();
 });
 
 test("a KampKlar link that is not a web address is refused with a reason", async ({ page, loginAs }) => {
   const { admin } = await squad();
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/opgaver");
   await page.getByLabel("Kalenderlink fra DBU KampKlar").fill("ftp://kampklar.dk/kalender.ics");
   await page.getByRole("button", { name: "Gem" }).click();
   await expect(page.getByText(/Kalenderlinket er ikke en gyldig adresse/)).toBeVisible();
