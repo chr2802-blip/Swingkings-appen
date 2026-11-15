@@ -138,7 +138,9 @@ test("an admin pastes the box's link, and a player's Betal opens MobilePay with 
   await loginAs(anna);
   await page.goto("/boder");
   await expect(page.getByRole("heading", { name: "Bødekassen" })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Betal dine bøder/ })).toHaveCount(0);
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByRole("heading", { name: "Anna", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Betal/ })).toHaveCount(0);
 
   await loginAs(admin);
   await page.goto("/hold");
@@ -153,8 +155,10 @@ test("an admin pastes the box's link, and a player's Betal opens MobilePay with 
   const dues = `${BOX_LINK}?amount=60000&message=Kontingent%20%E2%80%93%20Anna`;
 
   await loginAs(anna);
+  // The fine box only says what you owe; paying is on your own page, where "Du skylder" leads.
   await page.goto("/boder");
-  await expect(page.getByRole("link", { name: /Betal dine bøder.*30 kr med MobilePay/ })).toHaveAttribute("href", fines);
+  await expect(page.getByText("Du skylder")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Betal/ })).toHaveCount(0);
 
   await page.goto("/hold/spillere");
   await expect(page.getByText("Du mangler at betale kontingent (600 kr).")).toBeVisible();
