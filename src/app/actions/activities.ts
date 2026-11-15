@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import type { Venue } from "@prisma/client";
 import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
 import { assertTeamAdmin } from "@/lib/access";
@@ -179,6 +180,8 @@ export async function copyTasks(_prev: ActionResult, formData: FormData): Promis
   return ok(tasks.length === 1 ? "1 opgave er kopieret og fordelt." : `${tasks.length} opgaver er kopieret og fordelt.`);
 }
 
+const VENUES: Venue[] = ["ALL", "HOME", "AWAY"];
+
 const templateSchema = z.object({
   title: requiredText("Giv opgaven et navn."),
   description: optionalText,
@@ -190,7 +193,14 @@ export async function saveTaskTemplate(_prev: ActionResult, formData: FormData):
   assertTeamAdmin(user, user.teamId);
   const form = readForm(templateSchema, formData);
   if (!form.ok) return fail(form.error);
-  const data = { ...form.fields, autoAdd: formData.get("autoAdd") === "on" };
+  // "auto" is "OFF" (picked by hand) or which matches the sync adds it to.
+  const auto = String(formData.get("auto") ?? "OFF");
+  if (!["OFF", ...VENUES].includes(auto)) return fail("Vælg, hvornår opgaven tilføjes.");
+  const data = {
+    ...form.fields,
+    autoAdd: auto !== "OFF",
+    ...(auto !== "OFF" && { autoVenue: auto as Venue }),
+  };
   const db = teamDb(user.teamId);
   const id = String(formData.get("id") ?? "");
   if (id) await db.taskTemplate.updateMany({ where: { id }, data });

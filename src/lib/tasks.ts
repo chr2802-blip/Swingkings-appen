@@ -1,4 +1,4 @@
-import type { ActivityKind, Prisma } from "@prisma/client";
+import type { ActivityKind, Prisma, Venue } from "@prisma/client";
 import { prisma } from "./prisma";
 import { distribute, type Candidate } from "./distribution";
 import { notifyLater } from "./notify";
@@ -92,7 +92,19 @@ export async function createDistributedTasks(
   return tasks;
 }
 
-export type ActivityRef = { id: string; startsAt: Date };
+export type ActivityRef = { id: string; startsAt: Date; isHome?: boolean | null };
+
+/**
+ * The automatic standard jobs that go on a match: those for every match, plus those for
+ * home or away matches when it is that. When the feed does not say which side the team
+ * is, every automatic job goes on — one too many is deleted, one missing is found on
+ * match day.
+ */
+export function venuesFor(isHome: boolean | null | undefined): Venue[] {
+  if (isHome === true) return ["ALL", "HOME"];
+  if (isHome === false) return ["ALL", "AWAY"];
+  return ["ALL", "HOME", "AWAY"];
+}
 
 /** Where a job about an activity is opened from: the activity's page. */
 export function taskUrl(task: { id: string; matchId: string | null }) {
@@ -102,7 +114,8 @@ export function taskUrl(task: { id: string; matchId: string | null }) {
 /**
  * The team's standard jobs, added to one activity and handed out. `which` picks them:
  * a list of template ids (anything not the team's is ignored, being read through the
- * team), or "auto" for the ones the KampKlar sync adds by itself.
+ * team), or "auto" for the ones the KampKlar sync adds by itself — those for every
+ * match, and those for home or away when the activity is that (`venuesFor`).
  */
 export async function addTemplatesToActivity(
   teamId: string,
@@ -113,7 +126,7 @@ export async function addTemplatesToActivity(
 ) {
   if (Array.isArray(which) && which.length === 0) return [];
   const templates = await prisma.taskTemplate.findMany({
-    where: { teamId, ...(which === "auto" ? { autoAdd: true } : { id: { in: which } }) },
+    where: { teamId, ...(which === "auto" ? { autoAdd: true, autoVenue: { in: venuesFor(activity.isHome) } } : { id: { in: which } }) },
     orderBy: { createdAt: "asc" },
   });
   return createDistributedTasks(

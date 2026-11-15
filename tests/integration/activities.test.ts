@@ -266,11 +266,14 @@ describe("standard jobs", () => {
   it("are kept by admins, with whether the sync adds them by itself", async () => {
     const { team, admin } = await makeSquad();
     await signIn(admin);
-    await saveTaskTemplate(undefined, formData({ title: "Trøjevask", people: "1", autoAdd: "on" }));
+    await saveTaskTemplate(undefined, formData({ title: "Trøjevask", people: "1", auto: "ALL" }));
     const template = await prisma.taskTemplate.findFirstOrThrow({ where: { teamId: team.id } });
-    expect(template).toMatchObject({ autoAdd: true });
-    await saveTaskTemplate(undefined, formData({ id: template.id, title: "Kørsel", people: "2", description: "Til udebane" }));
-    expect(await prisma.taskTemplate.findUniqueOrThrow({ where: { id: template.id } })).toMatchObject({ title: "Kørsel", people: 2, autoAdd: false });
+    expect(template).toMatchObject({ autoAdd: true, autoVenue: "ALL" });
+    await saveTaskTemplate(undefined, formData({ id: template.id, title: "Kørsel", people: "2", auto: "AWAY" }));
+    expect(await prisma.taskTemplate.findUniqueOrThrow({ where: { id: template.id } })).toMatchObject({ autoAdd: true, autoVenue: "AWAY" });
+    await saveTaskTemplate(undefined, formData({ id: template.id, title: "Kørsel", people: "2", description: "Til udebane", auto: "OFF" }));
+    // Turned off, it keeps which matches it was for, should it be turned on again.
+    expect(await prisma.taskTemplate.findUniqueOrThrow({ where: { id: template.id } })).toMatchObject({ title: "Kørsel", people: 2, autoAdd: false, autoVenue: "AWAY" });
     expect(await templateOptions(team.id)).toEqual([{ id: template.id, title: "Kørsel", people: 2, autoAdd: false }]);
     await deleteTaskTemplate(undefined, formData({ id: template.id }));
     expect(await prisma.taskTemplate.count()).toBe(0);
@@ -281,6 +284,8 @@ describe("standard jobs", () => {
     await signIn(admin);
     expect(await saveTaskTemplate(undefined, formData({ title: "", people: "1" }))).toEqual({ ok: false, error: "Giv opgaven et navn." });
     expect((await saveTaskTemplate(undefined, formData({ title: "X", people: "21" })))?.ok).toBe(false);
+    expect(await saveTaskTemplate(undefined, formData({ title: "X", people: "1", auto: "SOMETIMES" }))).toEqual({ ok: false, error: "Vælg, hvornår opgaven tilføjes." });
+    expect(await prisma.taskTemplate.count()).toBe(0);
   });
 
   it("are a team setting: a player or a bødekasseformand may not change them", async () => {

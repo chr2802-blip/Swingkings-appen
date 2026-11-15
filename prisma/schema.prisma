@@ -49,6 +49,13 @@ enum MatchSource {
   KAMPKLAR
 }
 
+/// Which matches an automatic standard job goes on.
+enum Venue {
+  ALL
+  HOME
+  AWAY
+}
+
 /// KampKlar's feed holds every activity on the team; only some of them are matches.
 enum ActivityKind {
   MATCH
@@ -425,6 +432,9 @@ model TaskTemplate {
   people      Int      @default(1)
   /// Whether the KampKlar sync adds it to every new match by itself.
   autoAdd     Boolean  @default(true)
+  /// Which of those matches: all, only home or only away. A match whose side the feed
+  /// does not tell gets every automatic job.
+  autoVenue   Venue    @default(ALL)
   createdAt   DateTime @default(now())
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)

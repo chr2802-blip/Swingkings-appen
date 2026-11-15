@@ -65,6 +65,36 @@ describe("applyCalendar", () => {
     expect(moved.startsAt.toISOString()).toBe("2026-10-18T12:30:00.000Z");
   });
 
+  it("puts a home-only job on home matches, an away-only one on away matches, and both where the side is unknown", async () => {
+    const team = await makeTeam("Swingkings");
+    await makeMember(team.id, "Anna");
+    await prisma.taskTemplate.createMany({
+      data: [
+        { teamId: team.id, title: "Tøjvask" },
+        { teamId: team.id, title: "Opkridtning", autoVenue: "HOME" },
+        { teamId: team.id, title: "Kørsel", autoVenue: "AWAY" },
+        { teamId: team.id, title: "Frugt", autoAdd: false, autoVenue: "HOME" },
+      ],
+    });
+    await applyCalendar(
+      team.id,
+      team.name,
+      [
+        event("home", "Swingkings - B.93", "2026-10-17T12:30:00Z"),
+        event("away", "Vanløse - Swingkings", "2026-10-24T12:30:00Z"),
+        event("unknown", "Pokalkamp", "2026-10-31T12:30:00Z", { categories: ["Kamp"] }),
+      ],
+      null,
+      now,
+    );
+    const jobs = async (uid: string) =>
+      (await prisma.task.findMany({ where: { match: { externalUid: uid } }, orderBy: { title: "asc" } })).map((t) => t.title);
+    expect(await jobs("home")).toEqual(["Opkridtning", "Tøjvask"]);
+    expect(await jobs("away")).toEqual(["Kørsel", "Tøjvask"]);
+    expect(await prisma.match.findFirstOrThrow({ where: { externalUid: "unknown" } })).toMatchObject({ kind: "MATCH", isHome: null });
+    expect(await jobs("unknown")).toEqual(["Kørsel", "Opkridtning", "Tøjvask"]);
+  });
+
   it("brings nothing back from before the season began, and still updates what it kept", async () => {
     const team = await makeTeam();
     await applyCalendar(team.id, team.name, [event("kept", "Swingkings - AB", "2026-10-02T12:00:00Z")], null, now);
