@@ -1,7 +1,8 @@
-import type { Prisma } from "@prisma/client";
+import type { ActivityKind, Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { distribute, type Candidate } from "./distribution";
 import { notifyLater } from "./notify";
+import { kickoffLabel } from "./time";
 
 /** "Still to do" as a where clause. Every query meaning that uses it. */
 export const OPEN_TASK = { doneAt: null } satisfies Prisma.TaskWhereInput;
@@ -155,4 +156,73 @@ export async function copyTasksFromActivity(
     })),
     createdById,
   );
+}
+
+/**
+ * An activity got a new start time: its open jobs keep their distance from the start, so
+ * a job due at kickoff is still due at kickoff. The reminder may come again, since the
+ * deadline is new. Done jobs and jobs with no deadline are left as they were.
+ */
+export async function moveTaskDeadlines(teamId: string, matchId: string, from: Date, to: Date) {
+  const shift = to.getTime() - from.getTime();
+  if (shift === 0) return 0;
+  const tasks = await prisma.task.findMany({
+    where: { teamId, matchId, ...OPEN_TASK, dueAt: { not: null } },
+    select: { id: true, dueAt: true },
+  });
+  await prisma.$transaction(
+    tasks.map((task) =>
+      prisma.task.update({
+        where: { id: task.id },
+        data: { dueAt: new Date(task.dueAt!.getTime() + shift), lastNotifiedAt: null },
+      }),
+    ),
+  );
+  return tasks.length;
+}
+
+export type ActivityMove = {
+  id: string;
+  kind: ActivityKind;
+  title: string;
+  opponent: string | null;
+  from: Date;
+  to: Date;
+};
+
+const MOVED_TITLE: Record<ActivityKind, string> = {
+  MATCH: "Kampen er flyttet 📅",
+  TRAINING: "Træningen er flyttet 📅",
+  OTHER: "Aktiviteten er flyttet 📅",
+};
+
+/** Past this many moves at once, the team hears one summary rather than one push each. */
+export const MAX_SEPARATE_MOVE_PUSHES = 3;
+
+/**
+ * Tells the team (but not whoever made the change) that upcoming activities got a new
+ * time. Many at once — KampKlar shuffling a training plan — become one push.
+ */
+export async function announceActivityMoves(teamId: string, moves: ActivityMove[], actorId: string | null) {
+  if (moves.length === 0) return;
+  const members = await prisma.teamMember.findMany({ where: { teamId }, select: { userId: true } });
+  const to = members.map((m) => m.userId);
+  if (moves.length > MAX_SEPARATE_MOVE_PUSHES) {
+    notifyLater(to, actorId, {
+      title: "Nye tidspunkter 📅",
+      body: `${moves.length} aktiviteter har fået nyt tidspunkt.`,
+      url: "/aktiviteter",
+      tag: "activity-moves",
+    });
+    return;
+  }
+  for (const move of moves) {
+    const name = move.kind === "MATCH" && move.opponent ? `Mod ${move.opponent}` : move.title;
+    notifyLater(to, actorId, {
+      title: MOVED_TITLE[move.kind],
+      body: `${name}: nu ${kickoffLabel(move.to)} (før ${kickoffLabel(move.from)}).`,
+      url: `/aktiviteter/${move.id}`,
+      tag: `activity-${move.id}`,
+    });
+  }
 }
