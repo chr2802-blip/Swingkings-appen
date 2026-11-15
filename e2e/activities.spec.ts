@@ -165,6 +165,53 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   await expect.poll(async () => (await db.task.findFirst({ where: { title: "Købe nye bolde" } }))?.doneById).toBe(bo.id);
 });
 
+test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from an earlier one", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.taskTemplate.createMany({ data: [{ teamId: team.id, title: "Grill", people: 1 }, { teamId: team.id, title: "Frugt", people: 1 }] });
+  const earlier = await db.match.create({ data: { teamId: team.id, title: "Swingkings - AB", opponent: "AB", startsAt: inDays(-7) } });
+  await db.task.create({ data: { teamId: team.id, matchId: earlier.id, title: "Trøjevask", dueAt: inDays(-7) } });
+  const match = await db.match.create({ data: { teamId: team.id, title: "Swingkings - B93", opponent: "B93", startsAt: inDays(3) } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  const menu = page.getByRole("dialog", { name: "Handlinger" });
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  // The three ways live inside the one dialog, not as rows of their own.
+  await expect(menu.getByRole("button", { name: "Tilføj standardopgaver" })).toHaveCount(0);
+  await expect(menu.getByRole("button", { name: "Kopiér opgaver" })).toHaveCount(0);
+  await menu.getByRole("button", { name: "Ny opgave" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ny opgave" });
+  await expect(dialog.getByRole("button", { name: "Ny", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await dialog.getByRole("button", { name: "Standardopgaver" }).click();
+  await dialog.getByRole("checkbox", { name: /Grill/ }).check();
+  await dialog.getByRole("button", { name: "Tilføj og fordel" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Grill")).toBeVisible();
+  await expect(page.getByText("Frugt")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await menu.getByRole("button", { name: "Ny opgave" }).click();
+  // It opens on a new job again, whatever was used last.
+  await expect(dialog.getByLabel("Opgave")).toBeVisible();
+  await dialog.getByRole("button", { name: "Kopiér" }).click();
+  await dialog.getByLabel("Fra").selectOption({ index: 1 });
+  await dialog.getByRole("button", { name: "Kopiér og fordel" }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => db.task.count({ where: { matchId: match.id } })).toBe(2);
+  await expect(page.getByText("Trøjevask")).toBeVisible();
+});
+
+test("an activity with nothing to copy and no standard jobs offers only a new job", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3) } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("dialog", { name: "Handlinger" }).getByRole("button", { name: "Ny opgave" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ny opgave" });
+  await expect(dialog.getByLabel("Opgave")).toBeVisible();
+  await expect(dialog.getByRole("group", { name: "Hvordan?" })).toHaveCount(0);
+});
+
 test("somebody takes an open job", async ({ page, loginAs }) => {
   const { team, bo } = await squad();
   const task = await db.task.create({ data: { teamId: team.id, title: "Kage til kampen", dueAt: inDays(2) } });
