@@ -65,6 +65,21 @@ describe("updateTeam", () => {
     expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ mobilePayLink: null, duesKr: null });
   });
 
+  it("saves only the fields a tab's form carries, and leaves the others", async () => {
+    const { team, admin } = await makeSquad();
+    const saved = () => prisma.team.findUniqueOrThrow({ where: { id: team.id } });
+    await signIn(admin);
+    await updateTeam(undefined, teamForm({ calendarUrl: "https://kampklar.dk/feed/abc.ics" }));
+    expect(await updateTeam(undefined, formData({ finePriceKr: "20" }))).toEqual({ ok: true });
+    expect(await saved()).toMatchObject({ name: "Swingkings", finePriceKr: 20, calendarUrl: "https://kampklar.dk/feed/abc.ics" });
+    expect(await updateTeam(undefined, formData({ name: "Swingkings II", theme: "GREEN" }))).toEqual({ ok: true });
+    expect(await saved()).toMatchObject({ name: "Swingkings II", finePriceKr: 20, calendarUrl: "https://kampklar.dk/feed/abc.ics" });
+    expect(await updateTeam(undefined, formData({ calendarUrl: "" }))).toEqual({ ok: true });
+    expect(await saved()).toMatchObject({ name: "Swingkings II", finePriceKr: 20, calendarUrl: null });
+    // A field that is there must still be filled in.
+    expect(await updateTeam(undefined, formData({ name: " " }))).toEqual({ ok: false, error: "Giv holdet et navn." });
+  });
+
   it("refuses a link that is not an address, and a price outside 1–1000", async () => {
     const { admin } = await makeSquad();
     await signIn(admin);

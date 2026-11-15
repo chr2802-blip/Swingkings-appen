@@ -143,7 +143,7 @@ test("an admin pastes the box's link, and a player's Betal opens MobilePay with 
   await expect(page.getByRole("link", { name: /Betal/ })).toHaveCount(0);
 
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/betaling");
   await page.getByLabel("Link til MobilePay Box").fill(`${BOX_LINK}?amount=30`);
   await page.getByLabel("Kontingent pr. sæson (kr)").fill("600");
   await page.getByRole("button", { name: "Gem" }).click();

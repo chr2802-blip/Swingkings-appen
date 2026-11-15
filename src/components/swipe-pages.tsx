@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { usePathname } from "next/navigation";
 import { stayOnPage } from "./page-transition";
 
 export type SwipePage = {
@@ -50,14 +51,17 @@ const ARRIVE_MS = 1500;
  */
 export function SwipePages({
   pages,
-  initial = 0,
+  initial: asked,
   label = "Bødekassens sider",
 }: {
   pages: SwipePage[];
+  /** The page shown first; left out, the one whose `href` is the address. */
   initial?: number;
   /** What the row of names is called to a screen reader. */
   label?: string;
 }) {
+  const pathname = usePathname();
+  const initial = asked ?? Math.max(0, pages.findIndex((page) => page.href === pathname));
   // `active` is the page the scroller rests on; `shown` is the one nearest right now, mid-swipe.
   const [active, setActive] = useState(initial);
   const [shown, setShown] = useState(initial);

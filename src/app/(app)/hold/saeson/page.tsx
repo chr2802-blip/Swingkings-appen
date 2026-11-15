@@ -213,7 +213,7 @@ function SetupStep() {
           <Go href="/hold">Prisen for én bøde</Go> — skal den op eller ned?
         </li>
         <li>
-          <Go href="/hold#standardopgaver">Standardopgaverne</Go> — trøjevask, opkridtning, kørsel…
+          <Go href="/hold/opgaver">Standardopgaverne</Go> — trøjevask, opkridtning, kørsel…
         </li>
       </ul>
     </Card>
