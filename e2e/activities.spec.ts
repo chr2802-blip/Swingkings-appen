@@ -284,3 +284,31 @@ test("an activity shows one action button, and its drawer hands over to the dial
   // Two sheets overlapped on the way; the page must scroll again once both are gone.
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe("");
 });
+
+test("a player gives a job to a teammate, who accepts it, and the job keeps the history", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const task = await db.task.create({
+    data: { teamId: team.id, title: "Tøjvask", dueAt: inDays(2), assignees: { create: { userId: anna.id } } },
+  });
+  await loginAs(anna);
+  await page.goto(`/opgaver/${task.id}`);
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("dialog", { name: "Handlinger" }).getByRole("button", { name: "Giv opgaven videre" }).click();
+  const dialog = page.getByRole("dialog", { name: "Giv opgaven videre" });
+  await dialog.getByLabel("Hvem skal overtage?").selectOption({ label: "Bo" });
+  await dialog.getByLabel("Besked").fill("Jeg er ikke med til kampen");
+  await dialog.getByRole("button", { name: "Spørg" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Du har spurgt Bo, om de vil overtage opgaven.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Historik" })).toBeVisible();
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("link", { name: /Opgave tilbudt/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/opgaver/${task.id}$`));
+  await expect(page.getByText("“Jeg er ikke med til kampen”").first()).toBeVisible();
+  await page.getByRole("button", { name: "Ja, jeg tager den" }).click();
+  await expect(page.getByRole("button", { name: "Ja, jeg tager den" })).toHaveCount(0);
+  await expect(page.getByText("Godkendt")).toBeVisible();
+  expect((await db.taskAssignee.findMany({ where: { taskId: task.id } })).map((a) => a.userId)).toEqual([bo.id]);
+});
