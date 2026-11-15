@@ -64,6 +64,14 @@ enum ActivityKind {
  * SETTLED   approved; the fines have moved
  * CANCELLED withdrawn by the reporter or the treasurer, or undone afterwards
  */
+/// A request to take over somebody's task: waiting for an answer, or how it ended.
+enum HandoverStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
 enum ChallengeStatus {
   PENDING
   SETTLED
@@ -115,6 +123,7 @@ model Team {
   challenges      Challenge[]
   matches         Match[]
   tasks           Task[]
+  taskHandovers   TaskHandover[]
   taskTemplates   TaskTemplate[]
   chatMessages    ChatMessage[]
   posts           Post[]
@@ -162,6 +171,8 @@ model User {
 
   tasksCreated Task[]         @relation("TaskCreatedBy")
   tasksDone    Task[]         @relation("TaskDoneBy")
+  handoversOut TaskHandover[] @relation("HandoverFrom")
+  handoversIn  TaskHandover[] @relation("HandoverTo")
   taskAssigned TaskAssignee[]
 
   chatMessages ChatMessage[]
@@ -391,11 +402,36 @@ model Task {
   createdBy User?          @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   doneBy    User?          @relation("TaskDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
   assignees TaskAssignee[]
+  handovers TaskHandover[]
 
   @@index([teamId, dueAt])
   @@index([matchId])
   @@index([createdById])
   @@index([doneById])
+}
+
+/// One person asking another to take over their place on a task. The row stays as the
+/// task's history once it is answered (or withdrawn).
+model TaskHandover {
+  id         String         @id @default(cuid())
+  teamId     String
+  taskId     String
+  fromId     String
+  toId       String
+  note       String?
+  status     HandoverStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  answeredAt DateTime?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  from User @relation("HandoverFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   User @relation("HandoverTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, toId, status])
+  @@index([taskId])
+  @@index([fromId])
+  @@index([toId])
 }
 
 /// Who a task is handed to. Reached through its task, which carries the team.

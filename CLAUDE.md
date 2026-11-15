@@ -98,6 +98,12 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   old rows may have `matchId` null). There is no tasks menu; `/kampe` and `/opgaver` redirect.
   Standard jobs are added with `addTemplatesToActivity` (ticked ids, or `"auto"`), copied
   from an earlier activity with `copyTasksFromActivity` (`src/lib/tasks.ts`).
+- **Giving a task away** (`offerTask`, `answerHandover`, `withdrawHandover`): somebody on a
+  task asks one teammate to take over their place. Nothing moves until that person accepts;
+  accepting swaps the two `TaskAssignee` rows, guarded on status so a double press moves it
+  once. One open request per person per task (a partial unique index). The `TaskHandover`
+  rows stay as the task's history ("Historik" on `/opgaver/<id>`); leaving the task or being
+  taken off it withdraws an open request.
 - **KampKlar** is read as the team's iCalendar export (`src/lib/ical.ts`,
   `src/lib/kampklar.ts`), fetched with `safeFetch`. Rows are matched by UID; hand-made
   activities are never touched by the sync. New future MATCH rows get the team's

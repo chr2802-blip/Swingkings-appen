@@ -19,7 +19,7 @@ import { playerTasksHref } from "@/components/player-link";
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, kings, nextMatch, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
+  const [board, kings, nextMatch, myTaskCount, openChallenges, pollsWaiting, newPosts, handoversToMe] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
@@ -41,6 +41,11 @@ export default async function OverviewPage() {
         where: { authorId: { not: user.id }, createdAt: { gt: member?.feedSeenAt ?? member?.createdAt ?? new Date() } },
       }),
     ),
+    db.taskHandover.findMany({
+      where: { toId: user.id, status: "PENDING", task: { doneAt: null } },
+      orderBy: { createdAt: "asc" },
+      select: { taskId: true },
+    }),
   ]);
   const mine = board.balances.find((row) => row.userId === user.id);
   const waitingOnMe = openChallenges.filter((c) => waitsOn(c, user.id)).length;
@@ -49,11 +54,19 @@ export default async function OverviewPage() {
   const month = readInZone(new Date(), "MMMM");
   /**
    * The banner is one row of three tiles. The balance is always first; the other two are
-   * the first of these that are waiting on this person (skipping zeros): polls without
-   * their vote, new posts, challenges waiting on them, their open tasks. Free places go to
-   * the next activity, then the month's bødekonge.
+   * the first of these that are waiting on this person (skipping zeros): tasks somebody
+   * asks them to take over (the oldest first), polls without their vote, new posts,
+   * challenges waiting on them, their open tasks. Free places go to the next activity,
+   * then the month's bødekonge.
    */
   const waiting = [
+    {
+      kind: "count" as const,
+      count: handoversToMe.length,
+      href: `/opgaver/${handoversToMe[0]?.taskId}`,
+      title: handoversToMe.length === 1 ? "Opgave tilbudt" : "Opgaver tilbudt",
+      note: "venter på dit svar",
+    },
     { kind: "count" as const, count: pollsWaiting, href: "#feed", title: pollsWaiting === 1 ? "Afstemning" : "Afstemninger", note: "mangler dit svar" },
     { kind: "count" as const, count: newPosts, href: "#feed", title: newPosts === 1 ? "Nyt opslag" : "Nye opslag", note: "i feedet" },
     { kind: "count" as const, count: waitingOnMe, href: "/boder?udfordringer", title: waitingOnMe === 1 ? "Udfordring" : "Udfordringer", note: "venter på dig" },
