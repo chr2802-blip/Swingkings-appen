@@ -71,6 +71,7 @@ export function SwipePages({
   const names = useRef<HTMLDivElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const line = useRef<HTMLSpanElement>(null);
+  const tablist = useRef<HTMLDivElement>(null);
   // What the listeners read: they are attached once and outlive any one render.
   const live = useRef({ active, resting, touching: false, target: null as number | null, timer: 0, deadline: 0 });
   live.current.active = active;
@@ -133,6 +134,17 @@ export function SwipePages({
     underline(live.current.active);
   }, [ready, underline]);
   // The names change width with the font and the window; the underline follows.
+  // When the names are wider than the screen they scroll sideways: keep the one shown in view.
+  useEffect(() => {
+    const list = tablist.current;
+    const tab = tabs.current[shown];
+    if (!list || !tab) return;
+    const left = tab.offsetLeft - 16;
+    const right = tab.offsetLeft + tab.offsetWidth + 16 - list.clientWidth;
+    if (list.scrollLeft > left) list.scrollLeft = left;
+    else if (list.scrollLeft < right) list.scrollLeft = right;
+  }, [shown]);
+
   useEffect(() => {
     if (!names.current) return;
     const watch = new ResizeObserver(() => {
@@ -222,7 +234,12 @@ export function SwipePages({
   return (
     <TurnTo.Provider value={goTo}>
       <div ref={names} className="mb-3 flex min-h-9 scroll-mt-24 items-center justify-between gap-3">
-        <div role="tablist" aria-label={label} className="relative flex min-w-0 gap-4">
+        <div
+          ref={tablist}
+          role="tablist"
+          aria-label={label}
+          className="scrollbar-hidden relative flex min-w-0 gap-4 overflow-x-auto"
+        >
           {pages.map((page, index) => (
             <button
               key={page.href}
@@ -234,7 +251,7 @@ export function SwipePages({
               aria-selected={index === shown}
               onClick={() => goTo(index)}
               // Until the script has placed the moving underline, the name carries its own.
-              className={`border-b-2 py-1.5 text-xs font-semibold tracking-wider uppercase transition-colors duration-200 ${
+              className={`shrink-0 border-b-2 py-1.5 text-xs font-semibold whitespace-nowrap tracking-wider uppercase transition-colors duration-200 ${
                 index === shown ? "text-slate-900" : "text-slate-400"
               } ${index === shown && !ready ? "border-[var(--accent)]" : "border-transparent"}`}
             >

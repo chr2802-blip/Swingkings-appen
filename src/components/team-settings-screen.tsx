@@ -17,19 +17,21 @@ import { InviteLinkForm } from "@/components/invite-link-form";
 import { TeamNoticeForm } from "@/components/team-notice-form";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
+import { MemberTable } from "@/components/member-table";
 import { revokeInviteLink } from "@/app/actions/teams";
 import { deleteTaskTemplate } from "@/app/actions/activities";
 
 /**
  * The team settings, as tabs like the fine box: the team itself (name, crest, colour and
  * the season), payment (the price of a fine, the MobilePay box, kontingent), jobs (the
- * KampKlar link, the standard jobs and how they have been shared), invitations, and a
+ * KampKlar link, the standard jobs and how they have been shared), the members' rights
+ * (Bøder, Admin and kontingent, ticked per member), invitations, and a
  * notification of the admin's own to one person or the whole team. Each
  * tab has its own address — the one opened is the one shown — and its own form, and all are read at once, so a swipe
- * never waits on the server. Admins only; anybody else is sent to the squad.
+ * never waits on the server. Admins only; anybody else is sent to the overview.
  */
 export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
-  if (!canAdministerTeam(user, user.teamId)) redirect("/hold/spillere");
+  if (!canAdministerTeam(user, user.teamId)) redirect("/oversigt");
   const db = teamDb(user.teamId);
   const [team, links, templates, roster, candidates] = await Promise.all([
     prisma.team.findUniqueOrThrow({
@@ -194,6 +196,11 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
             ),
           },
           {
+            href: "/hold/rettigheder",
+            title: "Rettigheder",
+            children: <MemberTable roster={roster} userId={user.id} />,
+          },
+          {
             href: "/hold/inviter",
             title: "Inviter",
             children: (
@@ -201,7 +208,7 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
                 <p className="text-sm text-slate-500">
                   Lav et link og send det i holdets gruppechat, på SMS eller Messenger. Den der åbner det, opretter sig
                   selv — eller logger ind, hvis de allerede har en konto — og kommer med som spiller. Roller giver du
-                  under Spillere. Linket virker for det antal personer, du vælger, og kun indtil det udløber.
+                  under Rettigheder. Linket virker for det antal personer, du vælger, og kun indtil det udløber.
                 </p>
                 <InviteLinkForm teamName={team.name} />
                 {links.length > 0 && (

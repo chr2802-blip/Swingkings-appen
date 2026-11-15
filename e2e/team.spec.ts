@@ -34,15 +34,16 @@ test("a coach renames the team, then changes the price of a fine on its own tab"
 test("each tab of the team settings has its own address, and no other does", async ({ page, loginAs }) => {
   const { admin } = await squad();
   await loginAs(admin);
-  for (const [fane, name] of [["betaling", "Betaling"], ["opgaver", "Opgaver"], ["inviter", "Inviter"]]) {
+  for (const [fane, name] of [["betaling", "Betaling"], ["opgaver", "Opgaver"], ["rettigheder", "Rettigheder"], ["inviter", "Inviter"]]) {
     await page.goto(`/hold/${fane}`);
     await expect(page.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tabpanel")).toHaveAccessibleName(name);
   }
   expect((await page.goto("/hold/noget-andet"))?.status()).toBe(404);
-  // The pages beside the tabs are still their own.
+  // The old roster address leads to the rights tab.
   await page.goto("/hold/spillere");
-  await expect(page.getByRole("checkbox", { name: "Admin for Anna" })).toBeVisible();
+  await expect(page).toHaveURL(/\/hold\/rettigheder$/);
+  await expect(page.getByRole("tabpanel", { name: "Rettigheder" }).getByRole("checkbox", { name: "Admin for Anna" })).toBeVisible();
 });
 
 test("the KampKlar link and the standard jobs share the Opgaver tab", async ({ page, loginAs }) => {
@@ -74,7 +75,7 @@ test("a player is kept out of the team settings", async ({ page, loginAs }) => {
 test("a coach removes a player, who no longer reaches the team", async ({ page, loginAs }) => {
   const { team, admin, bo } = await squad();
   await loginAs(admin);
-  await page.goto("/hold/spillere");
+  await page.goto("/hold/rettigheder");
   const row = page.getByRole("listitem").filter({ has: page.getByText("Bo", { exact: true }) });
   await row.getByRole("button", { name: "Handlinger for Bo" }).click();
   await page.getByRole("dialog", { name: "Bo" }).getByRole("button", { name: "Fjern fra holdet" }).click();
@@ -120,13 +121,13 @@ test("somebody on two teams switches between them", async ({ page, loginAs }) =>
   await expect.poll(async () => (await db.user.findUniqueOrThrow({ where: { id: first.anna.id } })).activeTeamId).toBe(second.id);
 });
 
-test("the roster lists everybody on the team with their role", async ({ page, loginAs }) => {
-  const { anna } = await squad();
-  await loginAs(anna);
-  await page.goto("/hold/spillere");
-  await expect(page.getByRole("heading", { name: "Spillere", level: 1 })).toBeVisible();
-  for (const name of ["Anna", "Bo", "Kasserer Kim", "Træner Tom"]) await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
-  await expect(page.getByRole("main").getByText("Bødekasseformand").first()).toBeVisible();
+test("the rights tab lists everybody on the team", async ({ page, loginAs }) => {
+  const { admin } = await squad();
+  await loginAs(admin);
+  await page.goto("/hold/rettigheder");
+  const tab = page.getByRole("tabpanel", { name: "Rettigheder" });
+  for (const name of ["Anna", "Bo", "Kasserer Kim", "Træner Tom"]) await expect(tab.getByText(name, { exact: true })).toBeVisible();
+  await expect(tab.getByRole("checkbox", { name: "Bøder for Kasserer Kim" })).toHaveAttribute("aria-checked", "true");
 });
 
 test("a coach sends a reminder to the players ticked, opening MobilePay with the kontingent filled in", async ({ page, loginAs }) => {
@@ -155,4 +156,19 @@ test("a coach sends a reminder to the players ticked, opening MobilePay with the
   await tab.getByRole("textbox", { name: "Besked" }).fill("Se mere her.");
   await tab.getByRole("button", { name: "Send notifikation" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Linket skal være en hel adresse, der starter med https://" })).toBeVisible();
+});
+
+test("on a phone the six tab names stay on one line each, and the one opened is in view", async ({ page, loginAs }) => {
+  const { admin } = await squad();
+  await page.setViewportSize({ width: 360, height: 800 });
+  await loginAs(admin);
+  await page.goto("/hold/besked");
+  const tabs = page.getByRole("tab");
+  await expect(tabs).toHaveCount(6);
+  const heights = await tabs.evaluateAll((all) => all.map((tab) => tab.getBoundingClientRect().height));
+  expect(Math.max(...heights)).toBeLessThan(40);
+  await expect(page.getByRole("tab", { name: "Besked" })).toBeInViewport({ ratio: 0.95 });
+  await page.getByRole("tab", { name: "Holdet" }).click();
+  await expect(page).toHaveURL(/\/hold$/);
+  await expect(page.getByRole("tab", { name: "Holdet" })).toBeInViewport({ ratio: 0.95 });
 });
