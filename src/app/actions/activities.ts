@@ -14,7 +14,7 @@ import { addTemplatesToActivity, announceActivityMoves, copyTasksFromActivity, m
 
 function refresh() {
   revalidatePath("/aktiviteter", "layout");
-  revalidatePath("/hold");
+  revalidatePath("/hold", "layout");
   revalidatePath("/opgaver", "layout");
   revalidatePath("/oversigt");
 }

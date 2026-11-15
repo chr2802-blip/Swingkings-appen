@@ -56,7 +56,7 @@ test("logs out", async ({ page, loginAs }) => {
 test("an admin makes an invitation link, and somebody new joins the team through it", async ({ page, loginAs }) => {
   const { team, admin } = await squad();
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/inviter");
   await page.getByLabel("Højst antal personer").selectOption("5");
   await page.getByRole("button", { name: "Lav invitationslink" }).click();
   const link = page.getByRole("textbox", { name: "Invitationslink" });

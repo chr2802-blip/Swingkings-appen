@@ -29,10 +29,14 @@ export async function switchTeam(teamId: string) {
   redirect("/oversigt");
 }
 
+/**
+ * The settings are split over the tabs of /hold, each its own form: a field the form does
+ * not carry is left as it is, so saving one tab never clears another's.
+ */
 const teamSchema = z.object({
-  name: requiredText("Giv holdet et navn."),
+  name: requiredText("Giv holdet et navn.").optional(),
   theme: z.enum(THEMES.map((t) => t.value) as [string, ...string[]]).optional(),
-  finePriceKr: wholeNumber("Prisen for én bøde skal være et helt antal kroner (1–1000).", 1, 1000),
+  finePriceKr: wholeNumber("Prisen for én bøde skal være et helt antal kroner (1–1000).", 1, 1000).optional(),
   calendarUrl: z.string().trim().max(2000).optional(),
   mobilePayLink: z.string().trim().max(500).optional(),
   duesKr: z
@@ -69,10 +73,10 @@ export async function updateTeam(_prev: ActionResult, formData: FormData): Promi
   await prisma.team.update({
     where: { id: user.teamId },
     data: {
-      name: form.fields.name,
-      finePriceKr: form.fields.finePriceKr,
-      calendarUrl,
       // Left alone by a form that does not carry the fields.
+      ...(form.fields.name !== undefined ? { name: form.fields.name } : {}),
+      ...(form.fields.finePriceKr !== undefined ? { finePriceKr: form.fields.finePriceKr } : {}),
+      ...(formData.has("calendarUrl") ? { calendarUrl } : {}),
       ...(formData.has("mobilePayLink") ? { mobilePayLink } : {}),
       ...(formData.has("duesKr") ? { duesKr: form.fields.duesKr } : {}),
       ...(form.fields.theme ? { theme: form.fields.theme as (typeof THEMES)[number]["value"] } : {}),
@@ -116,7 +120,7 @@ export async function createInviteLink(_prev: ActionResult, formData: FormData):
   const form = readForm(inviteLinkSchema, formData);
   if (!form.ok) return fail(form.error);
   const path = await makeInviteLink(user.teamId, user.id, form.fields.days, form.fields.maxUses);
-  revalidatePath("/hold");
+  revalidatePath("/hold", "layout");
   return ok(path);
 }
 
@@ -124,7 +128,7 @@ export async function revokeInviteLink(_prev: ActionResult, formData: FormData):
   const user = await requireTeamUser();
   assertTeamAdmin(user, user.teamId);
   await teamDb(user.teamId).inviteLink.deleteMany({ where: { id: String(formData.get("linkId") ?? "") } });
-  revalidatePath("/hold");
+  revalidatePath("/hold", "layout");
   return ok();
 }
 

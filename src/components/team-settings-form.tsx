@@ -7,9 +7,14 @@ import { PhotoField } from "@/components/photo-field";
 import { updateTeam } from "@/app/actions/teams";
 import { THEMES } from "@/lib/theme";
 
+/** Which tab of the team settings the form sits on; each saves only its own fields. */
+export type TeamSettingsPart = "team" | "payment" | "calendar";
+
 export function TeamSettingsForm({
+  part,
   team,
 }: {
+  part: TeamSettingsPart;
   team: {
     name: string;
     theme: TeamTheme;
@@ -20,6 +25,52 @@ export function TeamSettingsForm({
     duesKr: number | null;
   };
 }) {
+  if (part === "calendar") {
+    return (
+      <ActionForm action={updateTeam} submitLabel="Gem" className="space-y-5">
+        <Field
+          label="Kalenderlink fra DBU KampKlar"
+          htmlFor="calendarUrl"
+          hint="I Fodbold-appen eller på Mit DBU: gå til holdet i KampKlar → Kalender → “Eksporter kalender”, og kopiér linket hertil. Aktiviteterne hentes hver morgen og når du trykker “Hent fra KampKlar”."
+        >
+          <Input
+            id="calendarUrl"
+            name="calendarUrl"
+            type="url"
+            inputMode="url"
+            placeholder="webcal://… eller https://…"
+            defaultValue={team.calendarUrl ?? ""}
+          />
+        </Field>
+      </ActionForm>
+    );
+  }
+  if (part === "payment") {
+    return (
+      <ActionForm action={updateTeam} submitLabel="Gem" className="space-y-5">
+        <Field label="Pris for én bøde (kr)" htmlFor="finePriceKr" hint="Gælder nye bøder. Allerede givne bøder beholder deres pris.">
+          <Input id="finePriceKr" name="finePriceKr" type="number" inputMode="numeric" min={1} max={1000} defaultValue={team.finePriceKr} required />
+        </Field>
+        <Field
+          label="Link til MobilePay Box"
+          htmlFor="mobilePayLink"
+          hint="I MobilePay: åbn boxen → Del, og kopiér linket hertil. Så åbner “Betal” MobilePay med boxen, beløbet og beskeden udfyldt. Betalinger markeres stadig i hånden."
+        >
+          <Input
+            id="mobilePayLink"
+            name="mobilePayLink"
+            type="url"
+            inputMode="url"
+            placeholder="https://qr.mobilepay.dk/box/…/pay-in"
+            defaultValue={team.mobilePayLink ?? ""}
+          />
+        </Field>
+        <Field label="Kontingent pr. sæson (kr)" htmlFor="duesKr" hint="Vises på “Betal kontingent”. Tomt: intet beløb vises.">
+          <Input id="duesKr" name="duesKr" type="number" inputMode="numeric" min={1} max={100000} defaultValue={team.duesKr ?? ""} />
+        </Field>
+      </ActionForm>
+    );
+  }
   return (
     <ActionForm action={updateTeam} submitLabel="Gem" className="space-y-5">
       <Field label="Holdets navn" htmlFor="name" hint="Bruges også til at kende jeres side i KampKlar-kampe (“Hjemme - Ude”).">
@@ -42,40 +93,6 @@ export function TeamSettingsForm({
           ))}
         </div>
       </fieldset>
-      <Field label="Pris for én bøde (kr)" htmlFor="finePriceKr" hint="Gælder nye bøder. Allerede givne bøder beholder deres pris.">
-        <Input id="finePriceKr" name="finePriceKr" type="number" inputMode="numeric" min={1} max={1000} defaultValue={team.finePriceKr} required />
-      </Field>
-      <Field
-        label="Link til MobilePay Box"
-        htmlFor="mobilePayLink"
-        hint="I MobilePay: åbn boxen → Del, og kopiér linket hertil. Så åbner “Betal” MobilePay med boxen, beløbet og beskeden udfyldt. Betalinger markeres stadig i hånden."
-      >
-        <Input
-          id="mobilePayLink"
-          name="mobilePayLink"
-          type="url"
-          inputMode="url"
-          placeholder="https://qr.mobilepay.dk/box/…/pay-in"
-          defaultValue={team.mobilePayLink ?? ""}
-        />
-      </Field>
-      <Field label="Kontingent pr. sæson (kr)" htmlFor="duesKr" hint="Vises på “Betal kontingent”. Tomt: intet beløb vises.">
-        <Input id="duesKr" name="duesKr" type="number" inputMode="numeric" min={1} max={100000} defaultValue={team.duesKr ?? ""} />
-      </Field>
-      <Field
-        label="Kalenderlink fra DBU KampKlar"
-        htmlFor="calendarUrl"
-        hint="I Fodbold-appen eller på Mit DBU: gå til holdet i KampKlar → Kalender → “Eksporter kalender”, og kopiér linket hertil. Aktiviteterne hentes hver morgen og når du trykker “Hent fra KampKlar”. Standardopgaverne sættes op længere nede på siden."
-      >
-        <Input
-          id="calendarUrl"
-          name="calendarUrl"
-          type="url"
-          inputMode="url"
-          placeholder="webcal://… eller https://…"
-          defaultValue={team.calendarUrl ?? ""}
-        />
-      </Field>
     </ActionForm>
   );
 }

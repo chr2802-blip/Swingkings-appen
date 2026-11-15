@@ -156,7 +156,7 @@ test("old links to matches and the task list land in their new homes", async ({ 
   await expect(page).toHaveURL(/\/oversigt$/);
   // The standard jobs moved to the team settings, which a player sees as the roster.
   await page.goto("/aktiviteter/standardopgaver");
-  await expect(page).toHaveURL(/\/hold\/spillere#standardopgaver$/);
+  await expect(page).toHaveURL(/\/hold\/spillere$/);
 });
 
 test("a player puts a job on an activity for a teammate, who marks it done", async ({ page, loginAs }) => {
@@ -245,7 +245,7 @@ test("somebody takes an open job", async ({ page, loginAs }) => {
 test("an admin keeps the team's standard jobs under the team settings; a player cannot", async ({ page, loginAs }) => {
   const { team, admin, anna } = await squad();
   await loginAs(admin);
-  await page.goto("/hold");
+  await page.goto("/hold/opgaver");
   await page.getByRole("button", { name: "Ny standardopgave" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Opgave").fill("Kørsel");
@@ -256,7 +256,8 @@ test("an admin keeps the team's standard jobs under the team settings; a player 
   expect(await db.taskTemplate.findFirst({ where: { teamId: team.id } })).toMatchObject({ title: "Kørsel", people: 3 });
 
   await loginAs(anna);
-  await page.goto("/hold");
+  await page.goto("/hold/opgaver");
+  await expect(page).toHaveURL(/\/hold\/spillere$/);
   await expect(page.getByRole("button", { name: "Ny standardopgave" })).toHaveCount(0);
 });
 
