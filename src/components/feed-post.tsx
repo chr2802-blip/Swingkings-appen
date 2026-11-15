@@ -77,6 +77,7 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
               postId={post.id}
               comments={post.comments.map((comment) => ({
                 id: comment.id,
+                parentId: comment.parentId,
                 body: comment.body,
                 stamp: stampLabel(comment.createdAt),
                 author: { id: comment.author.id, name: comment.author.name, photoId: comment.author.photoId },

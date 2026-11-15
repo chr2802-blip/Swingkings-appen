@@ -63,7 +63,7 @@ export async function feedPosts(
     photos: { orderBy: { position: "asc" }, select: { photoId: true } },
     // Shown as faces, first to like first — hence the picture and the order.
     likes: { orderBy: [{ createdAt: "asc" }, { userId: "asc" }], select: { userId: true, user: { select: { name: true, photoId: true } } } },
-    comments: { orderBy: { createdAt: "asc" }, select: { id: true, body: true, createdAt: true, author: person } },
+    comments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, parentId: true, body: true, createdAt: true, author: person } },
     poll: {
       select: {
         id: true,
