@@ -18,6 +18,7 @@ import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { notifyLater } from "@/lib/notify";
+import { mentionedIds } from "@/lib/mentions";
 
 const body = z.string().trim().max(MAX_MESSAGE).optional().transform((v) => v || null);
 
@@ -320,11 +321,14 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   const text = z.string().trim().min(1, "Skriv en kommentar.").max(1000).safeParse(formData.get("body") ?? "");
   if (!text.success) return fail(text.error.issues[0]?.message ?? "Skriv en kommentar.");
   await prisma.postComment.create({ data: { postId: post.id, authorId: user.id, body: text.data } });
-  notifyLater([post.authorId], user.id, {
-    title: `${user.name} kommenterede dit opslag`,
-    body: text.data.slice(0, 140),
-    url: "/oversigt#feed",
-  });
+  // Who is tagged is read from the words against this team's roster, so nobody on
+  // another team can be tagged. A tagged author hears it once, as a tag.
+  const tagged = mentionedIds(text.data, await teamRoster(user.teamId));
+  const preview = text.data.slice(0, 140);
+  notifyLater(tagged, user.id, { title: `${user.name} nævnte dig i en kommentar`, body: preview, url: "/oversigt#feed" });
+  if (!tagged.includes(post.authorId)) {
+    notifyLater([post.authorId], user.id, { title: `${user.name} kommenterede dit opslag`, body: preview, url: "/oversigt#feed" });
+  }
   revalidatePath("/oversigt");
   return ok();
 }

@@ -7,6 +7,7 @@ import { PlayerLink } from "@/components/player-link";
 import { PhotoCarousel } from "@/components/photo-carousel";
 import { PollView } from "@/components/poll-view";
 import { CommentsDrawer } from "@/components/comments-drawer";
+import type { CommentMember } from "@/components/comment-form";
 import { ActionButton } from "@/components/action-button";
 import { PostMenu, PostState } from "@/components/post-menu";
 import { toggleLike } from "@/app/actions/social";
@@ -17,7 +18,18 @@ export type FeedPost = Awaited<ReturnType<typeof feedPosts>>[number];
  * One post in the feed. Rendered on the server both for the first page and for each
  * page the feed fetches as it is scrolled (`loadFeedPosts`), so the two look the same.
  */
-export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewerId: string; admin: boolean }) {
+export function FeedPostCard({
+  post,
+  viewerId,
+  admin,
+  members,
+}: {
+  post: FeedPost;
+  viewerId: string;
+  admin: boolean;
+  /** The team, for tagging in comments. */
+  members: CommentMember[];
+}) {
   const liked = post.likes.some((like) => like.userId === viewerId);
   const likers = likersView(post.likes);
   return (
@@ -75,6 +87,8 @@ export function FeedPostCard({ post, viewerId, admin }: { post: FeedPost; viewer
             />
             <CommentsDrawer
               postId={post.id}
+              members={members}
+              viewerId={viewerId}
               comments={post.comments.map((comment) => ({
                 id: comment.id,
                 body: comment.body,

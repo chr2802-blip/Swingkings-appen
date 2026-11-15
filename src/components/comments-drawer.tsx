@@ -5,7 +5,8 @@ import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
-import { CommentForm } from "@/components/comment-form";
+import { CommentForm, type CommentMember } from "@/components/comment-form";
+import { mentionSegments } from "@/lib/mentions";
 import { deleteComment } from "@/app/actions/social";
 
 export type CommentView = {
@@ -22,7 +23,18 @@ export type CommentView = {
  * comments open in a drawer from the bottom with the box to write in at its foot.
  * The drawer stays open while comments are added or deleted, as the page renders anew.
  */
-export function CommentsDrawer({ postId, comments }: { postId: string; comments: CommentView[] }) {
+export function CommentsDrawer({
+  postId,
+  comments,
+  members,
+  viewerId,
+}: {
+  postId: string;
+  comments: CommentView[];
+  /** The team, to tag in a comment and to make the tagged names links. */
+  members: CommentMember[];
+  viewerId: string;
+}) {
   const [open, setOpen] = useState(false);
   const count = comments.length;
 
@@ -55,7 +67,17 @@ export function CommentsDrawer({ postId, comments }: { postId: string; comments:
                       <p className="text-[13px] font-semibold">
                         <PlayerLink userId={comment.author.id}>{comment.author.name}</PlayerLink>
                       </p>
-                      <p className="text-sm break-words whitespace-pre-line">{comment.body}</p>
+                      <p className="text-sm break-words whitespace-pre-line">
+                        {mentionSegments(comment.body, members).map((segment, index) =>
+                          segment.userId ? (
+                            <PlayerLink key={index} userId={segment.userId} className="font-semibold text-[var(--accent-text)]">
+                              {segment.text}
+                            </PlayerLink>
+                          ) : (
+                            segment.text
+                          ),
+                        )}
+                      </p>
                     </div>
                     <div className="mt-1 flex items-center gap-3 px-3 text-xs text-slate-500">
                       <span>{comment.stamp}</span>
@@ -76,7 +98,7 @@ export function CommentsDrawer({ postId, comments }: { postId: string; comments:
           )}
         </ModalBody>
         <ModalFooter>
-          <CommentForm postId={postId} />
+          <CommentForm postId={postId} members={members} viewerId={viewerId} />
         </ModalFooter>
       </Modal>
     </>
