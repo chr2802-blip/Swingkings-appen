@@ -1,4 +1,4 @@
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 import { prisma } from "./prisma";
 
 let configured = false;
@@ -11,13 +11,14 @@ let configured = false;
  */
 export const PUSH_TIMEOUT_MS = 10_000;
 
-function configure() {
+/** Hands the VAPID keys to web-push once; false when push is not set up here. */
+export function configurePush() {
   if (configured) return true;
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@example.com";
   if (!publicKey || !privateKey) return false;
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+  setVapidDetails(subject, publicKey, privateKey);
   configured = true;
   return true;
 }
@@ -39,7 +40,7 @@ export async function sendPushToUsers(
     quiet?: boolean;
   },
 ) {
-  if (!configure() || userIds.length === 0) return 0;
+  if (!configurePush() || userIds.length === 0) return 0;
 
   const subscriptions = (await prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } })).filter(
     (sub) => !payload.quiet || !isApplePush(sub.endpoint),
@@ -49,7 +50,7 @@ export async function sendPushToUsers(
   await Promise.all(
     subscriptions.map(async (sub) => {
       try {
-        await webpush.sendNotification(
+        await sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           JSON.stringify(payload),
           { timeout: PUSH_TIMEOUT_MS },
