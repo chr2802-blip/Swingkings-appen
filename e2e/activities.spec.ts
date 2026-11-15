@@ -1,4 +1,3 @@
-import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 
@@ -53,13 +52,7 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
   await expect(page.getByText("1 kommer")).toBeVisible();
 });
 
-/** Whether a row has scrolled up behind the header: the header sticks, so "in viewport" cannot tell. */
-async function hiddenAboveHeader(page: Page, row: Locator) {
-  const [box, header] = await Promise.all([row.boundingBox(), page.getByRole("banner").boundingBox()]);
-  return !!box && !!header && box.y + box.height <= header.y + header.height;
-}
-
-test("the list shows every kind and opens at today, with the earlier ones a scroll up", async ({ page, loginAs }) => {
+test("the list shows every kind from today, with the earlier ones folded away under Vis tidligere", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
   await db.match.createMany({
     data: [
@@ -73,41 +66,63 @@ test("the list shows every kind and opens at today, with the earlier ones a scro
   await loginAs(anna);
   await page.goto("/aktiviteter");
 
-  // No filters: matches, trainings and the rest are one list, with no chips over it.
-  await expect(page.getByRole("link", { name: "Med træninger" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Tidligere" })).toHaveCount(0);
+  // The page opens at its top: the heading, then what is ahead, in the order it is played.
   await expect(page.getByRole("heading", { name: "Aktiviteter", level: 1 })).toBeInViewport();
-  for (const name of ["Tirsdagstræning", "AB", "Afslutningsfest"]) {
-    await expect(page.getByRole("link", { name: new RegExp(name) })).toBeInViewport();
-  }
+  await expect(page.getByRole("link", { name: /Tirsdagstræning|AB|Afslutningsfest/ })).toHaveText([/Tirsdagstræning/, /AB/, /Afslutningsfest/]);
+  // What has been played is folded away.
+  await expect(page.getByRole("link", { name: /Gammel træning/ })).toBeHidden();
+  await expect(page.getByRole("link", { name: /B93/ })).toBeHidden();
 
-  // The earlier ones are on the page, in the order they were played, above the screen.
+  await page.getByText("Vis tidligere").click();
   const earlier = page.getByRole("region", { name: "Tidligere aktiviteter" });
-  await expect(earlier.getByRole("link")).toHaveText([/B93/, /Gammel træning/]);
-  await expect.poll(() => hiddenAboveHeader(page, earlier.getByRole("link", { name: /Gammel træning/ }))).toBe(true);
-  // Nothing has slid away: the header is where a page that opens at its top has it.
-  await expect(page.getByRole("link", { name: "Min profil" })).toBeInViewport();
-
-  await page.mouse.wheel(0, -2000);
-  await expect(earlier.getByRole("link", { name: /B93/ })).toBeInViewport();
+  // Newest first, under the ones ahead.
+  await expect(earlier.getByRole("link")).toHaveText([/Gammel træning/, /B93/]);
+  await expect(page.getByText("Vis tidligere")).toBeHidden();
   await earlier.getByRole("link", { name: /Gammel træning/ }).click();
   await expect(page.getByRole("heading", { name: "Gammel træning", level: 1 })).toBeVisible();
 });
 
-test("coming to the list from another tab also opens it at today", async ({ page, loginAs }) => {
+test("each row says one thing on its right, and home or away under the name", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
+  const home = await db.match.create({
+    data: { teamId: team.id, kind: "MATCH", title: "Swingkings - AB", opponent: "AB", isHome: true, location: "Bane 1", startsAt: inDays(3) },
+  });
+  await db.task.create({ data: { teamId: team.id, matchId: home.id, title: "Grill" } });
   await db.match.createMany({
     data: [
-      ...Array.from({ length: 12 }, (_, i) => ({ teamId: team.id, kind: "TRAINING" as const, title: `Træning ${i}`, startsAt: inDays(-30 + i) })),
-      { teamId: team.id, kind: "MATCH", title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3) },
+      { teamId: team.id, kind: "MATCH", title: "B93 - Swingkings", opponent: "B93", isHome: false, startsAt: inDays(4) },
+      { teamId: team.id, kind: "TRAINING", title: "Tirsdagstræning", startsAt: inDays(5), cancelledAt: new Date() },
     ],
   });
   await loginAs(anna);
-  await page.goto("/oversigt");
-  await page.getByRole("navigation").last().getByRole("link", { name: "Aktiviteter" }).click();
-  await expect(page.getByRole("heading", { name: "Aktiviteter", level: 1 })).toBeInViewport();
-  await expect(page.getByRole("link", { name: /AB/ })).toBeInViewport();
-  await expect.poll(() => hiddenAboveHeader(page, page.getByRole("link", { name: /Træning 11/ }))).toBe(true);
+  await page.goto("/aktiviteter");
+
+  const ab = page.getByRole("link", { name: /AB/ });
+  await expect(ab).toContainText("Hjemme · Bane 1");
+  await expect(ab).toContainText("1 opgave");
+  const b93 = page.getByRole("link", { name: /B93/ });
+  await expect(b93).toContainText("Ude");
+  await expect(b93).not.toContainText("opgave");
+  const training = page.getByRole("link", { name: /Tirsdagstræning/ });
+  await expect(training).toContainText("Aflyst");
+  // The kind is in the name: no "Træning" label beside it.
+  await expect(training.getByText("Træning", { exact: true })).toHaveCount(0);
+});
+
+test("an admin with no KampKlar link is pointed to the team settings; nobody else is", async ({ page, loginAs }) => {
+  const { team, anna, admin } = await squad();
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  await expect(page.getByRole("link", { name: /KampKlar/ })).toHaveCount(0);
+
+  await loginAs(admin);
+  await page.goto("/aktiviteter");
+  await page.getByRole("link", { name: /Hent kampene fra KampKlar/ }).click();
+  await expect(page).toHaveURL(/\/hold$/);
+
+  await db.team.update({ where: { id: team.id }, data: { calendarUrl: "https://example.com/cal.ics" } });
+  await page.goto("/aktiviteter");
+  await expect(page.getByRole("link", { name: /KampKlar/ })).toHaveCount(0);
 });
 
 test("a team with nothing behind it and nothing ahead sees an empty calendar", async ({ page, loginAs }) => {

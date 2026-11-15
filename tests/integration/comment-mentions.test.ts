@@ -41,6 +41,19 @@ describe("tagging in a comment", () => {
     expect(sent).toEqual([{ to: [anna.id], title: "Bo nævnte dig i en kommentar" }]);
   });
 
+  it("in an answer, the answered hear it as an answer and only the others as a tag", async () => {
+    const { team, admin, anna, bo, treasurer } = await makeSquad();
+    const post = await prisma.post.create({ data: { teamId: team.id, authorId: admin.id, body: "Sejr!" } });
+    const comment = await prisma.postComment.create({ data: { postId: post.id, authorId: anna.id, body: "Flot" } });
+    await signIn(bo);
+    expect(await addComment(undefined, formData({ postId: post.id, parentId: comment.id, body: "@Anna @Kasserer @Træner enig" }))).toEqual({ ok: true });
+    await runAfter();
+    expect(sent).toEqual([
+      { to: [anna.id], title: "Bo svarede på din kommentar" },
+      { to: [admin.id, treasurer.id].sort(), title: "Bo nævnte dig i en kommentar" },
+    ]);
+  });
+
   it("without a tag, only the author hears of it, as before", async () => {
     const { team, anna, bo } = await makeSquad();
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr!" } });

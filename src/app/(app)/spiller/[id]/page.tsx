@@ -11,6 +11,7 @@ import { PayLink } from "@/components/pay-link";
 import { afterPaying } from "@/lib/pay";
 import { DetailSheet } from "@/components/detail-sheet";
 import { Avatar } from "@/components/photo";
+import { TASKS_PARAM } from "@/components/player-link";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { ActionButton } from "@/components/action-button";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
@@ -24,8 +25,16 @@ const RECENT = 10;
  * A person's page: their fines, challenges and jobs on this team. Every name in the app
  * links here. On your own page it is also your profile, with "Rediger" to change it.
  */
-export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PlayerPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  // Arriving from the home page's jobs tile: the list opens in full.
+  const allTasks = TASKS_PARAM in (await searchParams);
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
   const board = await fineBoard(user.teamId);
@@ -240,12 +249,12 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         )}
       </section>
 
-      <section>
+      <section id={TASKS_PARAM} className="scroll-mt-24">
         <SectionTitle>Opgaver ({openTasks.length} åbne)</SectionTitle>
         {tasks.length === 0 ? (
           <Empty>Ingen opgaver.</Empty>
         ) : (
-          <Rows items={tasks} render={(task) => <TaskRow key={task.id} task={task} viewerId={user.id} />} />
+          <Rows items={tasks} open={allTasks} render={(task) => <TaskRow key={task.id} task={task} viewerId={user.id} />} />
         )}
       </section>
     </div>
@@ -256,12 +265,12 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
 const SHOWN = 5;
 
 /** A list in a card, the first few rows shown and the rest folded away (no script needed). */
-function Rows<T>({ items, render }: { items: T[]; render: (item: T) => React.ReactNode }) {
+function Rows<T>({ items, render, open = false }: { items: T[]; render: (item: T) => React.ReactNode; open?: boolean }) {
   return (
     <Card padded={false}>
       <ul className="divide-y divide-slate-100">{items.slice(0, SHOWN).map(render)}</ul>
       {items.length > SHOWN && (
-        <details className="group border-t border-slate-100">
+        <details open={open} className="group border-t border-slate-100">
           <summary className="press-card cursor-pointer list-none px-4 py-2 text-center text-sm font-medium text-[var(--accent-text)] group-open:hidden">
             Vis alle {items.length}
           </summary>

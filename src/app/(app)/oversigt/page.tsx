@@ -14,22 +14,18 @@ import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
 import { Crown } from "@/components/crest";
 import { HomeBanner } from "@/components/home-banner";
+import { playerTasksHref } from "@/components/player-link";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const [board, kings, nextMatch, firstTask, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
+  const [board, kings, nextMatch, myTaskCount, openChallenges, pollsWaiting, newPosts] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
       where: { ...LISTED_ACTIVITY, cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
       orderBy: { startsAt: "asc" },
       select: { id: true, kind: true, title: true, opponent: true, startsAt: true, isHome: true },
-    }),
-    db.task.findFirst({
-      where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } },
-      orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }],
-      select: { matchId: true },
     }),
     db.task.count({ where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } } }),
     db.challenge.findMany({ where: { status: "PENDING" }, select: { status: true, reportedById: true } }),
@@ -75,7 +71,6 @@ export default async function OverviewPage() {
       ? relativeDay(nextMatch.startsAt)
       : readInZone(nextMatch.startsAt, "EEE d.")
     : null;
-  const tasksHref = firstTask?.matchId ? `/aktiviteter/${firstTask.matchId}` : "/aktiviteter";
   const firstName = user.name.split(" ")[0];
 
   return (
@@ -113,7 +108,7 @@ export default async function OverviewPage() {
                   </p>
                 </Link>
               ) : tile.kind === "tasks" ? (
-                <Link key="tasks" href={tasksHref} className="press-card min-w-0 bg-white px-3 py-3">
+                <Link key="tasks" href={playerTasksHref(user.id)} className="press-card min-w-0 bg-white px-3 py-3">
                   <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                     {myTaskCount === 1 ? "Opgave" : "Opgaver"}
                   </p>
