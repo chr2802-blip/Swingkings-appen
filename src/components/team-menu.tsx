@@ -72,9 +72,6 @@ export function TeamMenu({
               Holdindstillinger
             </Link>
           )}
-          <Link href="/hold/spillere" className={item} onClick={() => setOpen(false)}>
-            Spillere
-          </Link>
           <Link href={profileHref} className={item} onClick={() => setOpen(false)}>
             Min profil
           </Link>

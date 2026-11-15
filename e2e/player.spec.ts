@@ -70,11 +70,11 @@ test("names in the feed, the comments and the chat open the person's page", asyn
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
 });
 
-test("the roster opens each player's page", async ({ page, loginAs }) => {
-  const { anna, bo } = await squad();
-  await loginAs(anna);
-  await page.goto("/hold/spillere");
-  await page.getByRole("link", { name: /^Bo/ }).click();
+test("the rights tab opens each player's page", async ({ page, loginAs }) => {
+  const { admin, bo } = await squad();
+  await loginAs(admin);
+  await page.goto("/hold/rettigheder");
+  await page.getByRole("tabpanel", { name: "Rettigheder" }).getByRole("link", { name: "Bo", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}$`));
 });
 
