@@ -56,6 +56,27 @@ test("the KampKlar link and the standard jobs share the Opgaver tab", async ({ p
   await expect(page.getByLabel("Holdets navn")).toBeHidden();
 });
 
+test("an admin makes a standard job automatic on away matches only", async ({ page, loginAs }) => {
+  const { team, admin } = await squad();
+  await loginAs(admin);
+  await page.goto("/hold/opgaver");
+  await page.getByRole("button", { name: "Ny standardopgave" }).click();
+  const dialog = page.getByRole("dialog", { name: "Ny standardopgave" });
+  await dialog.getByLabel("Opgave").fill("Kørsel");
+  await dialog.getByLabel("Tilføj automatisk til nye kampe fra KampKlar").selectOption({ label: "Kun udekampe" });
+  await dialog.getByRole("button", { name: "Gem" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Automatisk · ude")).toBeVisible();
+  await expect
+    .poll(async () => db.taskTemplate.findFirst({ where: { teamId: team.id }, select: { autoAdd: true, autoVenue: true } }))
+    .toEqual({ autoAdd: true, autoVenue: "AWAY" });
+
+  await page.getByRole("button", { name: "Handlinger for Kørsel" }).click();
+  await page.getByRole("dialog", { name: "Kørsel" }).getByRole("button", { name: "Ret", exact: true }).click();
+  const edit = page.getByRole("dialog", { name: "Ret standardopgave" });
+  await expect(edit.getByLabel("Tilføj automatisk til nye kampe fra KampKlar")).toHaveValue("AWAY");
+});
+
 test("a KampKlar link that is not a web address is refused with a reason", async ({ page, loginAs }) => {
   const { admin } = await squad();
   await loginAs(admin);

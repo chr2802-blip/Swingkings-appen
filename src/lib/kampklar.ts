@@ -61,7 +61,8 @@ export async function fetchCalendar(rawUrl: string): Promise<{ ok: true; text: s
  *   activities, moved ones or the jobs it hands out.
  * - Every entry becomes an activity — matches, trainings and the rest of KampKlar's feed.
  *   Only a new upcoming **match** gets the standard jobs marked to be added automatically
- *   (`TaskTemplate.autoAdd`), handed out fairly.
+ *   (`TaskTemplate.autoAdd`) — all of them, or only home or away (`autoVenue`) —
+ *   handed out fairly.
  * - An upcoming entry that has disappeared from the feed is marked cancelled rather than
  *   deleted: tasks and fines may already hang off it.
  * - Nothing from before the season began is brought in: "Start ny sæson" deleted the
@@ -121,7 +122,7 @@ export async function applyCalendar(
     } else {
       const match = await prisma.match.create({
         data: { ...data, teamId, source: "KAMPKLAR", externalUid: event.uid },
-        select: { id: true, startsAt: true },
+        select: { id: true, startsAt: true, isHome: true },
       });
       created++;
       if (kind === "MATCH" && !event.cancelled && match.startsAt > now) {

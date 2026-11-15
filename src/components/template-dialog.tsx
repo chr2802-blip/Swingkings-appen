@@ -1,13 +1,14 @@
 "use client";
 
 import { FormDialog } from "@/components/form-dialog";
-import { Field, Input, Textarea } from "@/components/ui";
+import type { Venue } from "@prisma/client";
+import { Field, Input, Select, Textarea } from "@/components/ui";
 import { saveTaskTemplate } from "@/app/actions/activities";
 
 export function TemplateDialog({
   template,
 }: {
-  template?: { id: string; title: string; description: string | null; people: number; autoAdd: boolean };
+  template?: { id: string; title: string; description: string | null; people: number; autoAdd: boolean; autoVenue: Venue };
 }) {
   return (
     <FormDialog
@@ -27,18 +28,22 @@ export function TemplateDialog({
       <Field label="Beskrivelse (valgfri)" htmlFor="description">
         <Textarea id="description" name="description" rows={2} defaultValue={template?.description ?? ""} maxLength={2000} />
       </Field>
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="autoAdd"
-          defaultChecked={template?.autoAdd ?? true}
-          className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
-        />
-        <span>
-          Tilføj automatisk til nye kampe fra KampKlar
-          <span className="block text-xs text-slate-500">Ellers vælges den, når en aktivitet oprettes, eller på aktivitetens side.</span>
-        </span>
-      </label>
+      <Field
+        label="Tilføj automatisk til nye kampe fra KampKlar"
+        htmlFor="auto"
+        hint="Kan KampKlar ikke se, om det er hjemme eller ude, kommer den med. Den kan altid vælges på aktivitetens side."
+      >
+        <Select
+          id="auto"
+          name="auto"
+          defaultValue={template ? (template.autoAdd ? template.autoVenue : "OFF") : "ALL"}
+        >
+          <option value="ALL">Alle kampe – hjemme og ude</option>
+          <option value="HOME">Kun hjemmekampe</option>
+          <option value="AWAY">Kun udekampe</option>
+          <option value="OFF">Nej – vælges, når en aktivitet oprettes</option>
+        </Select>
+      </Field>
     </FormDialog>
   );
 }

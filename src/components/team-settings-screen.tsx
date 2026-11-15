@@ -140,7 +140,11 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
                             <div className="min-w-0 flex-1">
                               <p className="flex flex-wrap items-center gap-2 font-medium">
                                 {t.title}
-                                {t.autoAdd && <Badge tone="accent">Automatisk</Badge>}
+                                {t.autoAdd && (
+                                  <Badge tone="accent">
+                                    {t.autoVenue === "HOME" ? "Automatisk · hjemme" : t.autoVenue === "AWAY" ? "Automatisk · ude" : "Automatisk"}
+                                  </Badge>
+                                )}
                               </p>
                               <p className="text-xs text-slate-500">
                                 {t.people === 1 ? "1 person" : `${t.people} personer`}
