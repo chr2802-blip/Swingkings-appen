@@ -20,7 +20,10 @@ self.addEventListener("push", (event) => {
       icon: "/icon-192.png",
       badge: "/badge.png",
       tag: data.tag,
-      renotify: Boolean(data.tag),
+      // A quiet one updates the notification already there (the chat's "7 nye beskeder")
+      // without buzzing again; a full one does buzz, even when it replaces another.
+      renotify: Boolean(data.tag) && !data.quiet,
+      silent: Boolean(data.quiet),
       requireInteraction: Boolean(data.requireInteraction),
       data: { url: data.url || "/oversigt" },
     }),

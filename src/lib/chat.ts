@@ -31,3 +31,18 @@ export async function latestMessages(teamId: string): Promise<ChatItem[]> {
     createdAt: row.createdAt.toISOString(),
   }));
 }
+
+/** How often an open chat writes that it is open: once in this long is enough to hold a push back. */
+const SEEN_EVERY_MS = 15_000;
+
+/**
+ * The chat is open in front of this person: their chat pushes wait (`src/lib/grouped-push.ts`).
+ * Called on the page and on every poll of `/api/chat`, which the chat only makes while it
+ * is in view — so a phone in a pocket stops counting as reading within a minute.
+ */
+export async function markChatSeen(teamId: string, userId: string, now: Date = new Date()) {
+  await teamDb(teamId).teamMember.updateMany({
+    where: { userId, OR: [{ chatSeenAt: null }, { chatSeenAt: { lt: new Date(now.getTime() - SEEN_EVERY_MS) } }] },
+    data: { chatSeenAt: now },
+  });
+}

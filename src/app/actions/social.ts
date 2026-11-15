@@ -18,6 +18,7 @@ import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { notifyLater } from "@/lib/notify";
+import { notifyChatLater, notifyCommentLater } from "@/lib/grouped-push";
 
 const body = z.string().trim().max(MAX_MESSAGE).optional().transform((v) => v || null);
 
@@ -45,22 +46,8 @@ export async function sendChatMessage(_prev: ActionResult, formData: FormData): 
   });
   announce(user.teamId, CHAT_POSTED);
 
-  const members = await teamDb(user.teamId).teamMember.findMany({ select: { userId: true } });
-  notifyLater(
-    members.map((m) => m.userId),
-    user.id,
-    {
-      title: `${user.name} · ${user.teamName}`,
-      body: text.data
-        ? text.data.slice(0, 140)
-        : photos.photoIds.length === 1
-          ? "📷 Sendte et billede"
-          : `📷 Sendte ${photos.photoIds.length} billeder`,
-      url: "/chat",
-      // One notification per team chat, replaced rather than stacked.
-      tag: `chat-${user.teamId}`,
-    },
-  );
+  // Grouped: one buzz, then quiet updates ("7 nye beskeder") — `src/lib/grouped-push.ts`.
+  notifyChatLater(user.teamId, user.teamName, user.id);
   revalidatePath("/chat");
   return ok();
 }
@@ -320,11 +307,7 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   const text = z.string().trim().min(1, "Skriv en kommentar.").max(1000).safeParse(formData.get("body") ?? "");
   if (!text.success) return fail(text.error.issues[0]?.message ?? "Skriv en kommentar.");
   await prisma.postComment.create({ data: { postId: post.id, authorId: user.id, body: text.data } });
-  notifyLater([post.authorId], user.id, {
-    title: `${user.name} kommenterede dit opslag`,
-    body: text.data.slice(0, 140),
-    url: "/oversigt#feed",
-  });
+  notifyCommentLater(post.id, user.id);
   revalidatePath("/oversigt");
   return ok();
 }

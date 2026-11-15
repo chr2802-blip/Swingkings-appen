@@ -149,6 +149,7 @@ model User {
   photo              Photo?             @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
   memberships        TeamMember[]
   pushSubscriptions  PushSubscription[]
+  pushPauses         PushPause[]
   inviteLinksCreated InviteLink[]       @relation("InviteLinkCreatedBy")
 
   finesReceived Fine[] @relation("FinePlayer")
@@ -190,6 +191,8 @@ model TeamMember {
   takesTasks  Boolean    @default(true)
   /// When this person last had the feed in view; posts after it are "nye opslag".
   feedSeenAt  DateTime?
+  /// When this person last had the team chat open; a chat push is held back while it is recent.
+  chatSeenAt  DateTime?
   /// When an admin marked this season's kontingent (membership fee) paid; null while it is not. A new season clears it.
   duesPaidAt  DateTime?
   createdAt   DateTime   @default(now())
@@ -687,6 +690,23 @@ model LoginAttempt {
 
   @@index([key, createdAt])
   @@index([createdAt])
+}
+
+/**
+ * When a person was last sent a full (buzzing) push about one thread — the team chat
+ * (`chat:<teamId>`) or the comments on one post (`comments:<postId>`). Until the pause
+ * is over, or they have read the thread, further messages update that notification
+ * quietly instead (`src/lib/grouped-push.ts`).
+ */
+model PushPause {
+  userId   String
+  key      String
+  pushedAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@index([pushedAt])
 }
 
 model PushSubscription {
