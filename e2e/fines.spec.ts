@@ -177,6 +177,30 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
   await expect(page.getByRole("dialog", { name: "Udfordring" }).getByText(/3 bøder flyttet fra Anna til Bo · godkendt af/)).toBeVisible();
 });
 
+test("a challenge is reported from inside the challenges' sheet and lands in it", async ({ page, loginAs }) => {
+  const { team, admin, anna, bo } = await squad();
+  await db.challenge.create({
+    data: { teamId: team.id, winnerId: bo.id, loserId: admin.id, reportedById: bo.id, description: "Flest mål", units: 1 },
+  });
+  // The winner needs fines to win their way out of.
+  await db.fine.create({ data: { teamId: team.id, playerId: bo.id, reason: "For sent", units: 2, unitPriceKr: 10, issuedById: admin.id } });
+  await loginAs(anna);
+  await page.goto("/boder?udfordringer");
+  const sheet = page.getByRole("dialog", { name: "Udfordringer" });
+  await sheet.getByRole("button", { name: "Meld udfordring" }).click();
+  const dialog = page.getByRole("dialog", { name: "Meld en udfordring" });
+  await dialog.getByLabel("Hvem spillede du mod?").selectOption({ label: "Bo" });
+  await dialog.getByLabel("Hvem vandt?").selectOption({ label: "Min modstander vandt" });
+  await dialog.getByLabel("Hvad gik udfordringen ud på?").fill("Straffesparkskonkurrence");
+  await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
+  await expect(dialog).toBeHidden();
+
+  // The sheet is still open behind it, and now holds the new one too, waiting on somebody else.
+  await expect(sheet.getByText("“Straffesparkskonkurrence”")).toBeVisible();
+  await expect(sheet.getByText("“Flest mål”")).toBeVisible();
+  expect(await db.challenge.count({ where: { teamId: team.id, reportedById: anna.id, winnerId: bo.id, loserId: anna.id } })).toBe(1);
+});
+
 test("a fine in the history opens with what it was for, who gave it and when, and a challenge's fine shows the challenge", async ({ page, loginAs }) => {
   const { team, admin, treasurer, anna, bo } = await squad();
   await db.fine.create({
