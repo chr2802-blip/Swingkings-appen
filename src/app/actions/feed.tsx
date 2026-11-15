@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { FEED_PAGE, decodeFeedCursor, feedPosts, nextFeedCursor } from "@/lib/feed";
+import { teamRoster } from "@/lib/roster";
 import { FeedPostCard } from "@/components/feed-post";
 
 /** At most this many posts in one fetch, however many the browser asks for. */
@@ -24,9 +25,13 @@ export async function loadFeedPosts(after: unknown, take: unknown = FEED_PAGE): 
   const count = typeof take === "number" && Number.isInteger(take) ? Math.min(Math.max(take, 1), MAX_TAKE) : FEED_PAGE;
 
   const admin = canAdministerTeam(user, user.teamId);
-  const posts = await feedPosts(user.teamId, { id: user.id, canAdminister: admin }, { take: count, after: cursor });
+  const [posts, roster] = await Promise.all([
+    feedPosts(user.teamId, { id: user.id, canAdminister: admin }, { take: count, after: cursor }),
+    teamRoster(user.teamId),
+  ]);
+  const members = roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId }));
   return {
-    posts: posts.map((post) => <FeedPostCard key={post.id} post={post} viewerId={user.id} admin={admin} />),
+    posts: posts.map((post) => <FeedPostCard key={post.id} post={post} viewerId={user.id} admin={admin} members={members} />),
     next: nextFeedCursor(posts, count),
   };
 }

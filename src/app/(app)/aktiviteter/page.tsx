@@ -4,9 +4,8 @@ import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { prisma } from "@/lib/prisma";
-import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
+import { readInZone, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
-import { StartHere } from "@/components/start-here";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { SyncButton } from "@/components/sync-button";
 import { CreateAction } from "@/components/create-button";
@@ -34,8 +33,8 @@ type Row = Prisma.MatchGetPayload<{ select: typeof ROW }>;
 
 /**
  * Every activity — matches, trainings and the rest — in one list in the order they are
- * played. The page opens at today (`StartHere`); the earlier ones lie above it, so they
- * are read by scrolling back up.
+ * played, from today. The earlier ones are folded away under "Vis tidligere", newest first.
+ * Each row says one thing on its right: that it is cancelled, its open jobs, or who comes.
  */
 export default async function ActivitiesPage() {
   const user = await requireTeamUser();
@@ -43,44 +42,40 @@ export default async function ActivitiesPage() {
   const today = startOfDayInZone();
   const db = teamDb(user.teamId);
 
-  const [team, upcoming, latest, templates, copyable] = await Promise.all([
-    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { calendarUrl: true, calendarSyncedAt: true } }),
+  const [team, upcoming, earlier, templates, copyable] = await Promise.all([
+    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { calendarUrl: true } }),
     db.match.findMany({ where: { startsAt: { gte: today } }, orderBy: { startsAt: "asc" }, take: EACH_WAY, select: ROW }),
     db.match.findMany({ where: { startsAt: { lt: today } }, orderBy: { startsAt: "desc" }, take: EACH_WAY, select: ROW }),
     templateOptions(user.teamId),
     copyableActivities(user.teamId),
   ]);
-  const earlier = latest.reverse();
 
   return (
     <div>
-      {earlier.length > 0 && (
-        <section aria-label="Tidligere aktiviteter" className="mb-8 opacity-75">
-          <ActivityMonths rows={earlier} />
-        </section>
+      <PageHeader title="Aktiviteter" action={team.calendarUrl && <SyncButton />} />
+      {!team.calendarUrl && admin && (
+        <Link href="/hold" className="-mt-4 mb-6 block text-sm font-medium text-[var(--accent-text)]">
+          Hent kampene fra KampKlar ›
+        </Link>
       )}
-      {/* As tall as the screen, so today can reach the top however little lies ahead. */}
-      <StartHere active={earlier.length > 0} className={`scroll-mt-20 ${earlier.length > 0 ? "min-h-dvh" : ""}`}>
-        <PageHeader
-          title="Aktiviteter"
-          description={
-            team.calendarUrl
-              ? `Hentes fra DBU KampKlar${team.calendarSyncedAt ? ` · senest ${readInZone(team.calendarSyncedAt, "d. MMM 'kl.' HH:mm")}` : ""}`
-              : admin
-                ? "Indsæt holdets kalenderlink fra KampKlar under Holdindstillinger, så kommer kampene automatisk."
-                : undefined
-          }
-          action={team.calendarUrl && <SyncButton />}
-        />
-        <CreateAction>
-          <ActivityDialog templates={templates} copyable={copyable} />
-        </CreateAction>
-        {upcoming.length === 0 ? (
-          <EmptyState icon="📅">Ingen kommende aktiviteter i kalenderen.</EmptyState>
-        ) : (
-          <ActivityMonths rows={upcoming} />
-        )}
-      </StartHere>
+      <CreateAction>
+        <ActivityDialog templates={templates} copyable={copyable} />
+      </CreateAction>
+      {upcoming.length === 0 ? (
+        <EmptyState icon="📅">Ingen kommende aktiviteter i kalenderen.</EmptyState>
+      ) : (
+        <ActivityMonths rows={upcoming} />
+      )}
+      {earlier.length > 0 && (
+        <details className="group mt-8">
+          <summary className="press-card cursor-pointer list-none rounded-xl py-2 text-center text-sm font-medium text-[var(--accent-text)] group-open:hidden">
+            Vis tidligere
+          </summary>
+          <section aria-label="Tidligere aktiviteter" className="opacity-75">
+            <ActivityMonths rows={earlier} />
+          </section>
+        </details>
+      )}
     </div>
   );
 }
@@ -105,29 +100,12 @@ function ActivityMonths({ rows }: { rows: Row[] }) {
                         {activityName(match)}
                       </p>
                       <p className="truncate text-xs text-slate-500">
-                        {readInZone(match.startsAt, "HH:mm")} · {relativeDay(match.startsAt)}
+                        {readInZone(match.startsAt, "HH:mm")}
+                        {match.kind === "MATCH" && match.isHome !== null && ` · ${match.isHome ? "Hjemme" : "Ude"}`}
                         {match.location && ` · ${match.location}`}
                       </p>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {match.cancelledAt ? (
-                        <Badge tone="red">Aflyst</Badge>
-                      ) : match.kind === "TRAINING" ? (
-                        <Badge>Træning</Badge>
-                      ) : match.kind === "OTHER" ? (
-                        <Badge>Aktivitet</Badge>
-                      ) : match.isHome !== null ? (
-                        <Badge tone="accent">{match.isHome ? "Hjemme" : "Ude"}</Badge>
-                      ) : null}
-                      {match.source === "MANUAL" && match._count.signups > 0 && (
-                        <span className="text-xs text-slate-500">{match._count.signups} kommer</span>
-                      )}
-                      {match.tasks.length > 0 && (
-                        <span className="text-xs text-slate-500">
-                          {match.tasks.length === 1 ? "1 opgave" : `${match.tasks.length} opgaver`}
-                        </span>
-                      )}
-                    </div>
+                    <RowNote match={match} />
                   </Link>
                 </li>
               ))}
@@ -137,6 +115,16 @@ function ActivityMonths({ rows }: { rows: Row[] }) {
       ))}
     </div>
   );
+}
+
+/** The one thing a row says on its right, if anything. */
+function RowNote({ match }: { match: Row }) {
+  if (match.cancelledAt) return <Badge tone="red">Aflyst</Badge>;
+  const open = match.tasks.length;
+  if (open > 0) return <span className="shrink-0 text-xs text-slate-500">{open === 1 ? "1 opgave" : `${open} opgaver`}</span>;
+  const coming = match._count.signups;
+  if (match.source === "MANUAL" && coming > 0) return <span className="shrink-0 text-xs text-slate-500">{coming} kommer</span>;
+  return null;
 }
 
 function groupByMonth<T extends { startsAt: Date }>(rows: T[]): [string, T[]][] {

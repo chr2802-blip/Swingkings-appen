@@ -646,12 +646,21 @@ model PostComment {
   authorId  String
   body      String
   createdAt DateTime @default(now())
+  /**
+   * The comment this one answers, always a top-level comment of the same post: a reply
+   * to a reply is placed under the comment that started the thread. Deleting the
+   * comment takes its replies with it.
+   */
+  parentId  String?
 
-  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post    Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  PostComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies PostComment[] @relation("CommentReplies")
 
   @@index([postId, createdAt])
   @@index([authorId])
+  @@index([parentId])
 }
 
 /**

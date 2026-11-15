@@ -318,6 +318,65 @@ test("comments open in a drawer, each apart with its writer, and only its writer
   expect(await db.postComment.count()).toBe(1);
 });
 
+test("typing @ in a comment offers teammates, and the tagged name links to their page", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr 3-1!" } });
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "0 kommentarer" }).click();
+  const drawer = page.getByRole("dialog", { name: "Kommentarer" });
+  const box = drawer.getByRole("textbox", { name: "Kommentar", exact: true });
+  await box.fill("Godt spillet @an");
+  const offered = drawer.getByRole("listbox", { name: "Tag en holdkammerat" }).getByRole("option");
+  // Only names that begin with what was typed, and never yourself.
+  await expect(offered).toHaveCount(1);
+  await expect(offered).toHaveAccessibleName("Anna");
+  await offered.first().click();
+  await expect(box).toHaveValue("Godt spillet @Anna ");
+  await expect(drawer.getByRole("listbox")).toHaveCount(0);
+  await box.pressSequentially("og @Bo");
+  await expect(drawer.getByRole("listbox")).toHaveCount(0);
+  await box.press("Enter");
+
+  const comment = drawer.getByRole("list", { name: "Kommentarer" }).getByRole("listitem");
+  await expect(comment).toContainText("Godt spillet @Anna og @Bo");
+  await expect(comment.getByRole("link", { name: "@Anna" })).toHaveAttribute("href", `/spiller/${anna.id}`);
+  await expect(comment.getByRole("link", { name: "@Bo" })).toHaveAttribute("href", `/spiller/${bo.id}`);
+  await expect(box).toHaveValue("");
+});
+
+test("a comment is answered from the drawer, and the answer sits under it", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const post = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr 3-1!" } });
+  const first = await db.postComment.create({ data: { postId: post.id, authorId: anna.id, body: "Hvilken kamp" } });
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "1 kommentar", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Kommentarer" });
+  await drawer.getByRole("button", { name: "Svar Anna" }).click();
+  await expect(drawer.getByText("Svarer Anna")).toBeVisible();
+  // The box is ready for the answer the moment "Svar" is pressed.
+  const box = drawer.getByRole("textbox", { name: "Svar", exact: true });
+  await expect(box).toBeFocused();
+  await box.fill("Det var den bedste i år");
+  await box.press("Enter");
+
+  const answers = drawer.getByRole("list", { name: "Svar til Anna" }).getByRole("listitem");
+  await expect(answers).toHaveCount(1);
+  await expect(answers.nth(0)).toContainText("Det var den bedste i år");
+  // After sending, the box writes a plain comment again.
+  await expect(drawer.getByRole("textbox", { name: "Kommentar", exact: true })).toHaveValue("");
+  await expect(drawer.getByText("Svarer Anna")).toHaveCount(0);
+  expect((await db.postComment.findFirstOrThrow({ where: { authorId: bo.id } })).parentId).toBe(first.id);
+
+  // "Annuller" turns an answer back into a comment on the post.
+  await drawer.getByRole("button", { name: "Svar Anna" }).click();
+  await drawer.getByRole("button", { name: "Annuller" }).click();
+  await expect(drawer.getByRole("textbox", { name: "Kommentar", exact: true })).toBeVisible();
+});
+
 test("a poll's answers are ticked on the roster, with several answers allowed and anonymous", async ({ page, loginAs }) => {
   const { team, anna, bo } = await squad();
   await loginAs(anna);

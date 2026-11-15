@@ -10,7 +10,7 @@ import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { parseLocalDateTime } from "@/lib/time";
 import { syncTeamCalendar } from "@/lib/kampklar";
-import { addTemplatesToActivity, copyTasksFromActivity } from "@/lib/tasks";
+import { addTemplatesToActivity, announceActivityMoves, copyTasksFromActivity, moveTaskDeadlines } from "@/lib/tasks";
 
 function refresh() {
   revalidatePath("/aktiviteter", "layout");
@@ -63,10 +63,17 @@ export async function saveActivity(_prev: ActionResult, formData: FormData): Pro
   const db = teamDb(user.teamId);
   const id = String(formData.get("id") ?? "");
   if (id) {
-    const existing = await db.match.findFirst({ where: { id }, select: { source: true } });
+    const existing = await db.match.findFirst({ where: { id }, select: { source: true, startsAt: true, cancelledAt: true } });
     if (!existing) return fail("Aktiviteten findes ikke længere.");
     if (existing.source === "KAMPKLAR") return fail("Aktiviteten kommer fra KampKlar og rettes der.");
     await db.match.updateMany({ where: { id }, data });
+    if (existing.startsAt.getTime() !== startsAt.getTime()) {
+      await moveTaskDeadlines(user.teamId, id, existing.startsAt, startsAt);
+      const now = new Date();
+      if (!existing.cancelledAt && (existing.startsAt > now || startsAt > now)) {
+        await announceActivityMoves(user.teamId, [{ id, ...data, from: existing.startsAt, to: startsAt }], user.id);
+      }
+    }
     refresh();
     return ok();
   }

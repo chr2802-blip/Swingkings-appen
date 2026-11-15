@@ -100,3 +100,24 @@ test("a long list shows the newest few and the rest behind Vis alle", async ({ p
   await page.getByText("Vis alle 7").click();
   await expect(page.getByText("Bøde nummer 7")).toBeVisible();
 });
+
+test("the home page's jobs tile opens your own page at the whole list of your jobs", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Kamp", opponent: "FC Naboen", startsAt: new Date(Date.now() + 3 * 86_400_000) } });
+  // More jobs than the page shows before "Vis alle": arriving from the tile, all of them show.
+  for (let n = 1; n <= 7; n++) {
+    await db.task.create({ data: { teamId: team.id, matchId: match.id, title: `Opgave nr. ${n}`, assignees: { create: { userId: anna.id } } } });
+  }
+
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await page.getByRole("link", { name: /Opgaver\s*7\s*til dig/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}\\?opgaver#opgaver$`));
+  await expect(page.getByRole("heading", { name: /Opgaver \(7 åbne\)/ })).toBeInViewport();
+  await expect(page.getByText("Opgave nr. 7")).toBeVisible();
+
+  // Opened any other way, the long list still folds after five.
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByText("Opgave nr. 7")).toBeHidden();
+  await expect(page.getByText("Vis alle 7")).toBeVisible();
+});
