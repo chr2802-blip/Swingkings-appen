@@ -135,18 +135,19 @@ test("a coach sends a reminder to one player, opening MobilePay with the konting
   await db.pushSubscription.create({ data: { userId: anna.id, endpoint: "https://8.8.8.8/push/anna", p256dh: "B".repeat(87), auth: "a".repeat(22) } });
   await loginAs(admin);
   await page.goto("/hold/besked");
-  await page.getByLabel("Til", { exact: true }).selectOption({ label: "Anna" });
-  await page.getByLabel("Åbner", { exact: true }).selectOption({ label: "MobilePay: betal kontingent" });
-  await page.getByLabel("Overskrift", { exact: true }).fill("Husk kontingent");
-  await page.getByLabel("Besked", { exact: true }).fill("Senest fredag.");
-  await page.getByRole("button", { name: "Send notifikation" }).click();
+  const tab = page.getByRole("tabpanel", { name: "Besked" });
+  await tab.getByLabel("Til", { exact: true }).selectOption({ label: "Anna" });
+  await tab.getByLabel("Åbner", { exact: true }).selectOption({ label: "MobilePay: betal kontingent" });
+  await tab.getByLabel("Overskrift", { exact: true }).fill("Husk kontingent");
+  await tab.getByRole("textbox", { name: "Besked" }).fill("Senest fredag.");
+  await tab.getByRole("button", { name: "Send notifikation" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Sendt til Anna." })).toBeVisible();
 
   // An outside link that is not https is refused before anything is sent.
-  await page.getByLabel("Åbner", { exact: true }).selectOption({ label: "Et andet link…" });
-  await page.getByLabel("Link", { exact: true }).fill("https://localhost");
-  await page.getByLabel("Overskrift", { exact: true }).fill("Stævne");
-  await page.getByLabel("Besked", { exact: true }).fill("Se mere her.");
-  await page.getByRole("button", { name: "Send notifikation" }).click();
+  await tab.getByLabel("Åbner", { exact: true }).selectOption({ label: "Et andet link…" });
+  await tab.getByLabel("Link", { exact: true }).fill("https://localhost");
+  await tab.getByLabel("Overskrift", { exact: true }).fill("Stævne");
+  await tab.getByRole("textbox", { name: "Besked" }).fill("Se mere her.");
+  await tab.getByRole("button", { name: "Send notifikation" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Linket skal være en hel adresse, der starter med https://" })).toBeVisible();
 });
