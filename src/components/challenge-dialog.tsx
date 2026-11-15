@@ -15,15 +15,24 @@ export function ChallengeDialog({
   finePriceKr,
   matches,
   defaultMatchId,
+  triggerClassName,
 }: {
   opponents: { userId: string; name: string }[];
   finePriceKr: number;
   matches: { id: string; label: string }[];
   defaultMatchId?: string;
+  triggerClassName?: string;
 }) {
   const [units, setUnits] = useState(1);
   return (
-    <FormDialog trigger="Meld udfordring" triggerIcon="⚔️" title="Meld en udfordring" action={createChallenge} submitLabel="Send til godkendelse">
+    <FormDialog
+      trigger="Meld udfordring"
+      triggerIcon="⚔️"
+      triggerClassName={triggerClassName}
+      title="Meld en udfordring"
+      action={createChallenge}
+      submitLabel="Send til godkendelse"
+    >
       <Field label="Hvem spillede du mod?" htmlFor="opponentId">
         <Select id="opponentId" name="opponentId" defaultValue="" required>
           <option value="" disabled>

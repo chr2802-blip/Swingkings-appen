@@ -12,6 +12,7 @@ import { SwipePages } from "@/components/swipe-pages";
 import { FineHistory } from "@/components/fine-history";
 import { FineCreateMenu } from "@/components/fine-create-menu";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
+import { ChallengeDialog } from "@/components/challenge-dialog";
 import { DetailSheet } from "@/components/detail-sheet";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { ActionButton } from "@/components/action-button";
@@ -129,9 +130,18 @@ export async function FinesScreen({
             </>
           }
         >
-          <p className="mb-6 text-sm text-slate-500">
-            Meld resultatet under +, en anden godkender, og taberen overtager indsatsen. Afgjorte udfordringer står i historikken.
+          <p className="mb-4 text-sm text-slate-500">
+            Meld resultatet her eller under +, en anden godkender, og taberen overtager indsatsen. Afgjorte udfordringer står i historikken.
           </p>
+          {/* Reporting one from here too, so the sheet is not a dead end; it lands in the sheet once sent. */}
+          <div className="mb-6">
+            <ChallengeDialog
+              opponents={board.roster.filter((m) => m.userId !== user.id)}
+              finePriceKr={board.finePriceKr}
+              matches={matches}
+              triggerClassName="w-full"
+            />
+          </div>
           {waiting.length > 0 && (
             <section className="mb-8">
               <SectionTitle>Venter på din godkendelse</SectionTitle>
