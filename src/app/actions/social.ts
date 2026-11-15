@@ -313,18 +313,43 @@ export async function toggleLike(_prev: ActionResult, formData: FormData): Promi
   return ok();
 }
 
+/**
+ * A comment on a post, or an answer to one (`parentId`). Answers sit one level deep: an
+ * answer to an answer goes under the comment that started the thread. Whoever is answered
+ * hears of it, and so does whoever started the thread, without being named in the words;
+ * the post's author hears of every comment.
+ */
 export async function addComment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const post = await postInTeam(user.teamId, String(formData.get("postId") ?? ""));
   if (!post) return fail("Opslaget findes ikke.");
   const text = z.string().trim().min(1, "Skriv en kommentar.").max(1000).safeParse(formData.get("body") ?? "");
   if (!text.success) return fail(text.error.issues[0]?.message ?? "Skriv en kommentar.");
-  await prisma.postComment.create({ data: { postId: post.id, authorId: user.id, body: text.data } });
-  notifyLater([post.authorId], user.id, {
-    title: `${user.name} kommenterede dit opslag`,
-    body: text.data.slice(0, 140),
-    url: "/oversigt#feed",
-  });
+
+  const answering = String(formData.get("parentId") ?? "");
+  let replyTo: { id: string; authorId: string; parent: { id: string; authorId: string } | null } | null = null;
+  if (answering) {
+    // Only a comment on this very post, which was found through `teamDb` above.
+    replyTo = await prisma.postComment.findFirst({
+      where: { id: answering, postId: post.id },
+      select: { id: true, authorId: true, parent: { select: { id: true, authorId: true } } },
+    });
+    if (!replyTo) return fail("Kommentaren findes ikke længere.");
+  }
+  const thread = replyTo?.parent ?? replyTo;
+
+  await prisma.postComment.create({ data: { postId: post.id, authorId: user.id, body: text.data, parentId: thread?.id ?? null } });
+  const preview = text.data.slice(0, 140);
+  if (replyTo && thread) {
+    const answered = [replyTo.authorId, thread.authorId];
+    notifyLater(answered, user.id, { title: `${user.name} svarede på din kommentar`, body: preview, url: "/oversigt#feed" });
+    // The post's author is told as for any comment, unless already told above.
+    if (!answered.includes(post.authorId)) {
+      notifyLater([post.authorId], user.id, { title: `${user.name} kommenterede dit opslag`, body: preview, url: "/oversigt#feed" });
+    }
+  } else {
+    notifyLater([post.authorId], user.id, { title: `${user.name} kommenterede dit opslag`, body: preview, url: "/oversigt#feed" });
+  }
   revalidatePath("/oversigt");
   return ok();
 }
