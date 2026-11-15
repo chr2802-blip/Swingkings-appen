@@ -1,29 +1,95 @@
 "use client";
 
 import { useState } from "react";
-import { FormDialog } from "@/components/form-dialog";
-import { Field, Input, Select, Textarea } from "@/components/ui";
+import { Modal } from "@/components/modal";
+import { MenuTrigger } from "@/components/action-menu";
+import { DialogForm } from "@/components/form-dialog";
+import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { PlayerChecklist } from "@/components/player-checklist";
+import { TemplatePicker } from "@/components/template-picker";
 import { createTask } from "@/app/actions/tasks";
+import { addStandardTasks, copyTasks } from "@/app/actions/activities";
+import type { ActivityOption, TemplateOption } from "@/lib/activity-data";
+import type { FormAction } from "@/lib/action-result";
 
 type Member = { userId: string; name: string; photoId: string | null; shirtNumber: number | null };
+type Way = "new" | "standard" | "copy";
+
+const WAYS: Record<Way, { label: string; action: FormAction; submitLabel: string }> = {
+  new: { label: "Ny", action: createTask, submitLabel: "Opret opgave" },
+  standard: { label: "Standardopgaver", action: addStandardTasks, submitLabel: "Tilføj og fordel" },
+  copy: { label: "Kopiér", action: copyTasks, submitLabel: "Kopiér og fordel" },
+};
 
 /**
- * A new job on one activity (deadline defaults to its start). Handed to the people
- * ticked, fairly by the app, or left open to be taken.
+ * The one way to put jobs on an activity: a new job, some of the team's standard jobs,
+ * or every job from an earlier activity. The last two are offered only when there is
+ * something to pick from. Switching way starts that form afresh.
  */
 export function TaskDialog({
   members,
   activityId,
+  templates = [],
+  copyable = [],
   triggerLabel = "Ny opgave",
 }: {
   members: Member[];
   activityId: string;
+  templates?: TemplateOption[];
+  copyable?: ActivityOption[];
   triggerLabel?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const [way, setWay] = useState<Way>("new");
+  const ways: Way[] = ["new"];
+  if (templates.length > 0) ways.push("standard");
+  if (copyable.length > 0) ways.push("copy");
+  const current = WAYS[way];
+  const close = () => setOpen(false);
+
+  return (
+    <>
+      <MenuTrigger
+        onClick={() => {
+          setWay("new");
+          setOpen(true);
+        }}
+      >
+        {triggerLabel}
+      </MenuTrigger>
+      <Modal open={open} onClose={close} title="Ny opgave">
+        {open && (
+          <DialogForm key={way} action={current.action} submitLabel={current.submitLabel} onDone={close} onCancel={close}>
+            {ways.length > 1 && (
+              <div role="group" aria-label="Hvordan?" className="flex flex-wrap gap-2">
+                {ways.map((w) => (
+                  <Button
+                    key={w}
+                    type="button"
+                    variant={w === way ? "primary" : "secondary"}
+                    aria-pressed={w === way}
+                    onClick={() => setWay(w)}
+                  >
+                    {WAYS[w].label}
+                  </Button>
+                ))}
+              </div>
+            )}
+            {way === "new" && <NewTaskFields members={members} activityId={activityId} />}
+            {way === "standard" && <StandardTaskFields activityId={activityId} templates={templates} />}
+            {way === "copy" && <CopyTaskFields activityId={activityId} copyable={copyable} />}
+          </DialogForm>
+        )}
+      </Modal>
+    </>
+  );
+}
+
+/** A new job (deadline defaults to the activity's start), handed out fairly, to those ticked, or left open. */
+function NewTaskFields({ members, activityId }: { members: Member[]; activityId: string }) {
   const [assign, setAssign] = useState<"auto" | "pick" | "none">("auto");
   return (
-    <FormDialog trigger={triggerLabel} title="Ny opgave" action={createTask} submitLabel="Opret opgave">
+    <>
       <input type="hidden" name="matchId" value={activityId} />
       <Field label="Opgave" htmlFor="title">
         <Input id="title" name="title" placeholder="Fx trøjevask" maxLength={200} required />
@@ -47,6 +113,43 @@ export function TaskDialog({
       <Field label="Beskrivelse (valgfri)" htmlFor="description">
         <Textarea id="description" name="description" rows={3} maxLength={2000} />
       </Field>
-    </FormDialog>
+    </>
+  );
+}
+
+/** Some of the team's standard jobs, distributed fairly. */
+function StandardTaskFields({ activityId, templates }: { activityId: string; templates: TemplateOption[] }) {
+  return (
+    <>
+      <input type="hidden" name="activityId" value={activityId} />
+      <Field label="Vælg opgaver" hint="De fordeles retfærdigt — dem med færrest opgaver det seneste år først.">
+        <TemplatePicker templates={templates} />
+      </Field>
+    </>
+  );
+}
+
+/** Every job from an earlier activity, distributed afresh. */
+function CopyTaskFields({ activityId, copyable }: { activityId: string; copyable: ActivityOption[] }) {
+  return (
+    <>
+      <input type="hidden" name="activityId" value={activityId} />
+      <Field
+        label="Fra"
+        htmlFor="copyFromId"
+        hint="Opgaverne kopieres med samme antal personer og frist i forhold til starttidspunktet, og fordeles på ny."
+      >
+        <Select id="copyFromId" name="copyFromId" required defaultValue="">
+          <option value="" disabled>
+            Vælg aktivitet
+          </option>
+          {copyable.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </>
   );
 }

@@ -11,7 +11,6 @@ import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { TaskDialog } from "@/components/task-dialog";
 import { ActivityDialog } from "@/components/activity-dialog";
-import { CopyTasksDialog, StandardTasksDialog } from "@/components/activity-task-dialogs";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { PlayerLink } from "@/components/player-link";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
@@ -63,9 +62,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         title={match.kind === "MATCH" && match.opponent ? `${match.isHome === false ? "Ude mod" : match.isHome ? "Hjemme mod" : "Mod"} ${match.opponent}` : match.title}
         action={
           <ActionMenu>
-            <TaskDialog members={roster} activityId={match.id} />
-            {templates.length > 0 && <StandardTasksDialog activityId={match.id} templates={templates} />}
-            {copyable.length > 0 && <CopyTasksDialog activityId={match.id} copyable={copyable} />}
+            <TaskDialog members={roster} activityId={match.id} templates={templates} copyable={copyable} />
             <GiveFineDialog
               members={board.roster}
               fineTypes={board.fineTypes}
