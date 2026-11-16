@@ -4,9 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { backHref } from "@/lib/back-link";
-import { pageMotion } from "@/lib/page-motion";
-import { TAB_PATHS } from "./nav-items";
-import { PageLeaving } from "./page-transition";
+import { PageLeaving, closeNext } from "./page-transition";
 
 /**
  * How many pages of the app lie behind the one on screen, in this tab of the browser.
@@ -53,6 +51,7 @@ export function BackButton({ profileHref }: { profileHref: string }) {
       href={href}
       aria-label="Tilbage"
       onClick={(event) => {
+        closeNext();
         if (behind === 0) return;
         event.preventDefault();
         window.history.back();
@@ -62,7 +61,7 @@ export function BackButton({ profileHref }: { profileHref: string }) {
       <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="m15 5-7 7 7 7" />
       </svg>
-      <PageLeaving motion={pageMotion(pathname, href, TAB_PATHS)} />
+      <PageLeaving motion="close" />
     </Link>
   );
 }

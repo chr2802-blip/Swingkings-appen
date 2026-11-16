@@ -263,10 +263,15 @@ test("a detail page has a back arrow that goes back to where you came from", asy
   await page.goto("/aktiviteter");
   await expect(page.getByRole("link", { name: "Tilbage" })).toHaveCount(0);
 
+  // The detail page comes in from the right, and the arrow brings the list back in from the left.
+  const shown = page.getByTestId("page");
   await page.getByRole("link", { name: /Afslutningsfest/ }).click();
   await expect(page).toHaveURL(new RegExp(`/aktiviteter/${party.id}$`));
+  await expect(shown).toHaveAttribute("data-motion", "open");
   await page.getByRole("link", { name: "Tilbage" }).click();
   await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect(shown).toHaveAttribute("data-motion", "close");
+  expect(await shown.evaluate((el) => getComputedStyle(el).animationName)).toBe("page-close");
 
   // Back from a player goes to the fines it was opened from, not to the page above it.
   await page.goto("/boder");
@@ -274,6 +279,15 @@ test("a detail page has a back arrow that goes back to where you came from", asy
   await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}$`));
   await page.getByRole("link", { name: "Tilbage" }).click();
   await expect(page).toHaveURL(/\/boder$/);
+  await expect(shown).toHaveAttribute("data-motion", "close");
+
+  // The browser's own back is still left to the phone to draw.
+  await page.getByRole("link", { name: /\bBo\b/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}$`));
+  await expect(shown).toHaveAttribute("data-motion", "open");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/boder$/);
+  await expect(shown).toHaveAttribute("data-motion", "none");
 });
 
 test("a detail page opened straight from a link goes up to the page above it", async ({ page, loginAs }) => {
@@ -283,5 +297,17 @@ test("a detail page opened straight from a link goes up to the page above it", a
   await page.goto(`/aktiviteter/${party.id}`);
   await page.getByRole("link", { name: "Tilbage" }).click();
   await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect(page.getByTestId("page")).toHaveAttribute("data-motion", "close");
   await expect(page.getByRole("link", { name: "Tilbage" })).toHaveCount(0);
+});
+
+test("your own page is the profile tab and has no back arrow; the chat has one", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByRole("heading", { name: "Anna", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Tilbage" })).toHaveCount(0);
+  await page.goto("/chat");
+  await page.getByRole("link", { name: "Tilbage" }).click();
+  await expect(page).toHaveURL(/\/oversigt$/);
 });
