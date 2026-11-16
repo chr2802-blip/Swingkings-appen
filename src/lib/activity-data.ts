@@ -56,7 +56,7 @@ export async function kampKlarNames(teamId: string): Promise<string[]> {
   const names = new Set<string>();
   for (const row of rows) {
     const lists = readExternalSignups(row.externalSignups);
-    if (lists) for (const name of [...lists.going, ...lists.available, ...lists.notGoing]) names.add(name.trim());
+    if (lists) for (const name of [...lists.going, ...lists.notGoing]) names.add(name.trim());
   }
   return [...names].sort((a, b) => a.localeCompare(b, "da"));
 }

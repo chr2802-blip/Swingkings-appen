@@ -40,22 +40,25 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
   await expect(page.getByText("Kommer du?")).toBeVisible();
   await page.getByRole("button", { name: "Jeg kommer", exact: true }).click();
   await expect(page.getByText("Du kommer ✅")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Kommer (1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tilmeldte (1)" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Anna", exact: true })).toBeVisible();
 
   await loginAs(bo);
   await page.goto(`/aktiviteter/${party.id}`);
   await page.getByRole("button", { name: "Jeg kommer ikke" }).click();
   await expect(page.getByText("Du kommer ikke", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Kommer ikke (1)" })).toBeVisible();
+  // Only those coming are shown: Bo's no is not.
+  await expect(page.getByRole("heading", { name: "Tilmeldte (1)" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Bo", exact: true })).toHaveCount(0);
   expect(await db.activitySignup.findMany({ where: { matchId: party.id }, orderBy: { going: "desc" }, select: { userId: true, going: true } })).toEqual([
     { userId: anna.id, going: true },
     { userId: bo.id, going: false },
   ]);
 
   await page.goto("/aktiviteter");
-  // Under the row: one coming, one not.
+  // On the row: a green circle for the one coming, a red for the one not.
   const row = page.getByRole("link", { name: /Afslutningsfest/ });
-  await expect(row.getByText("1 kommer", { exact: true })).toBeVisible();
+  await expect(row.getByText("1 tilmeldt", { exact: true })).toBeVisible();
   await expect(row.getByText("1 kommer ikke", { exact: true })).toBeVisible();
 });
 
@@ -140,7 +143,7 @@ test("a team with nothing behind it and nothing ahead sees an empty calendar", a
   await expect(page.getByRole("region", { name: "Tidligere aktiviteter" })).toHaveCount(0);
 });
 
-test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows who KampKlar says comes", async ({ page, loginAs }) => {
+test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows only those signed up there", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
   const link = "https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167";
   const match = await db.match.create({
@@ -152,7 +155,7 @@ test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows w
       source: "KAMPKLAR",
       externalUid: "x",
       externalUrl: link,
-      externalSignups: { going: ["Anna", "Gæst Gæstesen"], notGoing: ["Bo"], available: ["Kasserer"] },
+      externalSignups: { going: ["Anna", "Gæst Gæstesen", "Kasserer"], notGoing: ["Bo"] },
     },
   });
   await loginAs(anna);
@@ -160,20 +163,20 @@ test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows w
   await expect(page.getByRole("heading", { name: "Mod AB", level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Jeg kommer", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Åbn i KampKlar/ })).toHaveAttribute("href", link);
-  await expect(page.getByRole("heading", { name: "Kommer (2)" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Kommer ikke (1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tilmeldte (3)" })).toBeVisible();
   // "Kasserer" in KampKlar is the one member whose name starts so.
-  await expect(page.getByRole("heading", { name: "Til rådighed (1)" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Kasserer Kim" })).toBeVisible();
-  // Only an admin is told about names nobody is linked to.
-  await expect(page.getByText(/ikke koblet til en spiller/)).toHaveCount(0);
+  // Nobody else: not Bo's afbud, nor those who have not answered.
+  await expect(page.getByRole("link", { name: "Bo", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Træner Tom" })).toHaveCount(0);
+  await expect(page.getByText(/Tilmelding sker i KampKlar|ikke svaret|ikke koblet/)).toHaveCount(0);
   // A teammate links to their page; a name nobody here has is only a name.
   await expect(page.getByRole("link", { name: "Anna", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Gæst Gæstesen" })).toHaveCount(0);
   await expect(page.getByText("Gæst Gæstesen")).toHaveCount(1);
 });
 
-test("the list shows who comes, who is available and who has said no", async ({ page, loginAs }) => {
+test("the list shows how many have signed up in KampKlar in a green circle, and nothing else", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
   await db.match.create({
     data: {
@@ -183,15 +186,14 @@ test("the list shows who comes, who is available and who has said no", async ({ 
       startsAt: inDays(3),
       source: "KAMPKLAR",
       externalUid: "x",
-      externalSignups: { going: ["Anna", "Bo", "Carl"], notGoing: ["Dorte"], available: ["Eva", "Frede"] },
+      externalSignups: { going: ["Anna", "Bo", "Carl"], notGoing: ["Dorte"] },
     },
   });
   await loginAs(anna);
   await page.goto("/aktiviteter");
   const row = page.getByRole("link", { name: /AB/ });
-  await expect(row.getByText("3 kommer", { exact: true })).toBeVisible();
-  await expect(row.getByText("2 til rådighed", { exact: true })).toBeVisible();
-  await expect(row.getByText("1 kommer ikke", { exact: true })).toBeVisible();
+  await expect(row.getByText("3 tilmeldt", { exact: true })).toBeVisible();
+  await expect(row.getByText(/kommer ikke/)).toHaveCount(0);
 });
 
 test("an admin links a member to their name in KampKlar, and their sign-up follows", async ({ page, loginAs }) => {
@@ -204,14 +206,13 @@ test("an admin links a member to their name in KampKlar, and their sign-up follo
       startsAt: inDays(3),
       source: "KAMPKLAR",
       externalUid: "x",
-      externalSignups: { going: ["Thomas Træner-Hansen"], notGoing: [], available: [] },
+      externalSignups: { going: ["Thomas Træner-Hansen"], notGoing: [] },
     },
   });
   await loginAs(admin);
   await page.goto(`/aktiviteter/${match.id}`);
-  await expect(page.getByText("1 navn fra KampKlar er ikke koblet til en spiller.")).toBeVisible();
-  await page.getByRole("link", { name: "Kobl under Rettigheder ›" }).click();
-  await expect(page).toHaveURL(/\/hold\/rettigheder$/);
+  await expect(page.getByRole("link", { name: "Træner Tom" })).toHaveCount(0);
+  await page.goto("/hold/rettigheder");
 
   await page.getByRole("button", { name: "Handlinger for Træner Tom" }).click();
   await page.getByRole("dialog", { name: "Træner Tom" }).getByRole("button", { name: "Ret" }).click();
@@ -222,19 +223,18 @@ test("an admin links a member to their name in KampKlar, and their sign-up follo
   await expect.poll(async () => (await db.teamMember.findFirst({ where: { userId: admin.id } }))?.kampklarName).toBe("Thomas Træner-Hansen");
 
   await page.goto(`/aktiviteter/${match.id}`);
-  await expect(page.getByRole("heading", { name: "Kommer (1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tilmeldte (1)" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Træner Tom" })).toBeVisible();
-  await expect(page.getByText(/ikke koblet til en spiller/)).toHaveCount(0);
 });
 
-test("an activity from KampKlar whose feed carries no sign-ups says so", async ({ page, loginAs }) => {
+test("an activity from KampKlar whose feed carries no sign-ups has nobody signed up", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
   const match = await db.match.create({
     data: { teamId: team.id, title: "Træning", kind: "TRAINING", startsAt: inDays(3), source: "KAMPKLAR", externalUid: "y" },
   });
   await loginAs(anna);
   await page.goto(`/aktiviteter/${match.id}`);
-  await expect(page.getByText("KampKlar har ikke sendt tilmeldinger med til denne aktivitet endnu.")).toBeVisible();
+  await expect(page.getByText("Ingen tilmeldte endnu.")).toBeVisible();
   await expect(page.getByRole("link", { name: /Åbn i KampKlar/ })).toHaveCount(0);
 });
 
@@ -280,8 +280,8 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   const match = await db.match.create({ data: { teamId: team.id, title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3) } });
   await loginAs(anna);
   await page.goto(`/aktiviteter/${match.id}`);
-  await page.getByRole("button", { name: "Handlinger" }).click();
-  await page.getByRole("dialog", { name: "Handlinger" }).getByRole("button", { name: "Ny opgave" }).click();
+  await page.getByRole("button", { name: "Opret" }).click();
+  await page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Ny opgave" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Opgave").fill("Købe nye bolde");
   await dialog.getByLabel("Hvem skal gøre det?").selectOption("pick");
@@ -305,8 +305,8 @@ test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from a
   const match = await db.match.create({ data: { teamId: team.id, title: "Swingkings - B93", opponent: "B93", startsAt: inDays(3) } });
   await loginAs(anna);
   await page.goto(`/aktiviteter/${match.id}/opgaver`);
-  const menu = page.getByRole("dialog", { name: "Handlinger" });
-  await page.getByRole("button", { name: "Handlinger" }).click();
+  const menu = page.getByRole("dialog", { name: "Opret" });
+  await page.getByRole("button", { name: "Opret" }).click();
   // The three ways live inside the one dialog, not as rows of their own.
   await expect(menu.getByRole("button", { name: "Tilføj standardopgaver" })).toHaveCount(0);
   await expect(menu.getByRole("button", { name: "Kopiér opgaver" })).toHaveCount(0);
@@ -320,7 +320,7 @@ test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from a
   await expect(jobsTab(page).getByText("Grill")).toBeVisible();
   await expect(page.getByText("Frugt")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Ny opgave" }).click();
   // It opens on a new job again, whatever was used last.
   await expect(dialog.getByLabel("Opgave")).toBeVisible();
@@ -337,8 +337,8 @@ test("an activity with nothing to copy and no standard jobs offers only a new jo
   const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3) } });
   await loginAs(anna);
   await page.goto(`/aktiviteter/${match.id}`);
-  await page.getByRole("button", { name: "Handlinger" }).click();
-  await page.getByRole("dialog", { name: "Handlinger" }).getByRole("button", { name: "Ny opgave" }).click();
+  await page.getByRole("button", { name: "Opret" }).click();
+  await page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Ny opgave" }).click();
   const dialog = page.getByRole("dialog", { name: "Ny opgave" });
   await expect(dialog.getByLabel("Opgave")).toBeVisible();
   await expect(dialog.getByRole("group", { name: "Hvordan?" })).toHaveCount(0);
@@ -378,20 +378,20 @@ test("an admin keeps the team's standard jobs under the team settings; a player 
   await expect(page.getByRole("button", { name: "Ny standardopgave" })).toHaveCount(0);
 });
 
-test("an activity shows one action button, and its drawer hands over to the dialog it opens", async ({ page, loginAs }) => {
+test("an activity's \"+\" makes a job or gives a fine, and hands over to the dialog it opens", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
   const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3) } });
   await loginAs(anna);
   await page.goto(`/aktiviteter/${match.id}`);
-  for (const name of ["Ny opgave", "Giv bøde", "Ret aktivitet", "Slet aktivitet"]) {
-    await expect(page.getByRole("button", { name })).toHaveCount(0);
-  }
+  await expect(page.getByRole("button", { name: "Handlinger" })).toHaveCount(0);
+  for (const name of ["Ny opgave", "Giv bøde"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
+  // A hand-made activity is changed or deleted at the foot of its details.
+  await expect(page.getByRole("button", { name: "Ret aktivitet" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Slet aktivitet" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Handlinger" }).click();
-  const menu = page.getByRole("dialog", { name: "Handlinger" });
-  for (const name of ["Ny opgave", "Giv bøde", "Ret aktivitet", "Slet aktivitet"]) {
-    await expect(menu.getByRole("button", { name })).toBeVisible();
-  }
+  await page.getByRole("button", { name: "Opret" }).click();
+  const menu = page.getByRole("dialog", { name: "Opret" });
+  for (const name of ["Ny opgave", "Giv bøde"]) await expect(menu.getByRole("button", { name })).toBeVisible();
   await menu.getByRole("button", { name: "Giv bøde" }).click();
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
   await expect(dialog).toBeVisible();

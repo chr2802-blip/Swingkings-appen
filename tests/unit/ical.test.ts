@@ -143,12 +143,18 @@ describe("kampKlarDetails", () => {
 
   it("reads sign-ups from Tilmeldte and Afbud, one to a line or separated by commas", () => {
     const details = kampKlarDetails({
-      description: "Tilmeldte (3):\n- Anna Hansen\n- Bo Berg\n• Carl\n\nAfbud: Dorte, Eva\n\nTil rådighed (1):\nFrede\n\nBeskrivelse:\nHusk bolde",
+      description: "Tilmeldte (3):\n- Anna Hansen\n- Bo Berg\n• Carl\n\nAfbud: Dorte, Eva\n\nBeskrivelse:\nHusk bolde",
       url: null,
       attendees: [],
     });
-    expect(details.signups).toEqual({ going: ["Anna Hansen", "Bo Berg", "Carl"], notGoing: ["Dorte", "Eva"], available: ["Frede"] });
+    expect(details.signups).toEqual({ going: ["Anna Hansen", "Bo Berg", "Carl"], notGoing: ["Dorte", "Eva"] });
     expect(details.note).toBe("Husk bolde");
+  });
+
+  it("ends a list of names at a label it does not know, which goes in the note", () => {
+    const details = kampKlarDetails({ description: "Tilmeldte: Anna\nBo\nTil rådighed: Carl\nMødetid: 13:45", url: null });
+    expect(details.signups).toEqual({ going: ["Anna", "Bo"], notGoing: [] });
+    expect(details.note).toBe("Til rådighed: Carl\nMødetid: 13:45");
   });
 
   it("reads sign-ups from ATTENDEE lines when the description has none", () => {
@@ -160,14 +166,13 @@ describe("kampKlarDetails", () => {
         'ATTENDEE;CN="Anna Hansen";PARTSTAT=ACCEPTED:mailto:a@example.com',
         "ATTENDEE;CN=Bo;PARTSTAT=DECLINED:mailto:b@example.com",
         "ATTENDEE;CN=Carl;PARTSTAT=NEEDS-ACTION:mailto:c@example.com",
-        "ATTENDEE;CN=Dorte;PARTSTAT=TENTATIVE:mailto:d@example.com",
         "URL:https://web.dbu.dk/fodboldapp?activityId=1",
         "END:VEVENT",
       ].join("\r\n"),
     );
     expect(kampKlarDetails(event!)).toMatchObject({
       link: "https://web.dbu.dk/fodboldapp?activityId=1",
-      signups: { going: ["Anna Hansen"], notGoing: ["Bo"], available: ["Dorte"] },
+      signups: { going: ["Anna Hansen"], notGoing: ["Bo"] },
     });
   });
 

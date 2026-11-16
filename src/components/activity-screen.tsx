@@ -1,6 +1,5 @@
 import type { TeamUser } from "@/lib/auth";
-import { canAdministerTeam, canManageFines } from "@/lib/access";
-import Link from "next/link";
+import { canManageFines } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { prisma } from "@/lib/prisma";
 import { foundOr404 } from "@/lib/scoped";
@@ -16,7 +15,7 @@ import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { FineHistory } from "@/components/fine-history";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
-import { ActionMenu } from "@/components/action-menu";
+import { CreateMenu } from "@/components/create-button";
 import { ActionButton } from "@/components/action-button";
 import { SwipePages, TurnButton } from "@/components/swipe-pages";
 import { AutoSync } from "@/components/auto-sync";
@@ -43,11 +42,14 @@ export function activityHref(id: string, tab: ActivityTab = "") {
  * One activity, on three tabs swiped between — each with its own address, all read at
  * once so a swipe never waits on the server:
  *
- * - **Detaljer**: when and where, the note, and who comes. A hand-made activity is signed
- *   up for here; one from KampKlar is signed up for in KampKlar, behind its link, and
- *   shows who KampKlar says is coming when the feed carries it.
+ * - **Detaljer**: when and where, the note, and who has signed up — nobody else: KampKlar's
+ *   feed says little more. A hand-made activity is signed up for here; one from KampKlar
+ *   in KampKlar, behind its link.
  * - **Opgaver**: the activity's jobs.
  * - **Bøder**: the fines given at it, and its challenges.
+ *
+ * The "+" makes a job or gives a fine on it; a hand-made activity is changed or deleted
+ * with the buttons at the foot of Detaljer.
  */
 export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: string; show: ActivityTab }) {
   const manages = canManageFines(user, user.teamId);
@@ -80,14 +82,11 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
   const people = (list: { userId: string; name: string; photoId: string | null }[]): SignupPerson[] =>
     list.map((m) => ({ key: m.userId, name: m.name, userId: m.userId, photoId: m.photoId }));
   const external = readExternalSignups(match.externalSignups);
-  const groups = fromKampKlar
-    ? external && externalSignupSummary(roster, external)
-    : (() => {
-        const s = signupSummary(roster, match.signups);
-        return { going: people(s.going), available: [], notGoing: people(s.notGoing), unanswered: people(s.unanswered) };
-      })();
-  // Names from KampKlar nobody here is matched to: an admin can link them to a member.
-  const unmatched = fromKampKlar && groups ? [...groups.going, ...groups.available, ...groups.notGoing].filter((p) => !p.userId).length : 0;
+  const going: SignupPerson[] = fromKampKlar
+    ? external
+      ? externalSignupSummary(roster, external).going
+      : []
+    : people(signupSummary(roster, match.signups).going);
   const mine = match.signups.find((s) => s.userId === user.id)?.going;
   const past = (match.endsAt ?? match.startsAt) < new Date();
 
@@ -103,40 +102,17 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
             ? `${match.isHome === false ? "Ude mod" : match.isHome ? "Hjemme mod" : "Mod"} ${match.opponent}`
             : match.title
         }
-        action={
-          <ActionMenu>
-            <TaskDialog members={roster} activityId={match.id} templates={templates} copyable={copyable} />
-            <GiveFineDialog
-              members={board.roster}
-              fineTypes={board.fineTypes}
-              finePriceKr={board.finePriceKr}
-              matches={option}
-              defaultMatchId={match.id}
-            />
-            {!fromKampKlar && (
-              <ActivityDialog
-                activity={{
-                  id: match.id,
-                  title: match.title,
-                  startsAtInput: toLocalDateTimeInput(match.startsAt),
-                  location: match.location,
-                  note: match.note,
-                }}
-              />
-            )}
-            {!fromKampKlar && (
-              <ActionButton
-                action={deleteActivity}
-                fields={{ id: match.id }}
-                label="Slet aktivitet"
-                variant="danger"
-                confirm="Slet aktiviteten og dens opgaver?"
-                confirmLabel="Slet aktivitet"
-              />
-            )}
-          </ActionMenu>
-        }
       />
+      <CreateMenu>
+        <TaskDialog members={roster} activityId={match.id} templates={templates} copyable={copyable} />
+        <GiveFineDialog
+          members={board.roster}
+          fineTypes={board.fineTypes}
+          finePriceKr={board.finePriceKr}
+          matches={option}
+          defaultMatchId={match.id}
+        />
+      </CreateMenu>
 
       <SwipePages
         label="Aktivitetens sider"
@@ -177,7 +153,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
                       href={match.externalUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={buttonClass("secondary", "w-full")}
+                      className={buttonClass("primary", "w-full")}
                     >
                       Åbn i KampKlar ↗
                     </a>
@@ -200,7 +176,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
 
                 <section aria-labelledby="signups-title">
                   <SectionTitle>
-                    <span id="signups-title">Tilmeldte</span>
+                    <span id="signups-title">Tilmeldte ({going.length})</span>
                   </SectionTitle>
                   <Card className="space-y-5">
                     {!fromKampKlar && !match.cancelledAt && !past && (
@@ -224,38 +200,31 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
                         </div>
                       </div>
                     )}
-                    {fromKampKlar && (
-                      <p className="text-sm text-slate-600">
-                        Tilmelding sker i KampKlar
-                        {match.externalUrl ? " – tryk “Åbn i KampKlar” ovenfor." : "."}
-                      </p>
-                    )}
-                    {groups ? (
-                      <>
-                        <SignupTally
-                          going={groups.going.length}
-                          available={groups.available.length}
-                          notGoing={groups.notGoing.length}
-                          unanswered={groups.unanswered.length}
-                        />
-                        <SignupGroup title="Kommer" people={groups.going} />
-                        <SignupGroup title="Til rådighed" people={groups.available} />
-                        <SignupGroup title="Kommer ikke" people={groups.notGoing} />
-                        <SignupGroup title="Har ikke svaret" people={groups.unanswered} muted />
-                        {unmatched > 0 && canAdministerTeam(user, user.teamId) && (
-                          <p className="text-xs text-slate-500">
-                            {unmatched === 1 ? "1 navn" : `${unmatched} navne`} fra KampKlar er ikke koblet til en spiller.{" "}
-                            <Link href="/hold/rettigheder" className="font-medium text-[var(--accent-text)]">
-                              Kobl under Rettigheder ›
-                            </Link>
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-sm text-slate-500">KampKlar har ikke sendt tilmeldinger med til denne aktivitet endnu.</p>
-                    )}
+                    {going.length > 0 ? <SignupFaces people={going} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu.</p>}
                   </Card>
                 </section>
+
+                {!fromKampKlar && (
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    <ActivityDialog
+                      activity={{
+                        id: match.id,
+                        title: match.title,
+                        startsAtInput: toLocalDateTimeInput(match.startsAt),
+                        location: match.location,
+                        note: match.note,
+                      }}
+                    />
+                    <ActionButton
+                      action={deleteActivity}
+                      fields={{ id: match.id }}
+                      label="Slet aktivitet"
+                      variant="danger"
+                      confirm="Slet aktiviteten og dens opgaver?"
+                      confirmLabel="Slet aktivitet"
+                    />
+                  </div>
+                )}
               </div>
             ),
           },
@@ -301,78 +270,32 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
   );
 }
 
-/** The counts at a glance, with a bar that fills with those coming, then those available. */
-function SignupTally({
-  going,
-  available,
-  notGoing,
-  unanswered,
-}: {
-  going: number;
-  available: number;
-  notGoing: number;
-  unanswered: number;
-}) {
-  const total = going + available + notGoing + unanswered || 1;
+/** Those signed up, as pictures with their first name under — a teammate's links to their page. */
+function SignupFaces({ people }: { people: SignupPerson[] }) {
   return (
-    <div className="space-y-2">
-      <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <span>
-          <strong className="text-emerald-700">{going}</strong> kommer
-        </span>
-        {available > 0 && (
-          <span>
-            <strong className="text-amber-600">{available}</strong> til rådighed
-          </span>
-        )}
-        <span>
-          <strong className="text-red-600">{notGoing}</strong> kommer ikke
-        </span>
-        <span className="text-slate-500">
-          <strong>{unanswered}</strong> mangler svar
-        </span>
-      </p>
-      <div aria-hidden="true" className="flex h-1.5 overflow-hidden rounded-full bg-slate-100">
-        <span className="bg-emerald-500" style={{ width: `${(going / total) * 100}%` }} />
-        <span className="bg-amber-400" style={{ width: `${(available / total) * 100}%` }} />
-        <span className="bg-red-400" style={{ width: `${(notGoing / total) * 100}%` }} />
-      </div>
-    </div>
-  );
-}
-
-/** A group of people as pictures with their first name under — a teammate's links to their page. */
-function SignupGroup({ title, people, muted = false }: { title: string; people: SignupPerson[]; muted?: boolean }) {
-  if (people.length === 0) return null;
-  return (
-    <div>
-      <h3 className="mb-2 text-xs font-semibold text-slate-500">
-        {title} ({people.length})
-      </h3>
-      <ul className={`grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6 ${muted ? "opacity-60" : ""}`}>
-        {people.map((p) => {
-          const face = (
-            <>
-              <Avatar name={p.name} photoId={p.photoId} size="lg" className={muted ? "grayscale" : ""} />
-              <span className="w-full truncate text-center text-xs">{p.name.split(" ")[0]}</span>
-            </>
-          );
-          return (
-            <li key={p.key}>
-              {p.userId ? (
-                <PlayerLink userId={p.userId} aria-label={p.name} className="flex flex-col items-center gap-1 hover:no-underline">
-                  {face}
-                </PlayerLink>
-              ) : (
-                <span title={p.name} className="flex flex-col items-center gap-1">
-                  {face}
-                  <span className="sr-only">{p.name}</span>
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <ul className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6">
+      {people.map((p) => {
+        const face = (
+          <>
+            <Avatar name={p.name} photoId={p.photoId} size="lg" />
+            <span className="w-full truncate text-center text-xs">{p.name.split(" ")[0]}</span>
+          </>
+        );
+        return (
+          <li key={p.key}>
+            {p.userId ? (
+              <PlayerLink userId={p.userId} aria-label={p.name} className="flex flex-col items-center gap-1 hover:no-underline">
+                {face}
+              </PlayerLink>
+            ) : (
+              <span title={p.name} className="flex flex-col items-center gap-1">
+                {face}
+                <span className="sr-only">{p.name}</span>
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

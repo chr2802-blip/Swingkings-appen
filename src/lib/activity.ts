@@ -1,5 +1,5 @@
 import type { ActivityKind } from "@prisma/client";
-import type { SignupLists, SignupStatus } from "./ical";
+import type { SignupLists } from "./ical";
 import { readInZone } from "./time";
 
 /** An activity is a `Match` row: a match, a training, or anything else on the calendar. */
@@ -64,8 +64,7 @@ export function readExternalSignups(value: unknown): SignupLists | null {
       ? raw.filter((n): n is string => typeof n === "string" && n.trim() !== "")
       : [];
   };
-  // Rows from before "til rådighed" was read have no `available`: nobody was.
-  return { going: list("going"), notGoing: list("notGoing"), available: list("available") };
+  return { going: list("going"), notGoing: list("notGoing") };
 }
 
 /** Whether every word of `short` starts the same word of `long`: "Christian R" fits "Christian Rasmussen". */
@@ -127,7 +126,6 @@ export function externalSignupSummary<
           };
     });
   const going = toPeople(signups.going, "going");
-  const available = toPeople(signups.available, "available");
   const notGoing = toPeople(signups.notGoing, "not");
   const unanswered: SignupPerson[] = roster
     .filter((m) => !taken.has(m.userId))
@@ -137,25 +135,26 @@ export function externalSignupSummary<
       userId: m.userId,
       photoId: m.photoId,
     }));
-  return { going, available, notGoing, unanswered };
+  return { going, notGoing, unanswered };
 }
 
 /**
- * How many answered each way, for a row in the activity list: KampKlar's counts from the
- * feed, or the app's own sign-ups for a hand-made activity. Null when nothing is known.
+ * How many answered each way, for a row in the activity list. From KampKlar only those
+ * signed up count (`notGoing` null): the feed says little else. A hand-made activity has
+ * the app's own yes and no. Null when nothing is known.
  */
 export function signupCounts(activity: {
   source: "MANUAL" | "KAMPKLAR";
   externalSignups: unknown;
   signups: { going: boolean }[];
-}): Record<SignupStatus, number> | null {
+}): { going: number; notGoing: number | null } | null {
   if (activity.source === "KAMPKLAR") {
     const lists = readExternalSignups(activity.externalSignups);
-    return lists && { going: lists.going.length, available: lists.available.length, notGoing: lists.notGoing.length };
+    return lists && { going: lists.going.length, notGoing: null };
   }
   if (activity.signups.length === 0) return null;
   const going = activity.signups.filter((s) => s.going).length;
-  return { going, available: 0, notGoing: activity.signups.length - going };
+  return { going, notGoing: activity.signups.length - going };
 }
 
 /**

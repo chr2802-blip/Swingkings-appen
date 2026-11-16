@@ -209,8 +209,8 @@ test("a drawer and the dialog it opens share one history step, and a saved form 
   await page.goto(`/aktiviteter/${match.id}`);
   const before = await historyIndex(page);
 
-  await page.getByRole("button", { name: "Handlinger" }).click();
-  const menu = page.getByRole("dialog", { name: "Handlinger" });
+  await page.getByRole("button", { name: "Opret" }).click();
+  const menu = page.getByRole("dialog", { name: "Opret" });
   await menu.getByRole("button", { name: "Ny opgave" }).click();
   const dialog = page.getByRole("dialog", { name: "Ny opgave" });
   await expect(dialog).toBeVisible();
@@ -222,7 +222,7 @@ test("a drawer and the dialog it opens share one history step, and a saved form 
   expect(await historyIndex(page)).toBe(before);
 
   // The action replaces the history entry's state on its way; the step still goes when the dialog does.
-  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Ny opgave" }).click();
   await dialog.getByLabel("Opgave").fill("Købe nye bolde");
   await dialog.getByRole("button", { name: "Opret opgave" }).click();
