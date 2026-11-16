@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { pageMotion, type PageMotion } from "@/lib/page-motion";
 import { TAB_PATHS } from "./nav-items";
 
-const PAGE_ID = "app-page";
+export const PAGE_ID = "app-page";
 
 /** An address that was written by the page itself (a swipe), not arrived at: nothing comes in. */
 let inPlace: string | null = null;
