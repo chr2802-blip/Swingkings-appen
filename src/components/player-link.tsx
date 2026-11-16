@@ -6,12 +6,9 @@ export function playerHref(userId: string) {
   return `/spiller/${userId}`;
 }
 
-/** The search parameter (and anchor) that opens a person's page at their whole list of jobs. */
-export const TASKS_PARAM = "opgaver";
-
-/** A person's page, scrolled to their jobs with the whole list open. */
+/** A person's page, open at the tab with their jobs. */
 export function playerTasksHref(userId: string) {
-  return `${playerHref(userId)}?${TASKS_PARAM}#${TASKS_PARAM}`;
+  return `${playerHref(userId)}/opgaver`;
 }
 
 /** A name (or a face) that opens the person's page. Used wherever a teammate is named. */
@@ -20,5 +17,11 @@ export function PlayerLink({
   className = "",
   ...props
 }: Omit<ComponentProps<typeof Link>, "href"> & { userId: string }) {
-  return <Link href={playerHref(userId)} className={`hover:underline ${className}`} {...props} />;
+  return (
+    <Link
+      href={playerHref(userId)}
+      className={`hover:underline ${className}`}
+      {...props}
+    />
+  );
 }
