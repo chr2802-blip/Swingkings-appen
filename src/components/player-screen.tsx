@@ -28,7 +28,7 @@ import {
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { resetFines } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
-import { FineDetails } from "@/components/fine-history";
+import { FineDetails, FineHistory } from "@/components/fine-history";
 
 /** How many settled challenges and finished jobs the page shows; the open ones are always all there. */
 const RECENT = 10;
@@ -49,7 +49,8 @@ export function playerTabHref(userId: string, tab: PlayerTab = "") {
  *
  * - **Detaljer**: the three latest fines or challenges, and their next jobs — every one
  *   due on the first day one is.
- * - **Bøder**: their fines, and their challenges under them.
+ * - **Bøder og udfordringer**: one list as in the fine history, the challenges still
+ *   waiting above it.
  * - **Opgaver**: their jobs.
  *
  * What they owe (and "Betal" on your own) stands above the tabs.
@@ -339,7 +340,7 @@ export async function PlayerScreen({
           },
           {
             href: playerTabHref(id, "/boder"),
-            title: fines.length > 0 ? `Bøder (${fines.length})` : "Bøder",
+            title: "Bøder og udfordringer",
             action: managesFines && unclearedFines > 0 && (
               <ActionButton
                 action={resetFines}
@@ -351,22 +352,24 @@ export async function PlayerScreen({
                 confirmLabel="Nulstil"
               />
             ),
+            // One list as in the history: fines given (star) and those a challenge moved
+            // (swords). A challenge still waiting has moved nothing yet, so it stands above.
             children: (
               <div className="space-y-8">
-                {fines.length === 0 ? (
-                  <Empty>Ingen bøder. Mønsterspiller! 😇</Empty>
-                ) : (
-                  <List>{fines.map(fineRow)}</List>
-                )}
-                {challenges.length > 0 && (
-                  <section aria-labelledby="challenges-title">
+                {openChallenges.length > 0 && (
+                  <section aria-labelledby="pending-title">
                     <SectionTitle>
-                      <span id="challenges-title">
-                        Udfordringer ({challenges.length})
-                      </span>
+                      <span id="pending-title">Venter på godkendelse</span>
                     </SectionTitle>
-                    <List>{challenges.map(challengeRow)}</List>
+                    <List>{openChallenges.map(challengeRow)}</List>
                   </section>
+                )}
+                {fines.length === 0 ? (
+                  <Empty>
+                    Ingen bøder eller udfordringer. Mønsterspiller! 😇
+                  </Empty>
+                ) : (
+                  <FineHistory fines={fines} user={user} />
                 )}
               </div>
             ),

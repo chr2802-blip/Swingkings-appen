@@ -418,7 +418,7 @@ test("a treasurer resets a player, and a player cannot", async ({
   });
   await loginAs(anna);
   await page.goto(`/spiller/${anna.id}/boder`);
-  const fines = page.getByRole("tabpanel", { name: /^Bøder/ });
+  const fines = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
   await expect(fines.getByText("For sent")).toBeVisible();
   await expect(page.getByRole("button", { name: "Nulstil bøder" })).toHaveCount(
     0,
@@ -431,7 +431,7 @@ test("a treasurer resets a player, and a player cannot", async ({
     .getByRole("dialog")
     .getByRole("button", { name: "Nulstil" })
     .click();
-  await expect(fines.getByText(/· nulstillet /)).toBeVisible();
+  await expect(fines.getByText(/· nulstillet/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Nulstil bøder" })).toHaveCount(
     0,
   );

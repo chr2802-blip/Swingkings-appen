@@ -54,7 +54,7 @@ test("a player's page lists their fines with what each cost", async ({
   });
   await loginAs(anna);
   await page.goto(`/spiller/${anna.id}/boder`);
-  const fines = page.getByRole("tabpanel", { name: "Bøder (1)" });
+  const fines = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
   await expect(fines.getByText("Glemt benskinner")).toBeVisible();
   await expect(fines.getByText("30 kr")).toBeVisible();
 });
