@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { GET as chat } from "@/app/api/chat/route";
 import { GET as realtimeToken } from "@/app/api/realtime/token/route";
+import { GET as calendarFeed } from "@/app/api/calendar/[token]/route";
+import { calendarPathFor, calendarToken } from "@/lib/calendar-feed";
+import { parseCalendar } from "@/lib/ical";
 import { announce } from "@/lib/realtime";
-import { joinTeam, makeSquad, makeTeam, makeUser, signIn } from "../helpers/factories";
+import { joinTeam, makeMatch, makeSquad, makeTeam, makeUser, signIn } from "../helpers/factories";
 import { afterQueue } from "../helpers/next-mocks";
 
 const REALTIME = {
@@ -31,6 +34,58 @@ describe("GET /api/chat", () => {
     expect((await chat()).status).toBe(401);
     await signIn(await makeUser());
     expect((await chat()).status).toBe(401);
+  });
+});
+
+describe("GET /api/calendar/<token>.ics", () => {
+  const fetchFeed = (path: string) => {
+    const token = path.replace("/api/calendar/", "");
+    return calendarFeed(new Request(`https://app.example${path}`), { params: Promise.resolve({ token }) });
+  };
+
+  it("serves the member's team's activities with no session, a cancelled one as cancelled", async () => {
+    const { team, anna } = await makeSquad();
+    const other = await makeSquad("Naboerne");
+    const match = await makeMatch(team.id, { opponent: "AB" });
+    await prisma.match.update({ where: { id: match.id }, data: { isHome: true } });
+    const party = await makeMatch(team.id, { kind: "OTHER", title: "Julefrokost" });
+    await prisma.match.update({ where: { id: party.id }, data: { cancelledAt: new Date() } });
+    await makeMatch(other.team.id, { opponent: "Fremmede" });
+    // Long ago: left out.
+    await makeMatch(team.id, { opponent: "Gammel", startsAt: new Date(Date.now() - 400 * 86_400_000) });
+
+    const response = await fetchFeed(await calendarPathFor(anna.id, team.id));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/calendar; charset=utf-8");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    const events = parseCalendar(await response.text());
+    expect(events.map((e) => [e.summary, e.cancelled])).toEqual([
+      ["Hjemme mod AB", false],
+      ["Aflyst: Julefrokost", true],
+    ]);
+    expect(events[0]!.url).toBe(`https://app.example/aktiviteter/${match.id}`);
+  });
+
+  it("is not found for a forged token, another team, a member who left, or a new password", async () => {
+    const { team, anna } = await makeSquad();
+    const other = await makeSquad("Naboerne");
+    const path = await calendarPathFor(anna.id, team.id);
+
+    // The same member and team, another signature.
+    expect((await fetchFeed(path.replace(/\.[\w-]{32}\.ics$/, `.${"A".repeat(32)}.ics`))).status).toBe(404);
+    expect((await fetchFeed("/api/calendar/nonsense.ics")).status).toBe(404);
+    // Signed for a team Anna is not on.
+    expect((await fetchFeed(`/api/calendar/${calendarToken(anna.id, other.team.id, 0)}.ics`)).status).toBe(404);
+    // Her token, the other team's id in it.
+    expect((await fetchFeed(path.replace(team.id, other.team.id))).status).toBe(404);
+
+    await prisma.user.update({ where: { id: anna.id }, data: { tokenVersion: { increment: 1 } } });
+    expect((await fetchFeed(path)).status).toBe(404);
+    const fresh = await calendarPathFor(anna.id, team.id);
+    expect((await fetchFeed(fresh)).status).toBe(200);
+
+    await prisma.teamMember.delete({ where: { userId_teamId: { userId: anna.id, teamId: team.id } } });
+    expect((await fetchFeed(fresh)).status).toBe(404);
   });
 });
 

@@ -109,7 +109,8 @@ test("each row says one thing on its right, and home or away under the name", as
 
   const ab = page.getByRole("link", { name: /AB/ });
   await expect(ab).toContainText("Hjemme · Bane 1");
-  await expect(ab).toContainText("1 opgave");
+  // Jobs are on the activity, not on its row.
+  await expect(ab).not.toContainText("opgave");
   const b93 = page.getByRole("link", { name: /B93/ });
   await expect(b93).toContainText("Ude");
   await expect(b93).not.toContainText("opgave");
@@ -117,6 +118,29 @@ test("each row says one thing on its right, and home or away under the name", as
   await expect(training).toContainText("Aflyst");
   // The kind is in the name: no "Træning" label beside it.
   await expect(training.getByText("Træning", { exact: true })).toHaveCount(0);
+});
+
+test("\"Tilføj til kalender\" gives a link the calendar subscribes to, which works without logging in", async ({ page, loginAs, request }) => {
+  const { team, anna } = await squad();
+  await db.team.update({ where: { id: team.id }, data: { calendarUrl: "https://kampklar.example/feed.ics" } });
+  await db.match.create({ data: { teamId: team.id, kind: "MATCH", title: "Swingkings - AB", opponent: "AB", isHome: true, startsAt: inDays(3) } });
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  // KampKlar is fetched by itself: there is no button for it here.
+  await expect(page.getByRole("button", { name: "Hent fra KampKlar" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Tilføj til kalender" }).click();
+  const dialog = page.getByRole("dialog", { name: "Tilføj til kalender" });
+  const subscribe = dialog.getByRole("link", { name: /Abonnér/ });
+  await expect(subscribe).toHaveAttribute("href", /^webcal:\/\/127\.0\.0\.1:\d+\/api\/calendar\/[\w.-]+\.ics$/);
+  await expect(dialog.getByRole("link", { name: /Google Kalender/ })).toHaveAttribute("href", /calendar\.google\.com.*webcal/);
+
+  const link = await dialog.getByLabel("Kalenderlink").inputValue();
+  // The calendar app has no session: `request` carries no cookie.
+  const feed = await request.get(link.replace(/^https:/, "http:"));
+  expect(feed.status()).toBe(200);
+  expect(await feed.text()).toContain("SUMMARY:Hjemme mod AB");
+  expect((await request.get(link.replace(/\.ics$/, "x.ics").replace(/^https:/, "http:"))).status()).toBe(404);
 });
 
 test("an admin with no KampKlar link is pointed to the team settings; nobody else is", async ({ page, loginAs }) => {

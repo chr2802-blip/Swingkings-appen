@@ -23,6 +23,7 @@ import { deleteActivity, setSignup } from "@/app/actions/activities";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
 import {
   activityName,
+  activityTitle,
   externalSignupSummary,
   KIND_LABEL,
   readExternalSignups,
@@ -97,11 +98,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
       {/* Who has signed up in KampKlar is what one opens it for: fetched fresh. */}
       {fromKampKlar && <AutoSync />}
       <PageHeader
-        title={
-          match.kind === "MATCH" && match.opponent
-            ? `${match.isHome === false ? "Ude mod" : match.isHome ? "Hjemme mod" : "Mod"} ${match.opponent}`
-            : match.title
-        }
+        title={activityTitle(match)}
       />
       <CreateMenu>
         <TaskDialog members={roster} activityId={match.id} templates={templates} copyable={copyable} />

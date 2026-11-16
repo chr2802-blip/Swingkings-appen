@@ -20,6 +20,12 @@ export function activityName(activity: {
     : activity.title;
 }
 
+/** What an activity is called as a heading: "Hjemme mod AB", "Ude mod B93", or its title. */
+export function activityTitle(activity: { kind: ActivityKind; title: string; opponent: string | null; isHome: boolean | null }) {
+  if (activity.kind !== "MATCH" || !activity.opponent) return activity.title;
+  return `${activity.isHome === false ? "Ude mod" : activity.isHome ? "Hjemme mod" : "Mod"} ${activity.opponent}`;
+}
+
 /**
  * Who has answered a hand-made activity and how, against the roster: those coming, those
  * not, and those yet to answer — each by name, as the roster sorts them. An answer from
