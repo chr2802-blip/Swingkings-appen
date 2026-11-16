@@ -7,7 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { readInZone, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { ActivityDialog } from "@/components/activity-dialog";
-import { SyncButton } from "@/components/sync-button";
+import { CalendarButton } from "@/components/calendar-button";
+import { calendarPathFor } from "@/lib/calendar-feed";
 import { AutoSync } from "@/components/auto-sync";
 import { CreateAction } from "@/components/create-button";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
@@ -27,7 +28,6 @@ const ROW = {
   cancelledAt: true,
   source: true,
   externalSignups: true,
-  tasks: { where: { doneAt: null }, select: { id: true } },
   signups: { select: { going: true } },
 } satisfies Prisma.MatchSelect;
 
@@ -36,8 +36,8 @@ type Row = Prisma.MatchGetPayload<{ select: typeof ROW }>;
 /**
  * Every activity — matches, trainings and the rest — in one list in the order they are
  * played, from today. The earlier ones are folded away under "Vis tidligere", newest first.
- * Each row says on its right that it is cancelled, or its open jobs, and in a green circle
- * how many have signed up — for a hand-made activity also a red one for those who said no.
+ * Each row says one thing on its right: that it is cancelled, or in a green circle how many
+ * have signed up — for a hand-made activity also a red one for those who said no.
  */
 export default async function ActivitiesPage() {
   const user = await requireTeamUser();
@@ -45,17 +45,18 @@ export default async function ActivitiesPage() {
   const today = startOfDayInZone();
   const db = teamDb(user.teamId);
 
-  const [team, upcoming, earlier, templates, copyable] = await Promise.all([
+  const [team, upcoming, earlier, templates, copyable, feedPath] = await Promise.all([
     prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { calendarUrl: true } }),
     db.match.findMany({ where: { startsAt: { gte: today } }, orderBy: { startsAt: "asc" }, take: EACH_WAY, select: ROW }),
     db.match.findMany({ where: { startsAt: { lt: today } }, orderBy: { startsAt: "desc" }, take: EACH_WAY, select: ROW }),
     templateOptions(user.teamId),
     copyableActivities(user.teamId),
+    calendarPathFor(user.id, user.teamId),
   ]);
 
   return (
     <div>
-      <PageHeader title="Aktiviteter" action={team.calendarUrl && <SyncButton />} />
+      <PageHeader title="Aktiviteter" action={<CalendarButton path={feedPath} />} />
       {team.calendarUrl && <AutoSync />}
       {!team.calendarUrl && admin && (
         <Link href="/hold" className="-mt-4 mb-6 block text-sm font-medium text-[var(--accent-text)]">
@@ -109,8 +110,7 @@ function ActivityMonths({ rows }: { rows: Row[] }) {
                         {match.location && ` · ${match.location}`}
                       </p>
                     </div>
-                    <RowNote match={match} />
-                    {!match.cancelledAt && <SignupCircles match={match} />}
+                    {match.cancelledAt ? <Badge tone="red">Aflyst</Badge> : <SignupCircles match={match} />}
                   </Link>
                 </li>
               ))}
@@ -120,14 +120,6 @@ function ActivityMonths({ rows }: { rows: Row[] }) {
       ))}
     </div>
   );
-}
-
-/** The one thing a row says on its right, if anything. */
-function RowNote({ match }: { match: Row }) {
-  if (match.cancelledAt) return <Badge tone="red">Aflyst</Badge>;
-  const open = match.tasks.length;
-  if (open > 0) return <span className="shrink-0 text-xs text-slate-500">{open === 1 ? "1 opgave" : `${open} opgaver`}</span>;
-  return null;
 }
 
 /** A number in a coloured circle, with its word for a screen reader. */
