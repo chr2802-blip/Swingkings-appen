@@ -1,6 +1,8 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 
+/** The jobs' tab: a job of your own is also named on the details. */
+const jobsTab = (page: import("@playwright/test").Page) => page.getByRole("tabpanel", { name: /^Opgaver/ });
 const inDays = (days: number) => new Date(Date.now() + days * 86_400_000);
 /** A datetime-local value on the team's clock. */
 const localInput = (date: Date) =>
@@ -22,7 +24,9 @@ test("a player adds an activity with a standard job ticked, and it opens with th
 
   await expect(page).toHaveURL(/\/aktiviteter\/\w+$/);
   await expect(page.getByRole("heading", { name: "Afslutningsfest", level: 1 })).toBeVisible();
-  await expect(page.getByText("Grill")).toBeVisible();
+  await page.getByRole("tab", { name: "Opgaver (1)" }).click();
+  await expect(page).toHaveURL(/\/aktiviteter\/\w+\/opgaver$/);
+  await expect(jobsTab(page).getByText("Grill")).toBeVisible();
   await expect(page.getByText("Frugt")).toHaveCount(0);
   expect(await db.taskAssignee.count()).toBe(1);
   expect(await db.match.findFirst({ where: { teamId: team.id } })).toMatchObject({ kind: "OTHER" });
@@ -133,15 +137,65 @@ test("a team with nothing behind it and nothing ahead sees an empty calendar", a
   await expect(page.getByRole("region", { name: "Tidligere aktiviteter" })).toHaveCount(0);
 });
 
-test("an activity from KampKlar takes no sign-ups", async ({ page, loginAs }) => {
+test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows who KampKlar says comes", async ({ page, loginAs }) => {
   const { team, anna } = await squad();
+  const link = "https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167";
   const match = await db.match.create({
-    data: { teamId: team.id, title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3), source: "KAMPKLAR", externalUid: "x" },
+    data: {
+      teamId: team.id,
+      title: "Swingkings - AB",
+      opponent: "AB",
+      startsAt: inDays(3),
+      source: "KAMPKLAR",
+      externalUid: "x",
+      externalUrl: link,
+      externalSignups: { going: ["Anna", "Gæst Gæstesen"], notGoing: ["Bo"] },
+    },
   });
   await loginAs(anna);
   await page.goto(`/aktiviteter/${match.id}`);
   await expect(page.getByRole("heading", { name: "Mod AB", level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Jeg kommer", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Åbn i KampKlar/ })).toHaveAttribute("href", link);
+  await expect(page.getByRole("heading", { name: "Kommer (2)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Kommer ikke (1)" })).toBeVisible();
+  // A teammate links to their page; a name nobody here has is only a name.
+  await expect(page.getByRole("link", { name: "Anna", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Gæst Gæstesen" })).toHaveCount(0);
+  await expect(page.getByText("Gæst Gæstesen")).toHaveCount(1);
+});
+
+test("an activity from KampKlar whose feed carries no sign-ups says so", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({
+    data: { teamId: team.id, title: "Træning", kind: "TRAINING", startsAt: inDays(3), source: "KAMPKLAR", externalUid: "y" },
+  });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  await expect(page.getByText("KampKlar har ikke sendt tilmeldinger med til denne aktivitet endnu.")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Åbn i KampKlar/ })).toHaveCount(0);
+});
+
+test("an activity's tabs are swiped or tapped between, each at its own address", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Swingkings - AB", opponent: "AB", startsAt: inDays(3), location: "Bane 3" } });
+  await db.task.create({ data: { teamId: team.id, matchId: match.id, title: "Tøjvask", dueAt: inDays(3), assignees: { create: { userId: anna.id } } } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  await expect(page.getByRole("tab", { name: "Detaljer" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("link", { name: /Bane 3/ })).toHaveAttribute("href", /google\.com\/maps.*Bane%203/);
+  // Your own open job is pointed out on the details, and a tap turns to the jobs.
+  await page.getByRole("button", { name: /Din opgave: Tøjvask/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/opgaver$`));
+  await expect(page.getByRole("tab", { name: "Opgaver (1)" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Bøder" }).click();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/boder$`));
+  await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
+
+  // Opened straight on a tab, the page starts there.
+  await page.goto(`/aktiviteter/${match.id}/opgaver`);
+  await expect(page.getByRole("tab", { name: "Opgaver (1)" })).toHaveAttribute("aria-selected", "true");
+  await expect(jobsTab(page).getByText("Tøjvask")).toBeVisible();
 });
 
 test("old links to matches and the task list land in their new homes", async ({ page, loginAs }) => {
@@ -172,10 +226,11 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   await dialog.getByRole("checkbox", { name: "Bo" }).check();
   await dialog.getByRole("button", { name: "Opret opgave" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Købe nye bolde")).toBeVisible();
+  await page.getByRole("tab", { name: /^Opgaver/ }).click();
+  await expect(jobsTab(page).getByText("Købe nye bolde")).toBeVisible();
 
   await loginAs(bo);
-  await page.goto(`/aktiviteter/${match.id}`);
+  await page.goto(`/aktiviteter/${match.id}/opgaver`);
   await page.getByRole("button", { name: "Markér som udført" }).click();
   await expect.poll(async () => (await db.task.findFirst({ where: { title: "Købe nye bolde" } }))?.doneById).toBe(bo.id);
 });
@@ -187,7 +242,7 @@ test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from a
   await db.task.create({ data: { teamId: team.id, matchId: earlier.id, title: "Trøjevask", dueAt: inDays(-7) } });
   const match = await db.match.create({ data: { teamId: team.id, title: "Swingkings - B93", opponent: "B93", startsAt: inDays(3) } });
   await loginAs(anna);
-  await page.goto(`/aktiviteter/${match.id}`);
+  await page.goto(`/aktiviteter/${match.id}/opgaver`);
   const menu = page.getByRole("dialog", { name: "Handlinger" });
   await page.getByRole("button", { name: "Handlinger" }).click();
   // The three ways live inside the one dialog, not as rows of their own.
@@ -200,7 +255,7 @@ test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from a
   await dialog.getByRole("checkbox", { name: /Grill/ }).check();
   await dialog.getByRole("button", { name: "Tilføj og fordel" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Grill")).toBeVisible();
+  await expect(jobsTab(page).getByText("Grill")).toBeVisible();
   await expect(page.getByText("Frugt")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Handlinger" }).click();
@@ -212,7 +267,7 @@ test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from a
   await dialog.getByRole("button", { name: "Kopiér og fordel" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => db.task.count({ where: { matchId: match.id } })).toBe(2);
-  await expect(page.getByText("Trøjevask")).toBeVisible();
+  await expect(jobsTab(page).getByText("Trøjevask")).toBeVisible();
 });
 
 test("an activity with nothing to copy and no standard jobs offers only a new job", async ({ page, loginAs }) => {
@@ -321,7 +376,8 @@ test("an activity's fines open as in the history, and their giver may delete one
   await db.fine.create({ data: { teamId: team.id, playerId: bo.id, reason: "Glemt trøje", units: 1, unitPriceKr: 10, issuedById: treasurer.id } });
 
   await loginAs(anna);
-  await page.goto(`/aktiviteter/${match.id}`);
+  await page.goto(`/aktiviteter/${match.id}/boder`);
+  await expect(page.getByRole("tab", { name: "Bøder (1)" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Glemt trøje")).toHaveCount(0);
   await page.getByRole("button", { name: /Bo · For sent/ }).click();
   const sheet = page.getByRole("dialog", { name: "Bøde" });

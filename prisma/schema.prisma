@@ -370,6 +370,11 @@ model Match {
   externalUid String?
   /// Set when the feed marks it cancelled or it disappears from the feed.
   cancelledAt DateTime?
+  /// The activity in KampKlar (its "Aktivitetslink"), where a KampKlar activity is signed up for.
+  externalUrl String?
+  /// Who KampKlar says is coming, by name: `{ going: string[], notGoing: string[] }`, or
+  /// null when the feed does not say. Matched to the roster by name when shown.
+  externalSignups Json?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 

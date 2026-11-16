@@ -11,7 +11,7 @@ import { TIME_ZONE } from "./time";
  * is the import: the team's admin pastes that link in Settings and the app reads it.
  *
  * Only what a calendar entry has to say is read — UID, SUMMARY, DTSTART, DTEND,
- * LOCATION, DESCRIPTION, STATUS, CATEGORIES — and everything else is ignored. Pure, so
+ * LOCATION, DESCRIPTION, STATUS, CATEGORIES, URL, ATTENDEE — and everything else is ignored. Pure, so
  * it is tested against sample feeds without a network.
  */
 export type CalendarEvent = {
@@ -23,6 +23,10 @@ export type CalendarEvent = {
   startsAt: Date;
   endsAt: Date | null;
   cancelled: boolean;
+  /** The entry's own URL property, if the feed gives one (KampKlar writes the link in the description). */
+  url?: string | null;
+  /** ATTENDEE lines with a name, and whether they said yes (true), no (false) or nothing (null). */
+  attendees?: { name: string; going: boolean | null }[];
 };
 
 type Property = { name: string; params: Record<string, string>; value: string };
@@ -144,6 +148,108 @@ function toEvent(properties: Property[]): CalendarEvent | null {
     startsAt,
     endsAt: end ? parseIcalDate(end.value, end.params) : null,
     cancelled: get("STATUS")?.value.trim().toUpperCase() === "CANCELLED" || /\baflyst\b/i.test(text("SUMMARY") ?? ""),
+    url: text("URL"),
+    attendees: properties
+      .filter((p) => p.name === "ATTENDEE" && p.params.CN)
+      .map((p) => {
+        const status = (p.params.PARTSTAT ?? "").toUpperCase();
+        return { name: p.params.CN!.trim(), going: status === "ACCEPTED" ? true : status === "DECLINED" ? false : null };
+      })
+      .filter((a) => a.name),
+  };
+}
+
+export type KampKlarDetails = {
+  /** The activity in KampKlar, where a KampKlar activity is signed up for. Only an https link on dbu.dk. */
+  link: string | null;
+  /** "Mødested: …" — where to meet, when the entry has no LOCATION of its own. */
+  meetingPlace: string | null;
+  /** What is left of the description to show: "Beskrivelse:" and whatever else the feed wrote. */
+  note: string | null;
+  /** Who has signed up and who has not, by name — or null when the entry does not say. */
+  signups: { going: string[]; notGoing: string[] } | null;
+};
+
+/** Only a link that leads to DBU becomes a button: the feed is somebody else's text. */
+export function dbuLink(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.trim());
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== "https:" || !(host === "dbu.dk" || host.endsWith(".dbu.dk"))) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** The labels KampKlar writes in an entry's description, and what each one is. */
+const SECTIONS: [RegExp, "link" | "place" | "text" | "going" | "notGoing"][] = [
+  [/^aktivitetslink$/, "link"],
+  [/^m(ø|oe)dested$/, "place"],
+  [/^beskrivelse$/, "text"],
+  [/^(tilmeldte?|deltagere|kommer|deltager)$/, "going"],
+  [/^(afbud|afmeldte?|kommer ikke|frameldte?)$/, "notGoing"],
+];
+const LABEL = /^\s*([A-Za-zÆØÅæøå ]{3,20}?)\s*(?:\(\d+\))?\s*:\s*(.*)$/;
+
+function names(lines: string[]) {
+  return lines
+    .flatMap((line) => line.split(/[,;]/))
+    .map((name) => name.replace(/^\s*(?:[-•*·]|\d+[.)])\s*/, "").trim())
+    .filter((name) => name && !/^(ingen|-)$/i.test(name));
+}
+
+/**
+ * What a KampKlar entry says beyond its time and title. KampKlar writes it all in the
+ * description, a label to a line:
+ *
+ *     Mødested: Læssøgadeskolen
+ *
+ *     Beskrivelse:
+ *     Test beskrivelse
+ *
+ *     Aktivitetslink: https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167
+ *
+ * A label's text runs until the next label. Sign-ups are read from "Tilmeldte:" and
+ * "Afbud:" there, or from the entry's ATTENDEE lines. Any other label stays in the note
+ * as written; a description with no labels at all is the note.
+ */
+export function kampKlarDetails(event: Pick<CalendarEvent, "description" | "url" | "attendees">): KampKlarDetails {
+  const sections = new Map<string, string[]>();
+  const rest: string[] = [];
+  let current: string[] = rest;
+  for (const line of (event.description ?? "").split("\n")) {
+    const label = LABEL.exec(line);
+    const kind = label && SECTIONS.find(([pattern]) => pattern.test(label[1]!.trim().toLowerCase()))?.[1];
+    if (label && kind) {
+      current = sections.get(kind) ?? [];
+      sections.set(kind, current);
+      if (label[2]!.trim()) current.push(label[2]!.trim());
+    } else {
+      current.push(line);
+    }
+  }
+  const joined = (lines: string[] | undefined) => lines?.join("\n").replace(/\n{3,}/g, "\n\n").trim() || null;
+
+  const note = [joined(rest), joined(sections.get("text"))].filter(Boolean).join("\n\n") || null;
+  const linkText = sections.get("link")?.join(" ").match(/https?:\/\/\S+/)?.[0];
+
+  let signups: KampKlarDetails["signups"] = null;
+  if (sections.has("going") || sections.has("notGoing")) {
+    signups = { going: names(sections.get("going") ?? []), notGoing: names(sections.get("notGoing") ?? []) };
+  } else if (event.attendees?.length) {
+    signups = {
+      going: event.attendees.filter((a) => a.going === true).map((a) => a.name),
+      notGoing: event.attendees.filter((a) => a.going === false).map((a) => a.name),
+    };
+  }
+
+  return {
+    link: dbuLink(linkText) ?? dbuLink(event.url),
+    meetingPlace: joined(sections.get("place"))?.replace(/\s*\n\s*/g, ", ") ?? null,
+    note,
+    signups,
   };
 }
 

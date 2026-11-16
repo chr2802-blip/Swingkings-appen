@@ -19,7 +19,8 @@ function refresh(taskId?: string, matchId?: string | null) {
   revalidatePath("/aktiviteter");
   revalidatePath("/oversigt");
   if (taskId) revalidatePath(`/opgaver/${taskId}`);
-  if (matchId) revalidatePath(`/aktiviteter/${matchId}`);
+  // The activity and its tabs (`/opgaver`, `/boder`) under it.
+  if (matchId) revalidatePath(`/aktiviteter/${matchId}`, "layout");
 }
 
 const taskSchema = z.object({

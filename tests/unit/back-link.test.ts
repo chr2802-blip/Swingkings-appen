@@ -15,6 +15,8 @@ describe("where the back arrow leads", () => {
     expect(backHref("/aktiviteter/abc/", me)).toBe("/aktiviteter");
     expect(backHref("/opgaver/abc", me)).toBe("/aktiviteter");
     expect(backHref("/kampe/abc", me)).toBe("/aktiviteter");
+    expect(backHref("/aktiviteter/abc/opgaver", me)).toBe("/aktiviteter");
+    expect(backHref("/aktiviteter/abc/boder", me)).toBe("/aktiviteter");
   });
 
   it("leaves your own page without one: it is the profile tab", () => {
