@@ -20,7 +20,8 @@ const END = 4;
  *
  * Only scrolling moves them. A phone's browser shows and hides its own toolbar near the
  * end of a page, which changes the window's height and so where the end is; read as a
- * scroll, that jerked the bars half-way and back. A change of height moves nothing.
+ * scroll, that jerked the bars half-way and back. A change of height moves nothing, nor
+ * does the scroll the browser sends after it, which has moved nothing.
  *
  * It writes `--bars` on <html> (0 shown, 1 gone; the CSS is in globals.css), and
  * `data-bars`: "hidden" once all the way out, "live" while following the finger, when
@@ -60,6 +61,10 @@ export function ScrollBars() {
         height = window.innerHeight;
         return;
       }
+      // A scroll that moved nothing moves nothing. The browser sends one a frame after the
+      // window grew, for the page it pulled back to its new end — which was read with the
+      // resize above — and read as a scroll to the end, it brought the bars back.
+      if (moved === 0) return;
       window.clearTimeout(timer);
       if (y < TOP || y >= max - END) {
         write(0, false);

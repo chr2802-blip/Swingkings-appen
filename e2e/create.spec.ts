@@ -30,9 +30,10 @@ test("each tab's + makes that tab's things: a post at home, a choice in the fine
   await expect(page.getByRole("heading", { name: "Chat" })).toBeVisible();
   await expect(page.locator(".app-create")).toHaveCount(0);
   // The tab bar still shows a "+", greyed out, so it looks the same on every tab.
-  const idle = page.getByRole("navigation").getByRole("button", { name: "Opret" });
+  const idle = page.getByRole("navigation").getByRole("button", { name: "Intet at tilføje her" });
   await expect(idle).toBeVisible();
   await expect(idle).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Opret" })).toHaveCount(0);
 
   // Where the page has its own "+", the greyed-out one gives way to it.
   await page.goto("/aktiviteter");
@@ -217,6 +218,8 @@ test("at the end of a page the bars come back, and a window changing height move
   // Scrolled down to the end: nothing left to read, so the menu is there. (The taller
   // window already stands at the end, so go up a little first, as a finger would.)
   await page.evaluate(() => window.scrollBy(0, -150));
+  // Two frames, so the step up is read before the step down: a finger takes longer than that.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(html).not.toHaveAttribute("data-bars");
   await expect(page.getByRole("navigation").last().getByRole("link", { name: "Profil" })).toBeInViewport({ ratio: 1 });

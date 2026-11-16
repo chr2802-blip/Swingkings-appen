@@ -73,14 +73,17 @@ export function BottomNav({ profileHref }: { profileHref: string }) {
               {/*
                * The middle, kept for the page's "+" (`CreateFab`). A page with nothing to
                * make shows the "+" greyed out here, so the bar looks the same on every tab.
+               * Its name has no "Opret" in it: it is there before the page's own "+" has
+               * come (until the page's script has run), and a press on "Opret" then must
+               * wait for the real one, not land on this.
                */}
               {index === NAV_ITEMS.length / 2 && (
                 <li className="relative w-16 shrink-0">
                   <button
                     type="button"
                     disabled
-                    aria-label="Opret"
-                    title="Intet at oprette her"
+                    aria-label="Intet at tilføje her"
+                    title="Intet at tilføje her"
                     className="app-create-idle absolute bottom-3 left-1/2 flex h-15 w-15 -translate-x-1/2 cursor-not-allowed items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--band-muted)_28%,var(--band))] text-[var(--band-muted)] ring-4 ring-[var(--band)]"
                   >
                     <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden>
