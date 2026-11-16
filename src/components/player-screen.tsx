@@ -24,11 +24,12 @@ import { ActionButton } from "@/components/action-button";
 import {
   ChallengeCard,
   challengeCardInclude,
+  type ChallengeView,
 } from "@/components/challenge-card";
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { resetFines } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
-import { FineDetails, FineHistory } from "@/components/fine-history";
+import { FineDetails, FineHistory, type HistoryFine } from "@/components/fine-history";
 
 /** How many settled challenges and finished jobs the page shows; the open ones are always all there. */
 const RECENT = 10;
@@ -113,12 +114,6 @@ export async function PlayerScreen({
       }),
     ]);
   const challenges = [...openChallenges, ...pastChallenges];
-  const badges = [
-    member?.shirtNumber != null && `#${member.shirtNumber}`,
-    member?.superAdmin && SUPER_ADMIN_LABEL,
-    member && member.role !== "PLAYER" && ROLE_LABEL[member.role],
-    !person.onTeam && "Ikke længere på holdet",
-  ].filter((badge): badge is string => typeof badge === "string");
   const tasks = [...openTasks, ...doneTasks];
   const unclearedFines = fines.filter((fine) => !fine.clearedAt).length;
   // A settled challenge also left a fine on each side; the challenge stands for both.
@@ -136,160 +131,19 @@ export async function PlayerScreen({
     .slice(0, LATEST);
   const nextTasks = firstDaysTasks(openTasks);
 
-  /** A fine as a row; tapped, it opens as in the history: everything about it, and "Slet". */
-  const fineRow = (fine: (typeof fines)[number]) => (
-    <li key={fine.id}>
-      <DetailSheet
-        title={fine.challenge ? "Udfordring" : "Bøde"}
-        triggerClassName={`press-card flex w-full items-center gap-3 px-4 py-2 text-left ${fine.clearedAt ? "opacity-60" : ""}`}
-        trigger={
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
-                {fine.reason}
-              </span>
-              <span className="block truncate text-xs text-slate-500">
-                {readInZone(fine.createdAt, "d. MMM yyyy")} ·{" "}
-                {fine.issuedBy.name}
-                {fine.match && ` · ${fine.match.opponent ?? fine.match.title}`}
-                {fine.clearedAt &&
-                  ` · nulstillet ${readInZone(fine.clearedAt, "d. MMM yyyy")}`}
-                {fine.note && ` · ${fine.note}`}
-              </span>
-            </span>
-            <span className="shrink-0 text-right text-sm">
-              {kr(fineAmount(fine))}
-              <span className="block text-xs text-slate-500">
-                {fineUnits(fine.units)}
-              </span>
-            </span>
-            <span aria-hidden className="text-slate-300">
-              ›
-            </span>
-          </>
-        }
-      >
-        <FineDetails fine={fine} user={user} />
-      </DetailSheet>
-    </li>
-  );
-
-  /** A challenge as a short row; tapped, it opens in full. */
-  const challengeRow = (challenge: (typeof challenges)[number]) => (
-    <li key={challenge.id}>
-      <DetailSheet
-        title="Udfordring"
-        triggerClassName="press-card flex w-full items-center gap-3 px-4 py-2 text-left"
-        trigger={
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm">
-                <span className="font-medium">{challenge.winner.name} 🏆</span>{" "}
-                slog {challenge.loser.name}
-              </span>
-              <span className="block truncate text-xs text-slate-500">
-                “{challenge.description}” · {fineUnits(challenge.units)} ·{" "}
-                {relativeDay(challenge.createdAt)}
-              </span>
-            </span>
-            <Badge tone={CHALLENGE_TONE[challenge.status]}>
-              {CHALLENGE_SHORT[challenge.status]}
-            </Badge>
-          </>
-        }
-      >
-        <ChallengeCard
-          challenge={challenge}
-          viewerId={user.id}
-          managesFines={managesFines}
-          finePriceKr={board.finePriceKr}
-        />
-      </DetailSheet>
-    </li>
+  const challengeRow = (challenge: ChallengeView) => (
+    <ChallengeRow
+      key={challenge.id}
+      challenge={challenge}
+      viewerId={user.id}
+      managesFines={managesFines}
+      finePriceKr={board.finePriceKr}
+    />
   );
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-3">
-          <Avatar name={person.name} photoId={person.photoId} size="md" />
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-semibold tracking-tight">
-              {person.name}
-            </h1>
-            {badges.length > 0 && (
-              <p className="truncate text-xs text-slate-500">
-                {badges.join(" · ")}
-              </p>
-            )}
-            {member && (
-              <p className="mt-1 flex flex-wrap items-center gap-2">
-                {member.duesPaid ? (
-                  <Badge tone="green">Kontingent betalt</Badge>
-                ) : (
-                  <Badge tone="amber">Mangler kontingent</Badge>
-                )}
-                {self && !member.duesPaid && board.payLink && (
-                  <PayLink
-                    kind="dues"
-                    link={board.payLink}
-                    amountKr={board.duesKr}
-                    name={person.name}
-                    className="text-xs font-medium text-[var(--accent)]"
-                  >
-                    Betal kontingent
-                    {board.duesKr ? ` (${kr(board.duesKr)})` : ""} ›
-                  </PayLink>
-                )}
-              </p>
-            )}
-          </div>
-          <div className="flex shrink-0 gap-2">
-            {self && (
-              <ButtonLink href="/profil" variant="secondary">
-                Rediger
-              </ButtonLink>
-            )}
-            {person.onTeam && (
-              <GiveFineDialog
-                members={board.roster}
-                fineTypes={board.fineTypes}
-                finePriceKr={board.finePriceKr}
-                matches={matches}
-                defaultPlayerId={id}
-              />
-            )}
-          </div>
-        </div>
-        <dl className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
-          <Stat
-            label="udestående"
-            value={kr(account.owesKr)}
-            tone={account.owesKr > 0 ? "text-red-600" : "text-emerald-700"}
-          />
-          <Stat
-            label={account.units === 1 ? "bøde" : "bøder"}
-            value={String(account.units)}
-          />
-          <Stat label="i alt" value={kr(account.finedKr)} />
-        </dl>
-        {self && account.owesKr > 0 && board.payLink && (
-          <>
-            <PayLink
-              kind="fines"
-              link={board.payLink}
-              amountKr={account.owesKr}
-              name={person.name}
-              className={buttonClass("primary", "mt-3 w-full")}
-            >
-              💸 Betal {kr(account.owesKr)} med MobilePay
-            </PayLink>
-            <p className="mt-1.5 text-center text-xs text-slate-500">
-              {afterPaying("fines")}
-            </p>
-          </>
-        )}
-      </div>
+      <PlayerHeader id={id} self={self} person={person} member={member} account={account} board={board} matches={matches} />
 
       <SwipePages
         label="Spillerens sider"
@@ -310,9 +164,11 @@ export async function PlayerScreen({
                     <Card padded={false}>
                       <ul className="divide-y divide-slate-100">
                         {latest.map((item) =>
-                          item.kind === "fine"
-                            ? fineRow(item.fine)
-                            : challengeRow(item.challenge),
+                          item.kind === "fine" ? (
+                            <FineRow key={item.fine.id} fine={item.fine} user={user} />
+                          ) : (
+                            challengeRow(item.challenge)
+                          ),
                         )}
                       </ul>
                     </Card>
@@ -396,6 +252,203 @@ export async function PlayerScreen({
     </div>
   );
 }
+
+type Board = Awaited<ReturnType<typeof fineBoard>>;
+
+/** Who they are, what they owe, and "Betal" on your own page — what stands above the tabs. */
+function PlayerHeader({
+  id,
+  self,
+  person,
+  member,
+  account,
+  board,
+  matches,
+}: {
+  id: string;
+  self: boolean;
+  person: NonNullable<ReturnType<Board["people"]["get"]>>;
+  member: Board["roster"][number] | undefined;
+  account: Board["balances"][number];
+  board: Board;
+  matches: Awaited<ReturnType<typeof matchOptions>>;
+}) {
+  const badges = [
+    member?.shirtNumber != null && `#${member.shirtNumber}`,
+    member?.superAdmin && SUPER_ADMIN_LABEL,
+    member && member.role !== "PLAYER" && ROLE_LABEL[member.role],
+    !person.onTeam && "Ikke længere på holdet",
+  ].filter((badge): badge is string => typeof badge === "string");
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <Avatar name={person.name} photoId={person.photoId} size="md" />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-semibold tracking-tight">
+            {person.name}
+          </h1>
+          {badges.length > 0 && (
+            <p className="truncate text-xs text-slate-500">
+              {badges.join(" · ")}
+            </p>
+          )}
+          {member && (
+            <p className="mt-1 flex flex-wrap items-center gap-2">
+              {member.duesPaid ? (
+                <Badge tone="green">Kontingent betalt</Badge>
+              ) : (
+                <Badge tone="amber">Mangler kontingent</Badge>
+              )}
+              {self && !member.duesPaid && board.payLink && (
+                <PayLink
+                  kind="dues"
+                  link={board.payLink}
+                  amountKr={board.duesKr}
+                  name={person.name}
+                  className="text-xs font-medium text-[var(--accent)]"
+                >
+                  Betal kontingent
+                  {board.duesKr ? ` (${kr(board.duesKr)})` : ""} ›
+                </PayLink>
+              )}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-2">
+          {self && (
+            <ButtonLink href="/profil" variant="secondary">
+              Rediger
+            </ButtonLink>
+          )}
+          {person.onTeam && (
+            <GiveFineDialog
+              members={board.roster}
+              fineTypes={board.fineTypes}
+              finePriceKr={board.finePriceKr}
+              matches={matches}
+              defaultPlayerId={id}
+            />
+          )}
+        </div>
+      </div>
+      <dl className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
+        <Stat
+          label="udestående"
+          value={kr(account.owesKr)}
+          tone={account.owesKr > 0 ? "text-red-600" : "text-emerald-700"}
+        />
+        <Stat
+          label={account.units === 1 ? "bøde" : "bøder"}
+          value={String(account.units)}
+        />
+        <Stat label="i alt" value={kr(account.finedKr)} />
+      </dl>
+      {self && account.owesKr > 0 && board.payLink && (
+        <>
+          <PayLink
+            kind="fines"
+            link={board.payLink}
+            amountKr={account.owesKr}
+            name={person.name}
+            className={buttonClass("primary", "mt-3 w-full")}
+          >
+            💸 Betal {kr(account.owesKr)} med MobilePay
+          </PayLink>
+          <p className="mt-1.5 text-center text-xs text-slate-500">
+            {afterPaying("fines")}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A fine as a row; tapped, it opens as in the history: everything about it, and "Slet". */
+function FineRow({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
+  return (
+    <li>
+      <DetailSheet
+        title={fine.challenge ? "Udfordring" : "Bøde"}
+        triggerClassName={`press-card flex w-full items-center gap-3 px-4 py-2 text-left ${fine.clearedAt ? "opacity-60" : ""}`}
+        trigger={
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {fine.reason}
+              </span>
+              <span className="block truncate text-xs text-slate-500">
+                {readInZone(fine.createdAt, "d. MMM yyyy")} ·{" "}
+                {fine.issuedBy.name}
+                {fine.match && ` · ${fine.match.opponent ?? fine.match.title}`}
+                {fine.clearedAt &&
+                  ` · nulstillet ${readInZone(fine.clearedAt, "d. MMM yyyy")}`}
+                {fine.note && ` · ${fine.note}`}
+              </span>
+            </span>
+            <span className="shrink-0 text-right text-sm">
+              {kr(fineAmount(fine))}
+              <span className="block text-xs text-slate-500">
+                {fineUnits(fine.units)}
+              </span>
+            </span>
+            <span aria-hidden className="text-slate-300">
+              ›
+            </span>
+          </>
+        }
+      >
+        <FineDetails fine={fine} user={user} />
+      </DetailSheet>
+    </li>
+  );
+}
+
+/** A challenge as a short row; tapped, it opens in full. */
+function ChallengeRow({
+  challenge,
+  viewerId,
+  managesFines,
+  finePriceKr,
+}: {
+  challenge: ChallengeView;
+  viewerId: string;
+  managesFines: boolean;
+  finePriceKr: number;
+}) {
+  return (
+    <li>
+      <DetailSheet
+        title="Udfordring"
+        triggerClassName="press-card flex w-full items-center gap-3 px-4 py-2 text-left"
+        trigger={
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm">
+                <span className="font-medium">{challenge.winner.name} 🏆</span>{" "}
+                slog {challenge.loser.name}
+              </span>
+              <span className="block truncate text-xs text-slate-500">
+                “{challenge.description}” · {fineUnits(challenge.units)} ·{" "}
+                {relativeDay(challenge.createdAt)}
+              </span>
+            </span>
+            <Badge tone={CHALLENGE_TONE[challenge.status]}>
+              {CHALLENGE_SHORT[challenge.status]}
+            </Badge>
+          </>
+        }
+      >
+        <ChallengeCard
+          challenge={challenge}
+          viewerId={viewerId}
+          managesFines={managesFines}
+          finePriceKr={finePriceKr}
+        />
+      </DetailSheet>
+    </li>
+  );
+}
+
 
 function List({ children }: { children: React.ReactNode }) {
   return (
