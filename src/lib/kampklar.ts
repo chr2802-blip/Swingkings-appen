@@ -181,6 +181,8 @@ export async function syncIfStale(teamId: string, now: Date = new Date()): Promi
   if (claimed.count === 0) return null;
   const result = await syncTeamCalendar(teamId, null).catch((error) => ({ ok: false as const, error: String(error) }));
   if (!result.ok) {
+    // Nobody is shown a failed visit-sync, so the log is the only place it is seen.
+    console.warn(`[kampklar] sync failed for team ${teamId}: ${result.error}`);
     await prisma.team.updateMany({ where: { id: teamId, calendarSyncedAt: now }, data: { calendarSyncedAt: team.calendarSyncedAt } });
   }
   return result;
