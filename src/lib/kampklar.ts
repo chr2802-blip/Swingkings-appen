@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { safeFetch } from "./safe-fetch";
-import { classify, normalizeCalendarUrl, parseCalendar, type CalendarEvent } from "./ical";
+import { Prisma } from "@prisma/client";
+import { classify, kampKlarDetails, normalizeCalendarUrl, parseCalendar, type CalendarEvent } from "./ical";
 import { addTemplatesToActivity, moveTaskDeadlines } from "./tasks";
 
 /** Past this, a calendar feed is not a team's season. */
@@ -65,6 +66,9 @@ export async function fetchCalendar(rawUrl: string): Promise<{ ok: true; text: s
  *   handed out fairly.
  * - An upcoming entry that has disappeared from the feed is marked cancelled rather than
  *   deleted: tasks and fines may already hang off it.
+ * - The description's labels are read (`kampKlarDetails`): the link to the activity in
+ *   KampKlar, the meeting place, the description proper and — when the feed carries
+ *   them — who has signed up. A KampKlar activity is signed up for in KampKlar, not here.
  * - Nothing from before the season began is brought in: "Start ny sæson" deleted the
  *   activities that had taken place, and the feed still lists them.
  */
@@ -93,6 +97,10 @@ export async function applyCalendar(
     if (seen.has(event.uid)) continue;
     seen.add(event.uid);
     const { kind, title, opponent, isHome } = classify(event, teamName);
+    const details = kampKlarDetails(event);
+    // A meeting place stands in for a missing LOCATION; beside a different one it is part of the note.
+    const place = details.meetingPlace;
+    const extraPlace = place && event.location && place !== event.location ? `Mødested: ${place}` : null;
     const data = {
       title,
       kind,
@@ -100,8 +108,10 @@ export async function applyCalendar(
       isHome,
       startsAt: event.startsAt,
       endsAt: event.endsAt,
-      location: event.location,
-      note: event.description,
+      location: event.location ?? place,
+      note: [extraPlace, details.note].filter(Boolean).join("\n\n") || null,
+      externalUrl: details.link,
+      externalSignups: details.signups ?? Prisma.DbNull,
       cancelledAt: event.cancelled ? now : null,
     };
     const row = byUid.get(event.uid);

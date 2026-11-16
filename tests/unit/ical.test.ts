@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classify, normalizeCalendarUrl, parseCalendar, parseIcalDate, unescapeText } from "@/lib/ical";
+import { classify, dbuLink, kampKlarDetails, normalizeCalendarUrl, parseCalendar, parseIcalDate, unescapeText } from "@/lib/ical";
 
 const FEED = [
   "BEGIN:VCALENDAR",
@@ -115,5 +115,73 @@ describe("normalizeCalendarUrl", () => {
   it("refuses other schemes and junk", () => {
     expect(normalizeCalendarUrl("ftp://example.dk")).toBeNull();
     expect(normalizeCalendarUrl("not a url")).toBeNull();
+  });
+});
+
+describe("kampKlarDetails", () => {
+  // As KampKlar writes it: one label to a line, the description's own text under "Beskrivelse:".
+  const KAMPKLAR = [
+    "BEGIN:VCALENDAR",
+    "BEGIN:VEVENT",
+    "UID:7334167@dbu",
+    "DTSTART:20261116T110000Z",
+    "SUMMARY:Test overskrift",
+    "DESCRIPTION:Mødested: Læssøgadeskolen\\n\\nBeskrivelse:\\nTest beskrivelse\\n\\nAktivitetslink: https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+
+  it("reads the link, the meeting place and the description from KampKlar's labels", () => {
+    const [event] = parseCalendar(KAMPKLAR);
+    expect(kampKlarDetails(event!)).toEqual({
+      link: "https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167",
+      meetingPlace: "Læssøgadeskolen",
+      note: "Test beskrivelse",
+      signups: null,
+    });
+  });
+
+  it("reads sign-ups from Tilmeldte and Afbud, one to a line or separated by commas", () => {
+    const details = kampKlarDetails({
+      description: "Tilmeldte (3):\n- Anna Hansen\n- Bo Berg\n• Carl\n\nAfbud: Dorte, Eva\n\nBeskrivelse:\nHusk bolde",
+      url: null,
+      attendees: [],
+    });
+    expect(details.signups).toEqual({ going: ["Anna Hansen", "Bo Berg", "Carl"], notGoing: ["Dorte", "Eva"] });
+    expect(details.note).toBe("Husk bolde");
+  });
+
+  it("reads sign-ups from ATTENDEE lines when the description has none", () => {
+    const [event] = parseCalendar(
+      [
+        "BEGIN:VEVENT",
+        "UID:x",
+        "DTSTART:20261116T110000Z",
+        'ATTENDEE;CN="Anna Hansen";PARTSTAT=ACCEPTED:mailto:a@example.com',
+        "ATTENDEE;CN=Bo;PARTSTAT=DECLINED:mailto:b@example.com",
+        "ATTENDEE;CN=Carl;PARTSTAT=NEEDS-ACTION:mailto:c@example.com",
+        "URL:https://web.dbu.dk/fodboldapp?activityId=1",
+        "END:VEVENT",
+      ].join("\r\n"),
+    );
+    expect(kampKlarDetails(event!)).toMatchObject({
+      link: "https://web.dbu.dk/fodboldapp?activityId=1",
+      signups: { going: ["Anna Hansen"], notGoing: ["Bo"] },
+    });
+  });
+
+  it("keeps a description with no labels as it is, and other labels in the note", () => {
+    expect(kampKlarDetails({ description: "Husk hvide strømper", url: null }).note).toBe("Husk hvide strømper");
+    expect(kampKlarDetails({ description: "Mødetid: 13:45\nBeskrivelse:\nGodt humør", url: null }).note).toBe("Mødetid: 13:45\n\nGodt humør");
+    expect(kampKlarDetails({ description: null }).note).toBeNull();
+  });
+
+  it("makes a button only of an https link to DBU", () => {
+    expect(dbuLink("https://web.dbu.dk/x")).toBe("https://web.dbu.dk/x");
+    expect(dbuLink("https://dbu.dk/x")).toBe("https://dbu.dk/x");
+    expect(dbuLink("http://web.dbu.dk/x")).toBeNull();
+    expect(dbuLink("https://dbu.dk.evil.example/x")).toBeNull();
+    expect(dbuLink("javascript:alert(1)")).toBeNull();
+    expect(kampKlarDetails({ description: "Aktivitetslink: https://evil.example/x", url: null }).link).toBeNull();
   });
 });

@@ -237,3 +237,35 @@ describe("a moved activity", () => {
     expect((await prisma.task.findUniqueOrThrow({ where: { id: stray.id } })).dueAt?.toISOString()).toBe("2026-10-17T12:30:00.000Z");
   });
 });
+
+describe("applyCalendar and KampKlar's description", () => {
+  it("stores the activity's link, its meeting place and who KampKlar says comes, and forgets them when the feed does", async () => {
+    const team = await makeTeam("Swingkings");
+    const description =
+      "Mødested: Læssøgadeskolen\n\nBeskrivelse:\nTest beskrivelse\n\nTilmeldte: Anna, Bo\nAfbud: Carl\n\n" +
+      "Aktivitetslink: https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167";
+    await applyCalendar(team.id, team.name, [event("7334167@dbu", "Test overskrift", "2026-11-16T11:00:00Z", { description })], null, now);
+    const row = await prisma.match.findFirstOrThrow({ where: { teamId: team.id, externalUid: "7334167@dbu" } });
+    expect(row).toMatchObject({
+      location: "Læssøgadeskolen",
+      note: "Test beskrivelse",
+      externalUrl: "https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167",
+      externalSignups: { going: ["Anna", "Bo"], notGoing: ["Carl"] },
+    });
+
+    // A LOCATION of its own wins; a different meeting place stays in the note. No sign-ups: none kept.
+    await applyCalendar(
+      team.id,
+      team.name,
+      [event("7334167@dbu", "Test overskrift", "2026-11-16T11:00:00Z", { location: "Bane 3", description: "Mødested: P-pladsen\nAktivitetslink: https://evil.example/x" })],
+      null,
+      now,
+    );
+    expect(await prisma.match.findFirstOrThrow({ where: { id: row.id } })).toMatchObject({
+      location: "Bane 3",
+      note: "Mødested: P-pladsen",
+      externalUrl: null,
+      externalSignups: null,
+    });
+  });
+});
