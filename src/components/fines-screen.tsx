@@ -52,7 +52,7 @@ export async function FinesScreen({
   const [board, kings, history, matches, pending] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
-    fineHistory(user.teamId, HISTORY),
+    fineHistory(user.teamId, { take: HISTORY }),
     matchOptions(user.teamId),
     db.challenge.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude }),
   ]);

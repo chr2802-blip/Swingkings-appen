@@ -312,3 +312,23 @@ test("a player gives a job to a teammate, who accepts it, and the job keeps the 
   await expect(page.getByText("Godkendt")).toBeVisible();
   expect((await db.taskAssignee.findMany({ where: { taskId: task.id } })).map((a) => a.userId)).toEqual([bo.id]);
 });
+
+test("an activity's fines open as in the history, and their giver may delete one there", async ({ page, loginAs }) => {
+  const { team, treasurer, anna, bo } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Kamp", opponent: "FC Naboen", startsAt: new Date(Date.now() - 86_400_000) } });
+  await db.fine.create({ data: { teamId: team.id, matchId: match.id, playerId: bo.id, reason: "For sent", note: "Ti minutter", units: 2, unitPriceKr: 10, issuedById: anna.id } });
+  // A fine from no activity stays off its page.
+  await db.fine.create({ data: { teamId: team.id, playerId: bo.id, reason: "Glemt trøje", units: 1, unitPriceKr: 10, issuedById: treasurer.id } });
+
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  await expect(page.getByText("Glemt trøje")).toHaveCount(0);
+  await page.getByRole("button", { name: /Bo · For sent/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Bøde" });
+  await expect(sheet.getByText("Ti minutter")).toBeVisible();
+  await expect(sheet.getByText(/FC Naboen ·/)).toBeVisible();
+  await sheet.getByRole("button", { name: "Slet bøden" }).click();
+  await page.getByRole("dialog", { name: "Slet bøden til Bo?" }).getByRole("button", { name: "Slet bøden" }).click();
+  await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
+  expect(await db.fine.count({ where: { matchId: match.id } })).toBe(0);
+});

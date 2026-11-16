@@ -4,8 +4,7 @@ import { teamDb } from "@/lib/team-db";
 import { prisma } from "@/lib/prisma";
 import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
-import { fineBoard } from "@/lib/fine-data";
-import { fineAmount, fineUnits, kr } from "@/lib/money";
+import { fineBoard, fineHistory } from "@/lib/fine-data";
 import { kickoffLabel, relativeDay, toLocalDateTimeInput } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
@@ -13,6 +12,7 @@ import { TaskDialog } from "@/components/task-dialog";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { PlayerLink } from "@/components/player-link";
+import { FineHistory } from "@/components/fine-history";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
 import { ActionMenu } from "@/components/action-menu";
 import { ActionButton } from "@/components/action-button";
@@ -31,10 +31,6 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
       where: { id },
       include: {
         tasks: { orderBy: { createdAt: "asc" }, select: TASK_SELECT },
-        fines: {
-          orderBy: { createdAt: "desc" },
-          select: { id: true, reason: true, units: true, unitPriceKr: true, player: { select: { id: true, name: true } } },
-        },
         challenges: {
           orderBy: { createdAt: "desc" },
           include: challengeCardInclude,
@@ -43,12 +39,13 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
       },
     }),
   );
-  const [roster, board, team, templates, copyable] = await Promise.all([
+  const [roster, board, team, templates, copyable, fines] = await Promise.all([
     teamRoster(user.teamId),
     fineBoard(user.teamId),
     prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true } }),
     templateOptions(user.teamId),
     copyableActivities(user.teamId, match.id),
+    fineHistory(user.teamId, { matchId: match.id }),
   ]);
   const label = activityName(match);
   const takesSignups = match.source === "MANUAL";
@@ -156,27 +153,8 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
 
       <section className="mb-8">
         <SectionTitle>{match.kind === "MATCH" ? "Bøder fra kampen" : "Bøder"}</SectionTitle>
-        {match.fines.length === 0 ? (
-          <EmptyState>Ingen bøder endnu.</EmptyState>
-        ) : (
-          <Card padded={false}>
-            <ul className="divide-y divide-slate-100">
-              {match.fines.map((fine) => (
-                <li key={fine.id} className="flex justify-between gap-3 px-4 py-3 text-sm">
-                  <span>
-                    <PlayerLink userId={fine.player.id} className="font-semibold">
-                      {fine.player.name}
-                    </PlayerLink>{" "}
-                    · {fine.reason}
-                  </span>
-                  <span className="shrink-0 text-slate-500">
-                    {fineUnits(fine.units)} · {kr(fineAmount(fine))}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
+        {/* The history's rows: a tap opens the fine with everything about it. */}
+        {fines.length === 0 ? <EmptyState>Ingen bøder endnu.</EmptyState> : <FineHistory fines={fines} user={user} />}
       </section>
 
       {match.challenges.length > 0 && (

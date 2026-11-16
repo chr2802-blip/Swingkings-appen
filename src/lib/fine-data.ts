@@ -50,9 +50,14 @@ export async function monthKings(teamId: string) {
   return fineKings(fines);
 }
 
-/** The team's newest fines, cleared ones included — the history under the board and on its own page. */
-export function fineHistory(teamId: string, take: number) {
+/**
+ * The team's newest fines, cleared ones included — the history under the board and on its
+ * own page, and (narrowed to one player or one activity) the fines on those pages, so a tap
+ * opens the same sheet everywhere. Without `take`, all of them.
+ */
+export function fineHistory(teamId: string, { take, playerId, matchId }: { take?: number; playerId?: string; matchId?: string } = {}) {
   return teamDb(teamId).fine.findMany({
+    where: { playerId, matchId },
     orderBy: { createdAt: "desc" },
     take,
     select: {

@@ -353,12 +353,31 @@ describe("fine data", () => {
     await fine(team.id, anna.id, bo.id, "Nyest", 10);
     await fine(other.team.id, other.anna.id, other.treasurer.id, "De andres", 0);
 
-    const all = await fineHistory(team.id, 10);
+    const all = await fineHistory(team.id, { take: 10 });
     expect(all.map((f) => f.reason)).toEqual(["Nyest", "Midt", "Ældst"]);
     expect(all[0]).toMatchObject({ issuedById: bo.id, player: { id: anna.id, name: "Anna" }, clearedAt: null });
     expect(all[2].clearedAt).toBeInstanceOf(Date);
-    expect((await fineHistory(team.id, 2)).map((f) => f.reason)).toEqual(["Nyest", "Midt"]);
-    expect(await fineHistory(other.team.id, 10)).toHaveLength(1);
+    expect((await fineHistory(team.id, { take: 2 })).map((f) => f.reason)).toEqual(["Nyest", "Midt"]);
+    expect(await fineHistory(other.team.id, { take: 10 })).toHaveLength(1);
+  });
+
+  it("narrows to one player or one activity, all of them without a limit, and never another team's", async () => {
+    const { team, treasurer, anna, bo } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const match = await makeMatch(team.id, { opponent: "FC Nabo" });
+    const give = (teamId: string, playerId: string, issuedById: string, reason: string, matchId?: string) =>
+      prisma.fine.create({ data: { teamId, playerId, issuedById, reason, units: 1, unitPriceKr: 10, matchId } });
+    await give(team.id, anna.id, treasurer.id, "Annas første");
+    await give(team.id, anna.id, treasurer.id, "Annas til kampen", match.id);
+    await give(team.id, bo.id, treasurer.id, "Bos til kampen", match.id);
+    await give(other.team.id, other.anna.id, other.treasurer.id, "De andres");
+
+    expect((await fineHistory(team.id, { playerId: anna.id })).map((f) => f.reason).sort()).toEqual(["Annas første", "Annas til kampen"]);
+    expect((await fineHistory(team.id, { matchId: match.id })).map((f) => f.reason).sort()).toEqual(["Annas til kampen", "Bos til kampen"]);
+    expect(await fineHistory(team.id)).toHaveLength(3);
+    // Another team's player or activity is nobody here.
+    expect(await fineHistory(team.id, { playerId: other.anna.id })).toEqual([]);
+    expect(await fineHistory(other.team.id, { matchId: match.id })).toEqual([]);
   });
 
   it("carries what a fine's sheet shows: the giver, the note, the activity and the challenge it came from", async () => {
@@ -373,7 +392,7 @@ describe("fine data", () => {
     await signIn(admin);
     expect(await moveChallenge(undefined, formData({ id: challenge.id, move: "approve" }))).toEqual({ ok: true });
 
-    const fines = await fineHistory(team.id, 10);
+    const fines = await fineHistory(team.id, { take: 10 });
     const plain = fines.find((f) => f.reason === "For sent")!;
     expect(plain).toMatchObject({ note: "Ti minutter", issuedBy: { name: "Kasserer" }, match: { opponent: "FC Nabo" }, challenge: null });
     const moved = fines.filter((f) => f.challengeId === challenge.id);

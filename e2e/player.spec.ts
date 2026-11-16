@@ -24,6 +24,15 @@ test("a player's page shows their fines, challenges and jobs, and no way to edit
   await expect(page.getByText("Naboens bøde")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Rediger" })).toHaveCount(0);
 
+  // A fine is a row too; tapped, it opens as in the history, and Anna (not its giver) may not delete it.
+  await page.getByRole("button", { name: /Glemt trøje/ }).click();
+  const fine = page.getByRole("dialog", { name: "Bøde" });
+  await expect(fine.getByText("Pris pr. bøde")).toBeVisible();
+  await expect(fine.getByRole("link", { name: "Kasserer Kim" })).toBeVisible();
+  await expect(fine.getByRole("button", { name: "Slet bøden" })).toHaveCount(0);
+  await fine.getByRole("button", { name: "Luk" }).click();
+  await expect(fine).toBeHidden();
+
   // The challenge is a short row; tapped, it opens in full, and a name there leads on.
   await page.getByRole("button", { name: /Anna 🏆 slog Bo/ }).click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
