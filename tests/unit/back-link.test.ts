@@ -5,7 +5,7 @@ const me = "/spiller/me";
 
 describe("where the back arrow leads", () => {
   it("leaves the tabs without one", () => {
-    for (const path of ["/oversigt", "/boder", "/boder/historik", "/boder/katalog", "/aktiviteter", "/chat", "/admin"]) {
+    for (const path of ["/oversigt", "/boder", "/boder/historik", "/boder/katalog", "/aktiviteter", "/admin"]) {
       expect(backHref(path, me)).toBeNull();
     }
   });
@@ -17,8 +17,13 @@ describe("where the back arrow leads", () => {
     expect(backHref("/kampe/abc", me)).toBe("/aktiviteter");
   });
 
-  it("takes a player's page, the settings and the roster home", () => {
+  it("leaves your own page without one: it is the profile tab", () => {
+    expect(backHref(me, me)).toBeNull();
+  });
+
+  it("takes another player's page, the chat, the settings and the roster home", () => {
     expect(backHref("/spiller/abc", me)).toBe("/oversigt");
+    expect(backHref("/chat", me)).toBe("/oversigt");
     expect(backHref("/hold", me)).toBe("/oversigt");
     expect(backHref("/hold/inviter", me)).toBe("/oversigt");
     expect(backHref("/hold/spillere", me)).toBe("/oversigt");

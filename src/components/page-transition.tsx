@@ -19,6 +19,18 @@ let leftAt: { opacity: string; at: number } | null = null;
 /** A page that let go longer ago than this did not let go for the page now coming in. */
 const LEFT_JUST_NOW_MS = 100;
 
+/** The back arrow was pressed: the next page closes the one on screen, also when it is a step back. */
+let goingBack = false;
+
+/**
+ * Called by the back arrow just before it leaves. The page it goes to closes in — from the
+ * left, the way back — whether the arrow steps back in history or goes to the page above.
+ * The browser's own back still brings nothing in: that one the phone draws itself.
+ */
+export function closeNext() {
+  goingBack = true;
+}
+
 /** Called just before a page rewrites its own address, so the change is not read as a new page. */
 export function stayOnPage(href: string) {
   inPlace = href;
@@ -31,7 +43,8 @@ export function stayOnPage(href: string) {
  * same element, so a page keeps its state when only its address moves.
  *
  * Back and forward bring nothing in: a phone draws its own slide for the back swipe, and
- * a second one on top of it reads as a stutter.
+ * a second one on top of it reads as a stutter. The back arrow in the header is ours, and
+ * closes its page (`closeNext`).
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -52,10 +65,12 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
     const from = last.current;
     last.current = pathname;
     if (!el || from === pathname) return;
-    const quiet = popped.current === pathname || inPlace === pathname;
+    const back = goingBack;
+    const quiet = !back && (popped.current === pathname || inPlace === pathname);
     popped.current = null;
     inPlace = null;
-    const motion = quiet ? null : pageMotion(from, pathname, TAB_PATHS);
+    goingBack = false;
+    const motion: PageMotion | null = back ? "close" : quiet ? null : pageMotion(from, pathname, TAB_PATHS);
     el.dataset.motion = motion ?? "none";
     const left = leftAt && performance.now() - leftAt.at < LEFT_JUST_NOW_MS ? leftAt.opacity : "1";
     leftAt = null;

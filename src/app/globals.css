@@ -180,6 +180,8 @@ h1,
   --dur-sheet-in: 300ms;
   --dur-sheet-out: 200ms;
   --dur-page: 300ms;
+  /* Further to go than a tab's step, so a little longer. */
+  --dur-page-push: 360ms;
   --dur-page-out: 140ms;
 }
 
@@ -371,10 +373,10 @@ h1,
   animation: page-backward var(--dur-page) var(--ease-page) backwards;
 }
 .app-page[data-motion="open"] {
-  animation: page-open var(--dur-page) var(--ease-page) backwards;
+  animation: page-open var(--dur-page-push) var(--ease-page) backwards;
 }
 .app-page[data-motion="close"] {
-  animation: page-close var(--dur-page) var(--ease-page) backwards;
+  animation: page-close var(--dur-page-push) var(--ease-page) backwards;
 }
 .app-page[data-motion="none"] {
   animation: none;
@@ -385,28 +387,33 @@ h1,
   will-change: opacity, translate;
   transition: opacity var(--dur-page-out) ease-out;
 }
+/*
+ * A tab comes in from its side of the tab bar; a page deeper down comes in from the right,
+ * as a phone app pushes a screen, and going back brings the page above in from the left.
+ * A page that opens or closes comes in faded too, so the move reads even before it ends.
+ */
 @keyframes page-forward {
   from {
     opacity: var(--page-from, 1);
-    translate: 24px 0;
+    translate: 48px 0;
   }
 }
 @keyframes page-backward {
   from {
     opacity: var(--page-from, 1);
-    translate: -24px 0;
+    translate: -48px 0;
   }
 }
 @keyframes page-open {
   from {
-    opacity: var(--page-from, 1);
-    translate: 0 14px;
+    opacity: calc(var(--page-from, 1) * 0.4);
+    translate: 32% 0;
   }
 }
 @keyframes page-close {
   from {
-    opacity: var(--page-from, 1);
-    translate: 0 -10px;
+    opacity: calc(var(--page-from, 1) * 0.4);
+    translate: -24% 0;
   }
 }
 

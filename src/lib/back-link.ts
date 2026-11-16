@@ -5,10 +5,12 @@
  * else with nothing above it, and has no arrow.
  *
  * The tabs and the pages swiped between inside one (Bøder's history and catalogue) are
- * not details and get none; the team's settings, a player, an activity and a task do.
+ * not details and get none, nor does your own page, which is the profile tab; the team's
+ * settings, the chat, another player, an activity and a task do.
  */
 export function backHref(pathname: string, profileHref: string): string | null {
   const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === profileHref) return null;
   const [first, second] = path.split("/").filter(Boolean);
 
   switch (first) {
@@ -16,6 +18,8 @@ export function backHref(pathname: string, profileHref: string): string | null {
     case "kampe":
     case "opgaver":
       return second ? "/aktiviteter" : null;
+    case "chat":
+      return "/oversigt";
     case "spiller":
       return second ? "/oversigt" : null;
     case "profil":
