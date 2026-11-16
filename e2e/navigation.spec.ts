@@ -311,3 +311,66 @@ test("your own page is the profile tab and has no back arrow; the chat has one",
   await page.getByRole("link", { name: "Tilbage" }).click();
   await expect(page).toHaveURL(/\/oversigt$/);
 });
+
+/** The app as opened from the home screen, where an iPhone has no back swipe of its own. */
+async function installed(page: Page) {
+  await page.addInitScript(() => Object.defineProperty(navigator, "standalone", { value: true }));
+}
+
+/**
+ * A finger from (x, y) to (x + dx, y + dy), in steps, as a real swipe sends it. Chromium as
+ * an Android phone goes back by itself on a sideways overscroll; that is the browser's, not
+ * the app's, so it is switched off here and only the app's own swipe is left.
+ */
+async function swipe(page: Page, x: number, y: number, dx: number, dy = 0) {
+  await page.addStyleTag({ content: "html, body { overscroll-behavior-x: none; }" });
+  const cdp = await page.context().newCDPSession(page);
+  const at = (i: number, steps: number) => [{ x: x + (dx * i) / steps, y: y + (dy * i) / steps }];
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(0, 1) });
+  for (let i = 1; i <= 10; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(i, 10) });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await cdp.detach();
+}
+
+test("in the installed app a swipe in from the left edge goes back, and a short one does not", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: new Date(Date.now() + 10 * 86_400_000) } });
+  await installed(page);
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  const shown = page.getByTestId("page");
+  await page.getByRole("link", { name: /Afslutningsfest/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${party.id}$`));
+
+  // Too short: the page slides back and lets go of the swipe.
+  await swipe(page, 5, 400, 60);
+  await expect(shown).not.toHaveAttribute("data-dragging");
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${party.id}$`));
+  expect(await shown.evaluate((el) => el.style.translate)).toBe("");
+
+  // Started inside the page: not ours.
+  await swipe(page, 120, 400, 250);
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${party.id}$`));
+
+  // Far enough: back to the list, which closes in, with nothing of the swipe left on it.
+  await swipe(page, 5, 400, 250);
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect(shown).toHaveAttribute("data-motion", "close");
+  await expect(shown).not.toHaveAttribute("data-dragging");
+  expect(await shown.evaluate((el) => el.style.translate)).toBe("");
+
+  // A tab has nothing to go back to.
+  await swipe(page, 5, 400, 250);
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+});
+
+test("in a browser the edge is left to the phone's own back swipe", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: new Date(Date.now() + 10 * 86_400_000) } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await expect(page.getByRole("link", { name: "Tilbage" })).toBeVisible();
+  await swipe(page, 5, 400, 250);
+  await expect(page.getByTestId("page")).not.toHaveAttribute("data-dragging");
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${party.id}$`));
+});
