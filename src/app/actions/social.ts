@@ -7,7 +7,7 @@ import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { MAX_MESSAGE, optionalId, readForm } from "@/lib/form";
+import { field, MAX_MESSAGE, optionalId, readForm } from "@/lib/form";
 import { readPhotoChoices, discardPhotos } from "@/lib/photos";
 import { MAX_CHAT_PHOTOS } from "@/lib/photo-file";
 import { teamRoster } from "@/lib/roster";
@@ -57,7 +57,7 @@ export async function deleteChatMessage(_prev: ActionResult, formData: FormData)
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
   const message = await db.chatMessage.findFirst({
-    where: { id: String(formData.get("id") ?? "") },
+    where: { id: field(formData, "id") },
     include: { photos: { select: { photoId: true } } },
   });
   if (!message) return ok();
@@ -185,7 +185,7 @@ export async function deletePost(_prev: ActionResult, formData: FormData): Promi
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
   const post = await db.post.findFirst({
-    where: { id: String(formData.get("id") ?? "") },
+    where: { id: field(formData, "id") },
     select: { id: true, authorId: true, photos: { select: { photoId: true } } },
   });
   if (!post) return ok();
@@ -211,7 +211,7 @@ export async function editPost(_prev: ActionResult, formData: FormData): Promise
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
   const post = await db.post.findFirst({
-    where: { id: String(formData.get("id") ?? "") },
+    where: { id: field(formData, "id") },
     select: { id: true, authorId: true, photos: { select: { photoId: true } }, poll: { select: { id: true } } },
   });
   if (!post) return fail("Opslaget findes ikke.");
@@ -243,7 +243,7 @@ export async function editPost(_prev: ActionResult, formData: FormData): Promise
 export async function pinPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
-  const post = await db.post.findFirst({ where: { id: String(formData.get("id") ?? "") }, select: { id: true, pinnedAt: true } });
+  const post = await db.post.findFirst({ where: { id: field(formData, "id") }, select: { id: true, pinnedAt: true } });
   if (!post) return fail("Opslaget findes ikke.");
   const pin = formData.get("pinned") === "on";
   if (pin !== (post.pinnedAt !== null)) {
@@ -261,7 +261,7 @@ export async function vote(_prev: ActionResult, formData: FormData): Promise<Act
   const result = await castVote(
     user.teamId,
     user.id,
-    String(formData.get("pollId") ?? ""),
+    field(formData, "pollId"),
     formData.getAll("optionId").map(String),
   );
   if (!result.ok) return fail(result.error);
@@ -274,7 +274,7 @@ export async function closePoll(_prev: ActionResult, formData: FormData): Promis
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
   const poll = await db.poll.findFirst({
-    where: { id: String(formData.get("pollId") ?? "") },
+    where: { id: field(formData, "pollId") },
     select: { id: true, closedAt: true, post: { select: { authorId: true } } },
   });
   if (!poll) return fail("Afstemningen findes ikke.");
@@ -291,7 +291,7 @@ async function postInTeam(teamId: string, postId: string) {
 
 export async function toggleLike(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const post = await postInTeam(user.teamId, String(formData.get("postId") ?? ""));
+  const post = await postInTeam(user.teamId, field(formData, "postId"));
   if (!post) return fail("Opslaget findes ikke.");
   const key = { postId_userId: { postId: post.id, userId: user.id } };
   const liked = await prisma.postLike.findUnique({ where: key });
@@ -309,11 +309,11 @@ export async function toggleLike(_prev: ActionResult, formData: FormData): Promi
  */
 export async function addComment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const post = await postInTeam(user.teamId, String(formData.get("postId") ?? ""));
+  const post = await postInTeam(user.teamId, field(formData, "postId"));
   if (!post) return fail("Opslaget findes ikke.");
   const text = z.string().trim().min(1, "Skriv en kommentar.").max(1000).safeParse(formData.get("body") ?? "");
   if (!text.success) return fail(text.error.issues[0]?.message ?? "Skriv en kommentar.");
-  const answering = String(formData.get("parentId") ?? "");
+  const answering = field(formData, "parentId");
   let replyTo: { id: string; authorId: string; parent: { id: string; authorId: string } | null } | null = null;
   if (answering) {
     // Only a comment on this very post, which was found through `teamDb` above.
@@ -345,7 +345,7 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
 export async function deleteComment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const comment = await prisma.postComment.findFirst({
-    where: { id: String(formData.get("id") ?? ""), post: { teamId: user.teamId } },
+    where: { id: field(formData, "id"), post: { teamId: user.teamId } },
   });
   if (!comment) return ok();
   if (comment.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din kommentar.");

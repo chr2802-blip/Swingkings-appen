@@ -128,8 +128,10 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   (`nextFeedCursor`). A single-choice poll is voted by pressing the answer; only a
   multiple-choice one has "Stem".
 - **Pictures** are shrunk in the browser (`downscale.ts`), re-measured on arrival
-  (`photo-file.ts`), stored in Postgres, served from `/api/photos/<id>` behind the session.
-  Pages read `photoId`, never the bytes.
+  (`photo-file.ts`) and served from `/api/photos/<id>` behind the session. The bytes are in
+  Postgres, or in a private Supabase Storage bucket when `SUPABASE_URL` and
+  `SUPABASE_SECRET_KEY` are set (`storage.ts`; a row's `storageKey` says which, and
+  `npm run db:photos` moves the old ones). Pages read `photoId`, never the bytes.
 - **A migration that adds a table ends with `ENABLE ROW LEVEL SECURITY`** (Supabase serves
   `public` to the publishable key). Run `npm run db:check` after any schema change.
 - **No Suspense boundaries** (`<Suspense>`, `loading.tsx`): an action that revalidates

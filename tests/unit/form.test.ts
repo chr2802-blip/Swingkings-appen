@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { MAX_NAME, optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
+import { field, MAX_NAME, optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { fail, invalid, ok, parsed } from "@/lib/action-result";
 
 const form = (fields: Record<string, string>) => {
@@ -8,6 +8,13 @@ const form = (fields: Record<string, string>) => {
   for (const [k, v] of Object.entries(fields)) data.set(k, v);
   return data;
 };
+
+describe("field", () => {
+  it("reads a field as text, and a missing one as empty", () => {
+    expect(field(form({ id: "abc" }), "id")).toBe("abc");
+    expect(field(form({}), "id")).toBe("");
+  });
+});
 
 describe("readForm", () => {
   const schema = z.object({ name: requiredText("Skriv et navn."), count: wholeNumber("Et tal fra 1 til 5.", 1, 5), note: optionalText, id: optionalId });

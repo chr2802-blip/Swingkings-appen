@@ -42,10 +42,6 @@ export function canDeleteFine(user: SessionUser, teamId: string, fine: { issuedB
   return fine.issuedById === user.id || canManageFines(user, teamId);
 }
 
-export function assertTeamAccess(user: SessionUser, teamId: string) {
-  if (!canAccessTeam(user, teamId)) throw new NotAllowedError();
-}
-
 export function assertTeamAdmin(user: SessionUser, teamId: string) {
   if (!canAdministerTeam(user, teamId)) throw new NotAllowedError();
 }
@@ -58,13 +54,6 @@ export const ROLE_LABEL: Record<MemberRole, string> = {
   ADMIN: "Admin",
   TREASURER: "Bødekasseformand",
   PLAYER: "Spiller",
-};
-
-/** What each team role may do, as the settings page explains it. */
-export const ROLE_DESCRIPTION: Record<MemberRole, string> = {
-  PLAYER: "Alt det daglige: aktiviteter, opgaver, bøder til andre, udfordringer, opslag og afstemninger.",
-  TREASURER: "Som spiller, og opretter, retter og sletter bødekataloget.",
-  ADMIN: "Det hele, også holdindstillinger, medlemmer, roller, kontingent, invitationslinks, standardopgaver og ny sæson.",
 };
 
 /** The one person who looks after every team; not a role anybody is given on a team. */

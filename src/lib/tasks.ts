@@ -6,7 +6,6 @@ import { kickoffLabel } from "./time";
 
 /** "Still to do" as a where clause. Every query meaning that uses it. */
 export const OPEN_TASK = { doneAt: null } satisfies Prisma.TaskWhereInput;
-export const DONE_TASK = { doneAt: { not: null } } satisfies Prisma.TaskWhereInput;
 
 /** How far back a job counts towards somebody's share: one season and a bit. */
 const LOAD_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;

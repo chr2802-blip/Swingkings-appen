@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { createSession, destroySession, hashPassword, requireUser, verifyPassword } from "@/lib/auth";
 import { findInviteLink, LINK_PROBLEM_TEXT, linkProblem, redeemInviteLink, type Joiner } from "@/lib/invite-links";
 import { clearAttempts, takeAttempt } from "@/lib/rate-limit";
+import { field } from "@/lib/form";
 
 export type FormState = { error?: string } | undefined;
 
@@ -122,7 +123,7 @@ export async function joinWithLink(_prev: FormState, formData: FormData): Promis
 /** Somebody already logged in joins the link's team with one press. */
 export async function joinWithLinkAsMe(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser();
-  const link = await findInviteLink(String(formData.get("token") ?? ""));
+  const link = await findInviteLink(field(formData, "token"));
   const problem = linkProblem(link);
   if (!link || problem) return { error: LINK_PROBLEM_TEXT[problem ?? "unknown"] };
   const result = await redeemInviteLink(link.id, { userId: user.id });

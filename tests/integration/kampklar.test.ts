@@ -169,7 +169,7 @@ describe("a moved activity", () => {
   }
 
   it("takes its open jobs' deadlines along without telling anybody, and leaves done jobs alone", async () => {
-    const { team, anna, bo, match } = await syncedMatch();
+    const { team, anna, match } = await syncedMatch();
     const open = await prisma.task.findFirstOrThrow({ where: { matchId: match.id } });
     await prisma.task.update({ where: { id: open.id }, data: { lastNotifiedAt: now } });
     const done = await prisma.task.create({

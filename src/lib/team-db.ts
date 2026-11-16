@@ -104,8 +104,6 @@ export function teamDb(teamId: string) {
   });
 }
 
-export type TeamDb = ReturnType<typeof teamDb>;
-
 /** Every model, sorted into what `teamDb` does with it — for the unit test. */
 export function classifyModels() {
   return Prisma.dmmf.datamodel.models.map((model) => ({ model: model.name, verdict: decide(model.name) }));
