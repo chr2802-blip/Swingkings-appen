@@ -69,7 +69,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
   const [roster, board, team, templates, copyable, fines] = await Promise.all([
     teamRoster(user.teamId),
     fineBoard(user.teamId),
-    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true } }),
+    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true, calendarSyncedAt: true } }),
     templateOptions(user.teamId),
     copyableActivities(user.teamId, match.id),
     fineHistory(user.teamId, { matchId: match.id }),
@@ -154,6 +154,13 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
                     >
                       Åbn i KampKlar ↗
                     </a>
+                  )}
+                  {fromKampKlar && (
+                    <p className="text-xs text-slate-400">
+                      {team.calendarSyncedAt
+                        ? `Hentet fra KampKlar ${readInZone(team.calendarSyncedAt, "d. MMM 'kl.' HH:mm")}`
+                        : "Ikke hentet fra KampKlar endnu"}
+                    </p>
                   )}
                 </Card>
 

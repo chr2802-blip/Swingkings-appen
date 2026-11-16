@@ -248,7 +248,11 @@ describe("the sync on opening the activities", () => {
     const { team } = await makeSquad();
     const before = new Date("2026-01-01T10:00:00Z");
     await prisma.team.update({ where: { id: team.id }, data: { calendarUrl: url, calendarSyncedAt: before } });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(await syncIfStale(team.id)).toMatchObject({ ok: false });
+    // Nobody sees a failed visit-sync on screen, so it is logged.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`[kampklar] sync failed for team ${team.id}`));
+    warn.mockRestore();
     expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).calendarSyncedAt).toEqual(before);
     expect(feed.urls).toHaveLength(1);
   });
