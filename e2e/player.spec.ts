@@ -100,6 +100,8 @@ test("a player's page shows their latest fines and challenges and their next job
   await expect(
     page.getByRole("tabpanel", { name: "Bøder (1)" }).getByText("Glemt trøje"),
   ).toBeVisible();
+  // What Bo owes stands above the tabs, whichever is shown.
+  await expect(page.getByText("udestående")).toBeVisible();
   await page.getByRole("tab", { name: "Opgaver (1)" }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/opgaver$`));
   await expect(
@@ -107,12 +109,14 @@ test("a player's page shows their latest fines and challenges and their next job
       .getByRole("tabpanel", { name: "Opgaver (1)" })
       .getByText("Vaske trøjer"),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Udfordringer (1)" }).click();
-  await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/udfordringer$`));
+  await expect(page.getByText("udestående")).toBeVisible();
+  await page.getByRole("tab", { name: "Bøder (1)" }).click();
 
-  // The challenge is a short row; tapped, it opens in full, and a name there leads on.
+  // The challenges are under the fines on the same tab: a short row that opens in full,
+  // and a name there leads on.
   await page
-    .getByRole("tabpanel", { name: "Udfordringer (1)" })
+    .getByRole("tabpanel", { name: "Bøder (1)" })
+    .getByRole("region", { name: "Udfordringer (1)" })
     .getByRole("button", { name: /Anna 🏆 slog Bo/ })
     .click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
@@ -144,12 +148,12 @@ test("a player's page opens straight on a tab", async ({ page, loginAs }) => {
     "aria-selected",
     "true",
   );
-  await page.goto(`/spiller/${anna.id}/udfordringer`);
-  await expect(page.getByRole("tab", { name: "Udfordringer" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await expect(page.getByText("Ingen udfordringer endnu.")).toBeVisible();
+  // With no challenges, the fines' tab says nothing of them.
+  await expect(
+    page
+      .getByRole("tabpanel", { name: "Bøder (1)" })
+      .getByRole("region", { name: /Udfordringer/ }),
+  ).toHaveCount(0);
   await page.goto(`/spiller/${anna.id}/opgaver`);
   await expect(page.getByRole("tab", { name: "Opgaver" })).toHaveAttribute(
     "aria-selected",
@@ -322,15 +326,15 @@ test("Seneste shows the three newest fines and challenges; the tabs show them al
       .getByRole("tabpanel", { name: "Bøder (5)" })
       .getByText("Bøde nummer 6"),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Udfordringer (2)" }).click();
   await expect(
     page
-      .getByRole("tabpanel", { name: "Udfordringer (2)" })
+      .getByRole("tabpanel", { name: "Bøder (5)" })
+      .getByRole("region", { name: "Udfordringer (2)" })
       .getByText(/Længst spark/),
   ).toBeVisible();
 });
 
-test("the next job is the one due first, and the home page's jobs tile opens the jobs tab", async ({
+test("the next jobs are all those on the first day one is due, and the home page's jobs tile opens the jobs tab", async ({
   page,
   loginAs,
 }) => {
@@ -343,12 +347,23 @@ test("the next job is the one due first, and the home page's jobs tile opens the
       startsAt: new Date(Date.now() + 9 * 86_400_000),
     },
   });
+  // Two activities on the same day, at noon and two hours later, whatever the time now.
+  const noon = new Date(Date.now() + 2 * 86_400_000);
+  noon.setUTCHours(11, 0, 0, 0);
   const sooner = await db.match.create({
     data: {
       teamId: team.id,
       title: "Kamp",
       opponent: "FC Snart",
-      startsAt: new Date(Date.now() + 2 * 86_400_000),
+      startsAt: noon,
+    },
+  });
+  const sameDay = await db.match.create({
+    data: {
+      teamId: team.id,
+      title: "Træning",
+      kind: "TRAINING",
+      startsAt: new Date(noon.getTime() + 2 * 3_600_000),
     },
   });
   for (let n = 1; n <= 6; n++) {
@@ -369,25 +384,34 @@ test("the next job is the one due first, and the home page's jobs tile opens the
       assignees: { create: { userId: anna.id } },
     },
   });
+  await db.task.create({
+    data: {
+      teamId: team.id,
+      matchId: sameDay.id,
+      title: "Låse op",
+      assignees: { create: { userId: anna.id } },
+    },
+  });
 
   await loginAs(anna);
   await page.goto("/oversigt");
-  await page.getByRole("link", { name: /Opgaver\s*7\s*til dig/ }).click();
+  await page.getByRole("link", { name: /Opgaver\s*8\s*til dig/ }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/opgaver$`));
-  await expect(page.getByRole("tab", { name: "Opgaver (7)" })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "Opgaver (8)" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
   await expect(
     page
-      .getByRole("tabpanel", { name: "Opgaver (7)" })
+      .getByRole("tabpanel", { name: "Opgaver (8)" })
       .getByText("Opgave nr. 6"),
   ).toBeVisible();
 
   await page.getByRole("tab", { name: "Detaljer" }).click();
   const next = page
     .getByRole("tabpanel", { name: "Detaljer" })
-    .getByRole("region", { name: "Næste opgave" });
+    .getByRole("region", { name: "Næste opgaver" });
   await expect(next.getByText("Tage bolde med")).toBeVisible();
-  await expect(next.getByRole("listitem")).toHaveCount(1);
+  await expect(next.getByText("Låse op")).toBeVisible();
+  await expect(next.getByRole("listitem")).toHaveCount(2);
 });

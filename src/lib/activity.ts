@@ -1,4 +1,5 @@
 import type { ActivityKind } from "@prisma/client";
+import { readInZone } from "./time";
 
 /** An activity is a `Match` row: a match, a training, or anything else on the calendar. */
 export const KIND_LABEL: Record<ActivityKind, string> = {
@@ -8,8 +9,14 @@ export const KIND_LABEL: Record<ActivityKind, string> = {
 };
 
 /** What an activity is called in a list: the opponent for a match, else its title. */
-export function activityName(activity: { kind: ActivityKind; title: string; opponent: string | null }) {
-  return activity.kind === "MATCH" && activity.opponent ? activity.opponent : activity.title;
+export function activityName(activity: {
+  kind: ActivityKind;
+  title: string;
+  opponent: string | null;
+}) {
+  return activity.kind === "MATCH" && activity.opponent
+    ? activity.opponent
+    : activity.title;
 }
 
 /**
@@ -30,18 +37,33 @@ export function signupSummary<M extends { userId: string }>(
 }
 
 /** Somebody on a sign-up list: a teammate when the name is on the roster, else just the name. */
-export type SignupPerson = { key: string; name: string; userId: string | null; photoId: string | null };
+export type SignupPerson = {
+  key: string;
+  name: string;
+  userId: string | null;
+  photoId: string | null;
+};
 
 function foldName(name: string) {
-  return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9æøå ]+/g, " ").replace(/\s+/g, " ").trim();
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9æøå ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** What `Match.externalSignups` holds, read defensively: it is the feed's, written as JSON. */
-export function readExternalSignups(value: unknown): { going: string[]; notGoing: string[] } | null {
+export function readExternalSignups(
+  value: unknown,
+): { going: string[]; notGoing: string[] } | null {
   if (!value || typeof value !== "object") return null;
   const list = (key: string) => {
     const raw = (value as Record<string, unknown>)[key];
-    return Array.isArray(raw) ? raw.filter((n): n is string => typeof n === "string" && n.trim() !== "") : [];
+    return Array.isArray(raw)
+      ? raw.filter((n): n is string => typeof n === "string" && n.trim() !== "")
+      : [];
   };
   return { going: list("going"), notGoing: list("notGoing") };
 }
@@ -53,10 +75,9 @@ export function readExternalSignups(value: unknown): { going: string[]; notGoing
  * KampKlar says nothing about one of ours, so nobody is matched twice. A name that is
  * nobody's here is still listed. Whoever on the roster is in neither list has not answered.
  */
-export function externalSignupSummary<M extends { userId: string; name: string; photoId: string | null }>(
-  roster: M[],
-  signups: { going: string[]; notGoing: string[] },
-) {
+export function externalSignupSummary<
+  M extends { userId: string; name: string; photoId: string | null },
+>(roster: M[], signups: { going: string[]; notGoing: string[] }) {
   const taken = new Set<string>();
   const byFull = new Map(roster.map((m) => [foldName(m.name), m]));
   const firstNames = new Map<string, M[]>();
@@ -69,20 +90,53 @@ export function externalSignupSummary<M extends { userId: string; name: string; 
     const full = byFull.get(folded);
     if (full && !taken.has(full.userId)) return full;
     const firsts = !folded.includes(" ") ? firstNames.get(folded) : undefined;
-    return firsts?.length === 1 && !taken.has(firsts[0]!.userId) ? firsts[0] : undefined;
+    return firsts?.length === 1 && !taken.has(firsts[0]!.userId)
+      ? firsts[0]
+      : undefined;
   };
   const toPeople = (names: string[], prefix: string): SignupPerson[] =>
     names.map((name, index) => {
       const member = find(name);
       if (member) taken.add(member.userId);
       return member
-        ? { key: member.userId, name: member.name, userId: member.userId, photoId: member.photoId }
-        : { key: `${prefix}-${index}-${name}`, name, userId: null, photoId: null };
+        ? {
+            key: member.userId,
+            name: member.name,
+            userId: member.userId,
+            photoId: member.photoId,
+          }
+        : {
+            key: `${prefix}-${index}-${name}`,
+            name,
+            userId: null,
+            photoId: null,
+          };
     });
   const going = toPeople(signups.going, "going");
   const notGoing = toPeople(signups.notGoing, "not");
   const unanswered: SignupPerson[] = roster
     .filter((m) => !taken.has(m.userId))
-    .map((m) => ({ key: m.userId, name: m.name, userId: m.userId, photoId: m.photoId }));
+    .map((m) => ({
+      key: m.userId,
+      name: m.name,
+      userId: m.userId,
+      photoId: m.photoId,
+    }));
   return { going, notGoing, unanswered };
+}
+
+/**
+ * The open jobs on the first day one is due: a job is due at its deadline, or else when its
+ * activity starts. Several on that day all show; with no day at all, the oldest job.
+ */
+export function firstDaysTasks<
+  T extends { dueAt: Date | null; match: { startsAt: Date } | null },
+>(open: T[]): T[] {
+  const when = (task: T) => task.dueAt ?? task.match?.startsAt ?? null;
+  const dated = open
+    .filter((task) => when(task) !== null)
+    .sort((a, b) => when(a)!.getTime() - when(b)!.getTime());
+  if (dated.length === 0) return open.slice(0, 1);
+  const day = readInZone(when(dated[0])!, "yyyy-MM-dd");
+  return dated.filter((task) => readInZone(when(task)!, "yyyy-MM-dd") === day);
 }

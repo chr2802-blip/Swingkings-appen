@@ -27,6 +27,7 @@ import {
 } from "@/components/challenge-card";
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { resetFines } from "@/app/actions/fines";
+import { firstDaysTasks } from "@/lib/activity";
 import { FineDetails } from "@/components/fine-history";
 
 /** How many settled challenges and finished jobs the page shows; the open ones are always all there. */
@@ -35,7 +36,7 @@ const RECENT = 10;
 const LATEST = 3;
 
 /** A person's tabs, in the order they are swiped through: details, fines, challenges, jobs. */
-export const PLAYER_TABS = ["", "/boder", "/udfordringer", "/opgaver"] as const;
+export const PLAYER_TABS = ["", "/boder", "/opgaver"] as const;
 export type PlayerTab = (typeof PLAYER_TABS)[number];
 
 export function playerTabHref(userId: string, tab: PlayerTab = "") {
@@ -43,12 +44,15 @@ export function playerTabHref(userId: string, tab: PlayerTab = "") {
 }
 
 /**
- * A person's page: who they are on top, and below it four tabs swiped between — each with
+ * A person's page: who they are on top, and below it three tabs swiped between — each with
  * its own address, all read at once so a swipe never waits on the server:
  *
- * - **Detaljer**: what they owe (and "Betal" on your own), the three latest fines or
- *   challenges, and their next job.
- * - **Bøder**, **Udfordringer**, **Opgaver**: each list in full.
+ * - **Detaljer**: the three latest fines or challenges, and their next jobs — every one
+ *   due on the first day one is.
+ * - **Bøder**: their fines, and their challenges under them.
+ * - **Opgaver**: their jobs.
+ *
+ * What they owe (and "Betal" on your own) stands above the tabs.
  * Every name in the app
  * links here. On your own page it is also your profile, with "Rediger" to change it.
  */
@@ -93,10 +97,12 @@ export async function PlayerScreen({
         where: { doneAt: null, assignees: { some: { userId: id } } },
         orderBy: [
           { dueAt: { sort: "asc", nulls: "last" } },
-          { match: { startsAt: "asc" } },
           { createdAt: "asc" },
         ],
-        select: TASK_SELECT,
+        select: {
+          ...TASK_SELECT,
+          match: { select: { ...TASK_SELECT.match.select, startsAt: true } },
+        },
       }),
       db.task.findMany({
         where: { doneAt: { not: null }, assignees: { some: { userId: id } } },
@@ -127,7 +133,7 @@ export async function PlayerScreen({
   ]
     .sort((a, b) => b.at.getTime() - a.at.getTime())
     .slice(0, LATEST);
-  const nextTask = openTasks[0];
+  const nextTasks = firstDaysTasks(openTasks);
 
   /** A fine as a row; tapped, it opens as in the history: everything about it, and "Slet". */
   const fineRow = (fine: (typeof fines)[number]) => (
@@ -254,6 +260,34 @@ export async function PlayerScreen({
             )}
           </div>
         </div>
+        <dl className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
+          <Stat
+            label="udestående"
+            value={kr(account.owesKr)}
+            tone={account.owesKr > 0 ? "text-red-600" : "text-emerald-700"}
+          />
+          <Stat
+            label={account.units === 1 ? "bøde" : "bøder"}
+            value={String(account.units)}
+          />
+          <Stat label="i alt" value={kr(account.finedKr)} />
+        </dl>
+        {self && account.owesKr > 0 && board.payLink && (
+          <>
+            <PayLink
+              kind="fines"
+              link={board.payLink}
+              amountKr={account.owesKr}
+              name={person.name}
+              className={buttonClass("primary", "mt-3 w-full")}
+            >
+              💸 Betal {kr(account.owesKr)} med MobilePay
+            </PayLink>
+            <p className="mt-1.5 text-center text-xs text-slate-500">
+              {afterPaying("fines")}
+            </p>
+          </>
+        )}
       </div>
 
       <SwipePages
@@ -265,39 +299,6 @@ export async function PlayerScreen({
             title: "Detaljer",
             children: (
               <div className="space-y-6">
-                <div>
-                  <dl className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
-                    <Stat
-                      label="udestående"
-                      value={kr(account.owesKr)}
-                      tone={
-                        account.owesKr > 0 ? "text-red-600" : "text-emerald-700"
-                      }
-                    />
-                    <Stat
-                      label={account.units === 1 ? "bøde" : "bøder"}
-                      value={String(account.units)}
-                    />
-                    <Stat label="i alt" value={kr(account.finedKr)} />
-                  </dl>
-                  {self && account.owesKr > 0 && board.payLink && (
-                    <>
-                      <PayLink
-                        kind="fines"
-                        link={board.payLink}
-                        amountKr={account.owesKr}
-                        name={person.name}
-                        className={buttonClass("primary", "mt-3 w-full")}
-                      >
-                        💸 Betal {kr(account.owesKr)} med MobilePay
-                      </PayLink>
-                      <p className="mt-1.5 text-center text-xs text-slate-500">
-                        {afterPaying("fines")}
-                      </p>
-                    </>
-                  )}
-                </div>
-
                 <section aria-labelledby="latest-title">
                   <SectionTitle>
                     <span id="latest-title">Seneste</span>
@@ -319,14 +320,16 @@ export async function PlayerScreen({
 
                 <section aria-labelledby="next-task-title">
                   <SectionTitle>
-                    <span id="next-task-title">Næste opgave</span>
+                    <span id="next-task-title">
+                      {nextTasks.length > 1 ? "Næste opgaver" : "Næste opgave"}
+                    </span>
                   </SectionTitle>
-                  {nextTask ? (
-                    <Card padded={false}>
-                      <ul>
-                        <TaskRow task={nextTask} viewerId={user.id} />
-                      </ul>
-                    </Card>
+                  {nextTasks.length > 0 ? (
+                    <List>
+                      {nextTasks.map((task) => (
+                        <TaskRow key={task.id} task={task} viewerId={user.id} />
+                      ))}
+                    </List>
                   ) : (
                     <Empty>Ingen opgaver lige nu.</Empty>
                   )}
@@ -348,25 +351,25 @@ export async function PlayerScreen({
                 confirmLabel="Nulstil"
               />
             ),
-            children:
-              fines.length === 0 ? (
-                <Empty>Ingen bøder. Mønsterspiller! 😇</Empty>
-              ) : (
-                <List>{fines.map(fineRow)}</List>
-              ),
-          },
-          {
-            href: playerTabHref(id, "/udfordringer"),
-            title:
-              challenges.length > 0
-                ? `Udfordringer (${challenges.length})`
-                : "Udfordringer",
-            children:
-              challenges.length === 0 ? (
-                <Empty>Ingen udfordringer endnu.</Empty>
-              ) : (
-                <List>{challenges.map(challengeRow)}</List>
-              ),
+            children: (
+              <div className="space-y-8">
+                {fines.length === 0 ? (
+                  <Empty>Ingen bøder. Mønsterspiller! 😇</Empty>
+                ) : (
+                  <List>{fines.map(fineRow)}</List>
+                )}
+                {challenges.length > 0 && (
+                  <section aria-labelledby="challenges-title">
+                    <SectionTitle>
+                      <span id="challenges-title">
+                        Udfordringer ({challenges.length})
+                      </span>
+                    </SectionTitle>
+                    <List>{challenges.map(challengeRow)}</List>
+                  </section>
+                )}
+              </div>
+            ),
           },
           {
             href: playerTabHref(id, "/opgaver"),
