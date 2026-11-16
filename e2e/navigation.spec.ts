@@ -496,8 +496,8 @@ test("your own page is the profile tab and has no back arrow; the chat has one",
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Tilbage" })).toHaveCount(0);
   // Nor have its tabs.
-  await page.getByRole("tab", { name: "Udfordringer" }).click();
-  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/udfordringer$`));
+  await page.getByRole("tab", { name: "Opgaver" }).click();
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/opgaver$`));
   await expect(page.getByRole("link", { name: "Tilbage" })).toHaveCount(0);
   await page.goto("/chat");
   await page.getByRole("link", { name: "Tilbage" }).click();
