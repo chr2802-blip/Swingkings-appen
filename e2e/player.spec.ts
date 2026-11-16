@@ -95,10 +95,12 @@ test("a player's page shows their latest fines and challenges and their next job
   await expect(fine).toBeHidden();
 
   // Each list has its own tab, and its own address.
-  await page.getByRole("tab", { name: "Bøder (1)" }).click();
+  await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/boder$`));
   await expect(
-    page.getByRole("tabpanel", { name: "Bøder (1)" }).getByText("Glemt trøje"),
+    page
+      .getByRole("tabpanel", { name: "Bøder og udfordringer" })
+      .getByText("Glemt trøje"),
   ).toBeVisible();
   // What Bo owes stands above the tabs, whichever is shown.
   await expect(page.getByText("udestående")).toBeVisible();
@@ -110,13 +112,13 @@ test("a player's page shows their latest fines and challenges and their next job
       .getByText("Vaske trøjer"),
   ).toBeVisible();
   await expect(page.getByText("udestående")).toBeVisible();
-  await page.getByRole("tab", { name: "Bøder (1)" }).click();
+  await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
 
-  // The challenges are under the fines on the same tab: a short row that opens in full,
-  // and a name there leads on.
+  // A challenge still waiting stands above the list on the same tab: a short row that
+  // opens in full, and a name there leads on.
   await page
-    .getByRole("tabpanel", { name: "Bøder (1)" })
-    .getByRole("region", { name: "Udfordringer (1)" })
+    .getByRole("tabpanel", { name: "Bøder og udfordringer" })
+    .getByRole("region", { name: "Venter på godkendelse" })
     .getByRole("button", { name: /Anna 🏆 slog Bo/ })
     .click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
@@ -144,15 +146,14 @@ test("a player's page opens straight on a tab", async ({ page, loginAs }) => {
   });
   await loginAs(anna);
   await page.goto(`/spiller/${anna.id}/boder`);
-  await expect(page.getByRole("tab", { name: "Bøder (1)" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  // With no challenges, the fines' tab says nothing of them.
+  await expect(
+    page.getByRole("tab", { name: "Bøder og udfordringer" }),
+  ).toHaveAttribute("aria-selected", "true");
+  // With no challenge waiting, the tab says nothing of one.
   await expect(
     page
-      .getByRole("tabpanel", { name: "Bøder (1)" })
-      .getByRole("region", { name: /Udfordringer/ }),
+      .getByRole("tabpanel", { name: "Bøder og udfordringer" })
+      .getByRole("region", { name: "Venter på godkendelse" }),
   ).toHaveCount(0);
   await page.goto(`/spiller/${anna.id}/opgaver`);
   await expect(page.getByRole("tab", { name: "Opgaver" })).toHaveAttribute(
@@ -244,7 +245,7 @@ test("an old link to a player's fines lands on their page", async ({
   ).toBeVisible();
 });
 
-test("Seneste shows the three newest fines and challenges; the tabs show them all", async ({
+test("Seneste shows the three newest fines and challenges; the tab merges them as the history does", async ({
   page,
   loginAs,
 }) => {
@@ -320,17 +321,23 @@ test("Seneste shows the three newest fines and challenges; the tabs show them al
       .getByText("Ingen opgaver lige nu."),
   ).toBeVisible();
 
-  await page.getByRole("tab", { name: "Bøder (5)" }).click();
+  // The tab is one list as in the history: the fines given and the settled challenge's,
+  // newest first; the challenge still waiting stands above it.
+  await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
+  const tab = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
   await expect(
-    page
-      .getByRole("tabpanel", { name: "Bøder (5)" })
-      .getByText("Bøde nummer 6"),
+    tab
+      .getByRole("region", { name: "Venter på godkendelse" })
+      .getByText(/Flest mål/),
   ).toBeVisible();
+  const rows = tab.getByRole("list").last().getByRole("listitem");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.nth(0)).toContainText("Udfordring vundet");
+  await expect(rows.nth(0)).toContainText("Udfordring");
+  await expect(rows.nth(4)).toContainText("Bøde nummer 6");
+  await rows.nth(0).getByRole("button").click();
   await expect(
-    page
-      .getByRole("tabpanel", { name: "Bøder (5)" })
-      .getByRole("region", { name: "Udfordringer (2)" })
-      .getByText(/Længst spark/),
+    page.getByRole("dialog", { name: "Udfordring" }).getByText(/Længst spark/),
   ).toBeVisible();
 });
 
