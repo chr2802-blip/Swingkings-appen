@@ -16,6 +16,9 @@ export function readForm<S extends z.ZodType>(schema: S, formData: FormData): Pa
   return invalid(issue?.message || "Tjek felterne og prøv igen.");
 }
 
+/** One field as text: what a hidden input or a select sent, or "" when it sent nothing. */
+export const field = (formData: FormData, name: string) => String(formData.get(name) ?? "");
+
 /** Ceilings on the absurd, not a style guide. */
 export const MAX_NAME = 200;
 export const MAX_NOTE = 2_000;

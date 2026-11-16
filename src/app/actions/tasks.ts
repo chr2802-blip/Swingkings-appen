@@ -9,7 +9,7 @@ import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { optionalText, readForm, requiredText } from "@/lib/form";
+import { field, optionalText, readForm, requiredText } from "@/lib/form";
 import { deadlineOn } from "@/lib/time";
 import { createDistributedTasks, taskUrl } from "@/lib/tasks";
 import { notifyLater } from "@/lib/notify";
@@ -149,7 +149,7 @@ export async function updateTask(_prev: ActionResult, formData: FormData): Promi
 /** Anybody on the team may mark a job done (or undo it): the kit gets washed by whoever has it. */
 export async function setTaskDone(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   const done = formData.get("done") === "true";
   const db = teamDb(user.teamId);
   const task = await db.task.findFirst({ where: { id }, select: { id: true, matchId: true } });
@@ -165,7 +165,7 @@ export async function setTaskDone(_prev: ActionResult, formData: FormData): Prom
 /** Puts yourself on a job, or takes yourself off one. */
 export async function toggleTakeTask(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   const task = await teamDb(user.teamId).task.findFirst({ where: { id }, select: { id: true, matchId: true } });
   if (!task) return fail("Opgaven findes ikke.");
   const mine = await prisma.taskAssignee.findUnique({ where: { taskId_userId: { taskId: id, userId: user.id } } });
@@ -185,7 +185,7 @@ export async function toggleTakeTask(_prev: ActionResult, formData: FormData): P
 
 export async function deleteTask(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const task = await editable(user, String(formData.get("id") ?? ""));
+  const task = await editable(user, field(formData, "id"));
   if (!task) return fail("Du kan ikke slette den opgave.");
   await teamDb(user.teamId).task.deleteMany({ where: { id: task.id } });
   refresh(undefined, task.matchId);
@@ -248,7 +248,7 @@ export async function offerTask(_prev: ActionResult, formData: FormData): Promis
  */
 export async function answerHandover(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   const accept = formData.get("answer") === "accept";
   const db = teamDb(user.teamId);
   const handover = await db.taskHandover.findFirst({
@@ -303,7 +303,7 @@ export async function answerHandover(_prev: ActionResult, formData: FormData): P
 /** The asker takes the request back while it is still unanswered. */
 export async function withdrawHandover(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   const db = teamDb(user.teamId);
   const handover = await db.taskHandover.findFirst({ where: { id }, include: { task: { select: { id: true, matchId: true } } } });
   if (!handover) return fail("Forespørgslen findes ikke.");

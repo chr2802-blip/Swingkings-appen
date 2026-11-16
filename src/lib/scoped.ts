@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import type { TeamUser } from "./auth";
 
 /**
  * Fetches one record through the caller's team-bound client and answers 404 when it is
@@ -11,5 +10,3 @@ export async function foundOr404<T>(lookup: Promise<T | null>): Promise<T> {
   if (!record) notFound();
   return record;
 }
-
-export type { TeamUser };

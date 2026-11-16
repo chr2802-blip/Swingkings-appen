@@ -7,7 +7,7 @@ import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
 import { assertFineManager, canDeleteFine, canManageFines } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
+import { field, optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { canMove } from "@/lib/challenges";
 import { settleChallenge } from "@/lib/fines";
 import { fineUnits, kr } from "@/lib/money";
@@ -33,7 +33,7 @@ export async function saveFineType(_prev: ActionResult, formData: FormData): Pro
   const form = readForm(fineTypeSchema, formData);
   if (!form.ok) return fail(form.error);
   const db = teamDb(user.teamId);
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   if (id) {
     const updated = await db.fineType.updateMany({ where: { id }, data: form.fields });
     if (updated.count === 0) return fail("Bøden findes ikke længere.");
@@ -51,7 +51,7 @@ export async function saveFineType(_prev: ActionResult, formData: FormData): Pro
 export async function removeFineType(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   assertFineManager(user, user.teamId);
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   const db = teamDb(user.teamId);
   const used = await db.fine.count({ where: { fineTypeId: id } });
   if (used > 0) await db.fineType.updateMany({ where: { id }, data: { archivedAt: new Date() } });
@@ -63,7 +63,6 @@ export async function removeFineType(_prev: ActionResult, formData: FormData): P
 /* ── Giving fines ───────────────────────────────────────────────────────────────── */
 
 const fineSchema = z.object({
-  playerIds: z.string().min(1, "Vælg mindst én spiller."),
   fineTypeId: optionalId,
   reason: z.string().trim().max(200).optional(),
   units: z.string().trim().optional(),
@@ -79,12 +78,8 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
   // Anybody on the team may give a fine; taking one back is `deleteFine`'s question.
   const user = await requireTeamUser();
   const playerIds = [...new Set(formData.getAll("playerId").map(String).filter(Boolean))];
-  const form = readForm(fineSchema, (() => {
-    const data = new FormData();
-    for (const [key, value] of formData) if (key !== "playerId") data.set(key, value);
-    data.set("playerIds", playerIds.join(","));
-    return data;
-  })());
+  if (playerIds.length === 0) return fail("Vælg mindst én spiller.");
+  const form = readForm(fineSchema, formData);
   if (!form.ok) return fail(form.error);
   const db = teamDb(user.teamId);
 
@@ -140,7 +135,7 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
  */
 export async function deleteFine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   const db = teamDb(user.teamId);
   const fine = await db.fine.findFirst({ where: { id }, select: { challengeId: true, issuedById: true } });
   if (!fine) return ok();
@@ -167,7 +162,7 @@ export async function deleteFine(_prev: ActionResult, formData: FormData): Promi
 export async function resetFines(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   assertFineManager(user, user.teamId);
-  const playerId = String(formData.get("playerId") ?? "");
+  const playerId = field(formData, "playerId");
   if (!playerId) return fail("Vælg hvem der skal nulstilles.");
   const db = teamDb(user.teamId);
   const everybody = playerId === "alle";

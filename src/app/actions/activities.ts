@@ -8,7 +8,7 @@ import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
 import { assertTeamAdmin } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
+import { field, optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { parseLocalDateTime } from "@/lib/time";
 import { syncIfStale, syncTeamCalendar } from "@/lib/kampklar";
 import { addTemplatesToActivity, announceActivityMoves, copyTasksFromActivity, moveTaskDeadlines } from "@/lib/tasks";
@@ -62,7 +62,7 @@ export async function saveActivity(_prev: ActionResult, formData: FormData): Pro
   };
 
   const db = teamDb(user.teamId);
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   if (id) {
     const existing = await db.match.findFirst({ where: { id }, select: { source: true, startsAt: true, cancelledAt: true } });
     if (!existing) return fail("Aktiviteten findes ikke længere.");
@@ -95,7 +95,7 @@ export async function saveActivity(_prev: ActionResult, formData: FormData): Pro
 
 export async function deleteActivity(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   const db = teamDb(user.teamId);
   const activity = await db.match.findFirst({ where: { id }, select: { source: true } });
   if (!activity) return ok();
@@ -114,11 +114,11 @@ export async function deleteActivity(_prev: ActionResult, formData: FormData): P
  */
 export async function setSignup(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const going = String(formData.get("going") ?? "");
+  const going = field(formData, "going");
   if (going !== "yes" && going !== "no") return fail("Svar ja eller nej.");
   const db = teamDb(user.teamId);
   const activity = await db.match.findFirst({
-    where: { id: String(formData.get("activityId") ?? "") },
+    where: { id: field(formData, "activityId") },
     select: { id: true, source: true, cancelledAt: true },
   });
   if (!activity) return fail("Aktiviteten findes ikke.");
@@ -160,7 +160,7 @@ export async function autoSyncCalendar(): Promise<{ synced: boolean }> {
 
 async function activityFrom(teamId: string, formData: FormData) {
   return teamDb(teamId).match.findFirst({
-    where: { id: String(formData.get("activityId") ?? "") },
+    where: { id: field(formData, "activityId") },
     select: { id: true, startsAt: true },
   });
 }
@@ -183,7 +183,7 @@ export async function copyTasks(_prev: ActionResult, formData: FormData): Promis
   const user = await requireTeamUser();
   const activity = await activityFrom(user.teamId, formData);
   if (!activity) return fail("Aktiviteten findes ikke.");
-  const fromId = String(formData.get("copyFromId") ?? "");
+  const fromId = field(formData, "copyFromId");
   if (!fromId) return fail("Vælg den aktivitet, opgaverne skal kopieres fra.");
   const tasks = await copyTasksFromActivity(user.teamId, fromId, activity, user.id);
   if (tasks.length === 0) return fail("Der var ingen opgaver at kopiere.");
@@ -213,7 +213,7 @@ export async function saveTaskTemplate(_prev: ActionResult, formData: FormData):
     ...(auto !== "OFF" && { autoVenue: auto as Venue }),
   };
   const db = teamDb(user.teamId);
-  const id = String(formData.get("id") ?? "");
+  const id = field(formData, "id");
   if (id) await db.taskTemplate.updateMany({ where: { id }, data });
   else await db.taskTemplate.create({ data: { ...data, teamId: user.teamId } });
   refresh();
@@ -223,7 +223,7 @@ export async function saveTaskTemplate(_prev: ActionResult, formData: FormData):
 export async function deleteTaskTemplate(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   assertTeamAdmin(user, user.teamId);
-  await teamDb(user.teamId).taskTemplate.deleteMany({ where: { id: String(formData.get("id") ?? "") } });
+  await teamDb(user.teamId).taskTemplate.deleteMany({ where: { id: field(formData, "id") } });
   refresh();
   return ok();
 }

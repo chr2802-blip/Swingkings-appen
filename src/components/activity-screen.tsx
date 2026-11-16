@@ -1,7 +1,7 @@
 import type { TeamUser } from "@/lib/auth";
 import { canManageFines } from "@/lib/access";
-import { teamDb } from "@/lib/team-db";
 import { prisma } from "@/lib/prisma";
+import { teamDb } from "@/lib/team-db";
 import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
 import { fineBoard, fineHistory } from "@/lib/fine-data";
@@ -69,7 +69,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
   const [roster, board, team, templates, copyable, fines] = await Promise.all([
     teamRoster(user.teamId),
     fineBoard(user.teamId),
-    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true, calendarSyncedAt: true } }),
+    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { calendarSyncedAt: true } }),
     templateOptions(user.teamId),
     copyableActivities(user.teamId, match.id),
     fineHistory(user.teamId, { matchId: match.id }),
@@ -260,7 +260,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
                     <SectionTitle>Udfordringer</SectionTitle>
                     <div className="space-y-3">
                       {match.challenges.map((c) => (
-                        <ChallengeCard key={c.id} challenge={c} viewerId={user.id} managesFines={manages} finePriceKr={team.finePriceKr} />
+                        <ChallengeCard key={c.id} challenge={c} viewerId={user.id} managesFines={manages} finePriceKr={board.finePriceKr} />
                       ))}
                     </div>
                   </section>

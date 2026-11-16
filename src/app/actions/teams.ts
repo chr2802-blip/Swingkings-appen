@@ -8,7 +8,7 @@ import { teamDb } from "@/lib/team-db";
 import { requireSuperAdmin, requireTeamUser, requireUser } from "@/lib/auth";
 import { assertTeamAdmin, canAccessTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { readForm, requiredText, wholeNumber } from "@/lib/form";
+import { field, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { generateLinkToken, hashLinkToken, joinPath } from "@/lib/invite-links";
 import { LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import { discardReplaced, readPhotoChoice, removeStored } from "@/lib/photos";
@@ -127,7 +127,7 @@ export async function createInviteLink(_prev: ActionResult, formData: FormData):
 export async function revokeInviteLink(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   assertTeamAdmin(user, user.teamId);
-  await teamDb(user.teamId).inviteLink.deleteMany({ where: { id: String(formData.get("linkId") ?? "") } });
+  await teamDb(user.teamId).inviteLink.deleteMany({ where: { id: field(formData, "linkId") } });
   revalidatePath("/hold", "layout");
   return ok();
 }
@@ -224,7 +224,7 @@ export async function setMemberDues(_prev: ActionResult, formData: FormData): Pr
 export async function removeMember(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   assertTeamAdmin(user, user.teamId);
-  const userId = String(formData.get("userId") ?? "");
+  const userId = field(formData, "userId");
   const db = teamDb(user.teamId);
   const member = await db.teamMember.findFirst({ where: { userId } });
   if (!member) return ok();
@@ -270,7 +270,7 @@ export async function createTeam(_prev: ActionResult, formData: FormData): Promi
 
 export async function deleteTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSuperAdmin();
-  const id = String(formData.get("teamId") ?? "");
+  const id = field(formData, "teamId");
   // The rows go with the team; the objects in storage do not, so their names are read first.
   const stored = await prisma.photo.findMany({ where: { teamId: id, storageKey: { not: null } }, select: { storageKey: true } });
   await prisma.team.deleteMany({ where: { id } });

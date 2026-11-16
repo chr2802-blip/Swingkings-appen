@@ -13,11 +13,6 @@ export function inZone(date: Date) {
   return new TZDate(date, TIME_ZONE);
 }
 
-/** Today in the team's zone, as the "yyyy-MM-dd" a date input expects. */
-export function todayInZone(now: Date = new Date()) {
-  return format(inZone(now), "yyyy-MM-dd");
-}
-
 /** Machine-only formatting (a date input's value), no locale. */
 export function formatInZone(date: Date, pattern: string) {
   return format(inZone(date), pattern);
