@@ -1,5 +1,6 @@
 import type { TeamUser } from "@/lib/auth";
-import { canManageFines } from "@/lib/access";
+import { canAdministerTeam, canManageFines } from "@/lib/access";
+import Link from "next/link";
 import { teamDb } from "@/lib/team-db";
 import { prisma } from "@/lib/prisma";
 import { foundOr404 } from "@/lib/scoped";
@@ -18,6 +19,7 @@ import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card
 import { ActionMenu } from "@/components/action-menu";
 import { ActionButton } from "@/components/action-button";
 import { SwipePages, TurnButton } from "@/components/swipe-pages";
+import { AutoSync } from "@/components/auto-sync";
 import { deleteActivity, setSignup } from "@/app/actions/activities";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
 import {
@@ -82,8 +84,10 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
     ? external && externalSignupSummary(roster, external)
     : (() => {
         const s = signupSummary(roster, match.signups);
-        return { going: people(s.going), notGoing: people(s.notGoing), unanswered: people(s.unanswered) };
+        return { going: people(s.going), available: [], notGoing: people(s.notGoing), unanswered: people(s.unanswered) };
       })();
+  // Names from KampKlar nobody here is matched to: an admin can link them to a member.
+  const unmatched = fromKampKlar && groups ? [...groups.going, ...groups.available, ...groups.notGoing].filter((p) => !p.userId).length : 0;
   const mine = match.signups.find((s) => s.userId === user.id)?.going;
   const past = (match.endsAt ?? match.startsAt) < new Date();
 
@@ -91,6 +95,8 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
 
   return (
     <div>
+      {/* Who has signed up in KampKlar is what one opens it for: fetched fresh. */}
+      {fromKampKlar && <AutoSync />}
       <PageHeader
         title={
           match.kind === "MATCH" && match.opponent
@@ -226,10 +232,24 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
                     )}
                     {groups ? (
                       <>
-                        <SignupTally going={groups.going.length} notGoing={groups.notGoing.length} unanswered={groups.unanswered.length} />
+                        <SignupTally
+                          going={groups.going.length}
+                          available={groups.available.length}
+                          notGoing={groups.notGoing.length}
+                          unanswered={groups.unanswered.length}
+                        />
                         <SignupGroup title="Kommer" people={groups.going} />
+                        <SignupGroup title="Til rådighed" people={groups.available} />
                         <SignupGroup title="Kommer ikke" people={groups.notGoing} />
                         <SignupGroup title="Har ikke svaret" people={groups.unanswered} muted />
+                        {unmatched > 0 && canAdministerTeam(user, user.teamId) && (
+                          <p className="text-xs text-slate-500">
+                            {unmatched === 1 ? "1 navn" : `${unmatched} navne`} fra KampKlar er ikke koblet til en spiller.{" "}
+                            <Link href="/hold/rettigheder" className="font-medium text-[var(--accent-text)]">
+                              Kobl under Rettigheder ›
+                            </Link>
+                          </p>
+                        )}
                       </>
                     ) : (
                       <p className="text-sm text-slate-500">KampKlar har ikke sendt tilmeldinger med til denne aktivitet endnu.</p>
@@ -281,15 +301,30 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
   );
 }
 
-/** The three counts at a glance, with a bar that fills with those coming. */
-function SignupTally({ going, notGoing, unanswered }: { going: number; notGoing: number; unanswered: number }) {
-  const total = going + notGoing + unanswered || 1;
+/** The counts at a glance, with a bar that fills with those coming, then those available. */
+function SignupTally({
+  going,
+  available,
+  notGoing,
+  unanswered,
+}: {
+  going: number;
+  available: number;
+  notGoing: number;
+  unanswered: number;
+}) {
+  const total = going + available + notGoing + unanswered || 1;
   return (
     <div className="space-y-2">
       <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <span>
           <strong className="text-emerald-700">{going}</strong> kommer
         </span>
+        {available > 0 && (
+          <span>
+            <strong className="text-amber-600">{available}</strong> til rådighed
+          </span>
+        )}
         <span>
           <strong className="text-red-600">{notGoing}</strong> kommer ikke
         </span>
@@ -299,6 +334,7 @@ function SignupTally({ going, notGoing, unanswered }: { going: number; notGoing:
       </p>
       <div aria-hidden="true" className="flex h-1.5 overflow-hidden rounded-full bg-slate-100">
         <span className="bg-emerald-500" style={{ width: `${(going / total) * 100}%` }} />
+        <span className="bg-amber-400" style={{ width: `${(available / total) * 100}%` }} />
         <span className="bg-red-400" style={{ width: `${(notGoing / total) * 100}%` }} />
       </div>
     </div>

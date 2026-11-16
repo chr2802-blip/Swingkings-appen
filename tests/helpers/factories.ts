@@ -118,7 +118,7 @@ export async function makeInviteLink(options: {
 
 export function makeMatch(
   teamId: string,
-  options: { startsAt?: Date; opponent?: string; title?: string; source?: "MANUAL" | "KAMPKLAR"; kind?: "MATCH" | "TRAINING" | "OTHER"; externalUid?: string } = {},
+  options: { startsAt?: Date; opponent?: string; title?: string; source?: "MANUAL" | "KAMPKLAR"; kind?: "MATCH" | "TRAINING" | "OTHER"; externalUid?: string; externalSignups?: Record<string, string[]> } = {},
 ) {
   const opponent = options.opponent ?? "B.93";
   return prisma.match.create({
@@ -130,6 +130,7 @@ export function makeMatch(
       source: options.source ?? "MANUAL",
       kind: options.kind ?? "MATCH",
       externalUid: options.externalUid ?? (options.source === "KAMPKLAR" ? unique() : null),
+      externalSignups: options.externalSignups,
     },
   });
 }

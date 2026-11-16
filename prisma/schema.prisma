@@ -213,6 +213,9 @@ model TeamMember {
   chatSeenAt  DateTime?
   /// When an admin marked this season's kontingent (membership fee) paid; null while it is not. A new season clears it.
   duesPaidAt  DateTime?
+  /// The name KampKlar's feed gives this person, set by an admin when it is not their name here.
+  /// Their sign-ups in KampKlar are matched by it first.
+  kampklarName String?
   createdAt   DateTime   @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

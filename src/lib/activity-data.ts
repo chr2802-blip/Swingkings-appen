@@ -1,7 +1,7 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
 import { kickoffLabel } from "./time";
-import { activityName } from "./activity";
+import { activityName, readExternalSignups } from "./activity";
 
 /**
  * Which activities belong in the everyday list: everything but trainings, plus any
@@ -38,3 +38,25 @@ export async function templateOptions(teamId: string) {
 
 export type TemplateOption = Awaited<ReturnType<typeof templateOptions>>[number];
 export type ActivityOption = { id: string; label: string };
+
+/** How many of the latest KampKlar activities are read for the names KampKlar uses. */
+const NAME_SOURCES = 40;
+
+/**
+ * Every name KampKlar has given in the sign-ups of the team's latest activities, in
+ * alphabetical order: the choices when an admin links a member to their name there.
+ */
+export async function kampKlarNames(teamId: string): Promise<string[]> {
+  const rows = await teamDb(teamId).match.findMany({
+    where: { source: "KAMPKLAR", externalSignups: { not: Prisma.DbNull } },
+    orderBy: { startsAt: "desc" },
+    take: NAME_SOURCES,
+    select: { externalSignups: true },
+  });
+  const names = new Set<string>();
+  for (const row of rows) {
+    const lists = readExternalSignups(row.externalSignups);
+    if (lists) for (const name of [...lists.going, ...lists.available, ...lists.notGoing]) names.add(name.trim());
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, "da"));
+}

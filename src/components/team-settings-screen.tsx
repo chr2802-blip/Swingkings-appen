@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { readInZone } from "@/lib/time";
 import { teamRoster } from "@/lib/roster";
+import { kampKlarNames } from "@/lib/activity-data";
 import { taskCandidates } from "@/lib/tasks";
 import { Badge, ButtonLink, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { Avatar } from "@/components/photo";
@@ -33,7 +34,7 @@ import { deleteTaskTemplate } from "@/app/actions/activities";
 export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
   if (!canAdministerTeam(user, user.teamId)) redirect("/oversigt");
   const db = teamDb(user.teamId);
-  const [team, links, templates, roster, candidates] = await Promise.all([
+  const [team, links, templates, roster, candidates, kampklarNames] = await Promise.all([
     prisma.team.findUniqueOrThrow({
       where: { id: user.teamId },
       select: {
@@ -55,6 +56,7 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
     db.taskTemplate.findMany({ orderBy: { createdAt: "asc" } }),
     teamRoster(user.teamId),
     taskCandidates(user.teamId),
+    kampKlarNames(user.teamId),
   ]);
   const loads = roster
     .filter((m) => m.takesTasks)
@@ -202,7 +204,7 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
           {
             href: "/hold/rettigheder",
             title: "Rettigheder",
-            children: <MemberTable roster={roster} userId={user.id} />,
+            children: <MemberTable roster={roster} userId={user.id} kampklarNames={kampklarNames} />,
           },
           {
             href: "/hold/inviter",

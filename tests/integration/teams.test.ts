@@ -195,6 +195,29 @@ describe("members", () => {
     });
   });
 
+  it("links a member to their name in KampKlar, keeps it when the form leaves it out, and clears it when emptied", async () => {
+    const { team, admin, anna } = await makeSquad();
+    const kampklarName = async () =>
+      (await prisma.teamMember.findUniqueOrThrow({ where: { userId_teamId: { userId: anna.id, teamId: team.id } } })).kampklarName;
+    await signIn(admin);
+    expect(await updateMember(undefined, formData({ userId: anna.id, kampklarName: "  Anna Sofie Hansen " }))).toEqual({ ok: true });
+    expect(await kampklarName()).toBe("Anna Sofie Hansen");
+    await updateMember(undefined, formData({ userId: anna.id, shirtNumber: "9" }));
+    expect(await kampklarName()).toBe("Anna Sofie Hansen");
+    await updateMember(undefined, formData({ userId: anna.id, kampklarName: "" }));
+    expect(await kampklarName()).toBeNull();
+
+    // A player may not, and another team's member is not here.
+    await signIn(anna);
+    await expectDenied(() => updateMember(undefined, formData({ userId: anna.id, kampklarName: "Hacker" })));
+    const other = await makeSquad("Naboerne");
+    await signIn(admin);
+    expect((await updateMember(undefined, formData({ userId: other.anna.id, kampklarName: "X" })))?.ok).toBe(false);
+    expect(
+      (await prisma.teamMember.findUniqueOrThrow({ where: { userId_teamId: { userId: other.anna.id, teamId: other.team.id } } })).kampklarName,
+    ).toBeNull();
+  });
+
   it("marks kontingent paid with the day it was paid, keeps that day, clears it, and leaves it alone when not asked", async () => {
     const { team, admin, anna } = await makeSquad();
     await signIn(admin);

@@ -144,6 +144,7 @@ const memberSchema = z.object({
     .refine((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 999), "Trøjenummeret skal være et tal."),
   takesTasks: z.enum(["on", "off"]).optional(),
   duesPaid: z.enum(["on", "off"]).optional(),
+  kampklarName: z.string().trim().max(120).optional(),
 });
 
 export async function updateMember(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -171,6 +172,8 @@ export async function updateMember(_prev: ActionResult, formData: FormData): Pro
       ...(form.fields.role ? { role: form.fields.role } : {}),
       shirtNumber: form.fields.shirtNumber,
       takesTasks: formData.getAll("takesTasks").includes("on"),
+      // Left alone by a form without the field; emptied, the link is gone.
+      ...(form.fields.kampklarName === undefined ? {} : { kampklarName: form.fields.kampklarName || null }),
       ...(duesPaid === undefined ? {} : { duesPaidAt: duesPaid ? (member.duesPaidAt ?? new Date()) : null }),
     },
   });

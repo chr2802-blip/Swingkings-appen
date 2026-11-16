@@ -8,9 +8,10 @@ import { readInZone, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { ActivityDialog } from "@/components/activity-dialog";
 import { SyncButton } from "@/components/sync-button";
+import { AutoSync } from "@/components/auto-sync";
 import { CreateAction } from "@/components/create-button";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
-import { activityName } from "@/lib/activity";
+import { activityName, signupCounts } from "@/lib/activity";
 
 /** How many activities are read each way from today. */
 const EACH_WAY = 60;
@@ -25,8 +26,9 @@ const ROW = {
   isHome: true,
   cancelledAt: true,
   source: true,
+  externalSignups: true,
   tasks: { where: { doneAt: null }, select: { id: true } },
-  _count: { select: { signups: { where: { going: true } } } },
+  signups: { select: { going: true } },
 } satisfies Prisma.MatchSelect;
 
 type Row = Prisma.MatchGetPayload<{ select: typeof ROW }>;
@@ -34,7 +36,8 @@ type Row = Prisma.MatchGetPayload<{ select: typeof ROW }>;
 /**
  * Every activity — matches, trainings and the rest — in one list in the order they are
  * played, from today. The earlier ones are folded away under "Vis tidligere", newest first.
- * Each row says one thing on its right: that it is cancelled, its open jobs, or who comes.
+ * Each row says one thing on its right — that it is cancelled, or its open jobs — and under
+ * its time and place how many come, are available and have said no.
  */
 export default async function ActivitiesPage() {
   const user = await requireTeamUser();
@@ -53,6 +56,7 @@ export default async function ActivitiesPage() {
   return (
     <div>
       <PageHeader title="Aktiviteter" action={team.calendarUrl && <SyncButton />} />
+      {team.calendarUrl && <AutoSync />}
       {!team.calendarUrl && admin && (
         <Link href="/hold" className="-mt-4 mb-6 block text-sm font-medium text-[var(--accent-text)]">
           Hent kampene fra KampKlar ›
@@ -104,6 +108,7 @@ function ActivityMonths({ rows }: { rows: Row[] }) {
                         {match.kind === "MATCH" && match.isHome !== null && ` · ${match.isHome ? "Hjemme" : "Ude"}`}
                         {match.location && ` · ${match.location}`}
                       </p>
+                      {!match.cancelledAt && <SignupLine match={match} />}
                     </div>
                     <RowNote match={match} />
                   </Link>
@@ -122,9 +127,31 @@ function RowNote({ match }: { match: Row }) {
   if (match.cancelledAt) return <Badge tone="red">Aflyst</Badge>;
   const open = match.tasks.length;
   if (open > 0) return <span className="shrink-0 text-xs text-slate-500">{open === 1 ? "1 opgave" : `${open} opgaver`}</span>;
-  const coming = match._count.signups;
-  if (match.source === "MANUAL" && coming > 0) return <span className="shrink-0 text-xs text-slate-500">{coming} kommer</span>;
   return null;
+}
+
+const STATUS_LINE = [
+  { key: "going", word: "kommer", dot: "bg-emerald-500" },
+  { key: "available", word: "til rådighed", dot: "bg-amber-400" },
+  { key: "notGoing", word: "kommer ikke", dot: "bg-red-400" },
+] as const;
+
+/** "● 8 ● 2 ● 3": who comes, who is available and who has said no — a word for each to a screen reader. */
+function SignupLine({ match }: { match: Row }) {
+  const counts = signupCounts(match);
+  if (!counts) return null;
+  const shown = STATUS_LINE.filter((s) => s.key !== "available" || counts.available > 0);
+  return (
+    <p className="mt-0.5 flex gap-3 text-xs text-slate-600">
+      {shown.map((s) => (
+        <span key={s.key} className="inline-flex items-center gap-1" title={s.word}>
+          <span aria-hidden="true" className={`h-2 w-2 rounded-full ${s.dot}`} />
+          {counts[s.key]}
+          <span className="sr-only"> {s.word}</span>
+        </span>
+      ))}
+    </p>
+  );
 }
 
 function groupByMonth<T extends { startsAt: Date }>(rows: T[]): [string, T[]][] {
