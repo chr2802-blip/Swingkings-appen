@@ -267,9 +267,9 @@ describe("kampKlarNames", () => {
   it("lists every name KampKlar has sent for the team, once each and in order — not another team's", async () => {
     const { team } = await makeSquad();
     const other = await makeSquad("Naboerne");
-    await makeMatch(team.id, { source: "KAMPKLAR", externalUid: "1", externalSignups: { going: ["Bo", "Anna"], notGoing: [], available: ["Øjvind"] } });
-    await makeMatch(team.id, { source: "KAMPKLAR", externalUid: "2", externalSignups: { going: ["Anna"], notGoing: ["Carl"], available: [] } });
-    await makeMatch(other.team.id, { source: "KAMPKLAR", externalUid: "3", externalSignups: { going: ["Fremmed"], notGoing: [], available: [] } });
+    await makeMatch(team.id, { source: "KAMPKLAR", externalUid: "1", externalSignups: { going: ["Bo", "Anna"], notGoing: ["Øjvind"] } });
+    await makeMatch(team.id, { source: "KAMPKLAR", externalUid: "2", externalSignups: { going: ["Anna"], notGoing: ["Carl"] } });
+    await makeMatch(other.team.id, { source: "KAMPKLAR", externalUid: "3", externalSignups: { going: ["Fremmed"], notGoing: [] } });
     expect(await kampKlarNames(team.id)).toEqual(["Anna", "Bo", "Carl", "Øjvind"]);
   });
 });

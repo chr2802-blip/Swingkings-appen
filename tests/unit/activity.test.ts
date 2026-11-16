@@ -19,7 +19,6 @@ describe("externalSignupSummary", () => {
     const s = externalSignupSummary(roster, {
       going: ["anna hansen", "Bo", "Gæst Gæstesen"],
       notGoing: ["Carl Orsted"],
-      available: [],
     });
     expect(s.going).toEqual([
       { key: "a", name: "Anna Hansen", userId: "a", photoId: "p1" },
@@ -40,7 +39,6 @@ describe("externalSignupSummary", () => {
     const s = externalSignupSummary(roster, {
       going: ["Carl", "Anna Hansen"],
       notGoing: ["Anna Hansen"],
-      available: [],
     });
     expect(s.going.map((p) => p.userId)).toEqual([null, "a"]);
     expect(s.notGoing.map((p) => p.userId)).toEqual([null]);
@@ -53,12 +51,10 @@ describe("externalSignupSummary", () => {
       { userId: "j", name: "Jonas Lund Petersen", photoId: null },
     ];
     const s = externalSignupSummary(team, {
-      going: ["Christian Rasmussen", "Mads Kjær"],
-      available: ["Jonas Lund"],
+      going: ["Christian Rasmussen", "Mads Kjær", "Jonas Lund"],
       notGoing: [],
     });
-    expect(s.going.map((p) => p.userId)).toEqual(["c", "m"]);
-    expect(s.available.map((p) => p.userId)).toEqual(["j"]);
+    expect(s.going.map((p) => p.userId)).toEqual(["c", "m", "j"]);
     expect(s.unanswered).toEqual([]);
   });
 
@@ -67,7 +63,7 @@ describe("externalSignupSummary", () => {
       { userId: "x", name: "Kalle", photoId: null, kampklarName: "Karl-Emil Hansen" },
       { userId: "k", name: "Karl", photoId: null, kampklarName: null },
     ];
-    const s = externalSignupSummary(team, { going: ["karl-emil hansen"], available: [], notGoing: ["Kalle"] });
+    const s = externalSignupSummary(team, { going: ["karl-emil hansen"], notGoing: ["Kalle"] });
     expect(s.going.map((p) => p.userId)).toEqual(["x"]);
     // Linked to another name, "Kalle" is not guessed to be them.
     expect(s.notGoing.map((p) => p.userId)).toEqual([null]);
@@ -76,14 +72,13 @@ describe("externalSignupSummary", () => {
 });
 
 describe("signupCounts", () => {
-  it("counts KampKlar's lists, or the app's own answers for a hand-made activity", () => {
+  it("counts only those signed up in KampKlar, and the app's own yes and no for a hand-made activity", () => {
     expect(
-      signupCounts({ source: "KAMPKLAR", externalSignups: { going: ["A", "B"], available: ["C"], notGoing: [] }, signups: [] }),
-    ).toEqual({ going: 2, available: 1, notGoing: 0 });
+      signupCounts({ source: "KAMPKLAR", externalSignups: { going: ["A", "B"], notGoing: ["C"] }, signups: [] }),
+    ).toEqual({ going: 2, notGoing: null });
     expect(signupCounts({ source: "KAMPKLAR", externalSignups: null, signups: [] })).toBeNull();
     expect(signupCounts({ source: "MANUAL", externalSignups: null, signups: [{ going: true }, { going: false }, { going: true }] })).toEqual({
       going: 2,
-      available: 0,
       notGoing: 1,
     });
     expect(signupCounts({ source: "MANUAL", externalSignups: null, signups: [] })).toBeNull();
@@ -94,7 +89,7 @@ describe("readExternalSignups", () => {
   it("reads what the sync stored, and nothing else", () => {
     expect(
       readExternalSignups({ going: ["Anna", 3, ""], notGoing: "x" }),
-    ).toEqual({ going: ["Anna"], notGoing: [], available: [] });
+    ).toEqual({ going: ["Anna"], notGoing: [] });
     expect(readExternalSignups(null)).toBeNull();
     expect(readExternalSignups("nope")).toBeNull();
   });

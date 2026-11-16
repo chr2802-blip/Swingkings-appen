@@ -36,8 +36,8 @@ type Row = Prisma.MatchGetPayload<{ select: typeof ROW }>;
 /**
  * Every activity — matches, trainings and the rest — in one list in the order they are
  * played, from today. The earlier ones are folded away under "Vis tidligere", newest first.
- * Each row says one thing on its right — that it is cancelled, or its open jobs — and under
- * its time and place how many come, are available and have said no.
+ * Each row says on its right that it is cancelled, or its open jobs, and in a green circle
+ * how many have signed up — for a hand-made activity also a red one for those who said no.
  */
 export default async function ActivitiesPage() {
   const user = await requireTeamUser();
@@ -108,9 +108,9 @@ function ActivityMonths({ rows }: { rows: Row[] }) {
                         {match.kind === "MATCH" && match.isHome !== null && ` · ${match.isHome ? "Hjemme" : "Ude"}`}
                         {match.location && ` · ${match.location}`}
                       </p>
-                      {!match.cancelledAt && <SignupLine match={match} />}
                     </div>
                     <RowNote match={match} />
+                    {!match.cancelledAt && <SignupCircles match={match} />}
                   </Link>
                 </li>
               ))}
@@ -130,27 +130,25 @@ function RowNote({ match }: { match: Row }) {
   return null;
 }
 
-const STATUS_LINE = [
-  { key: "going", word: "kommer", dot: "bg-emerald-500" },
-  { key: "available", word: "til rådighed", dot: "bg-amber-400" },
-  { key: "notGoing", word: "kommer ikke", dot: "bg-red-400" },
-] as const;
-
-/** "● 8 ● 2 ● 3": who comes, who is available and who has said no — a word for each to a screen reader. */
-function SignupLine({ match }: { match: Row }) {
-  const counts = signupCounts(match);
-  if (!counts) return null;
-  const shown = STATUS_LINE.filter((s) => s.key !== "available" || counts.available > 0);
+/** A number in a coloured circle, with its word for a screen reader. */
+function Circle({ count, word, tone }: { count: number; word: string; tone: string }) {
   return (
-    <p className="mt-0.5 flex gap-3 text-xs text-slate-600">
-      {shown.map((s) => (
-        <span key={s.key} className="inline-flex items-center gap-1" title={s.word}>
-          <span aria-hidden="true" className={`h-2 w-2 rounded-full ${s.dot}`} />
-          {counts[s.key]}
-          <span className="sr-only"> {s.word}</span>
-        </span>
-      ))}
-    </p>
+    <span title={word} className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white ${tone}`}>
+      {count}
+      <span className="sr-only"> {word}</span>
+    </span>
+  );
+}
+
+/** Green: signed up. Red, for a hand-made activity: said no. A circle with nothing in it is left out. */
+function SignupCircles({ match }: { match: Row }) {
+  const counts = signupCounts(match);
+  if (!counts || (counts.going === 0 && !counts.notGoing)) return null;
+  return (
+    <span className="flex shrink-0 gap-1">
+      {counts.going > 0 && <Circle count={counts.going} word="tilmeldt" tone="bg-emerald-600" />}
+      {!!counts.notGoing && <Circle count={counts.notGoing} word="kommer ikke" tone="bg-red-500" />}
+    </span>
   );
 }
 
