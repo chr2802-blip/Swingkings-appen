@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireTeamUser } from "@/lib/auth";
-import { canDeleteFine, canManageFines, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
+import { canManageFines, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
-import { fineBoard, matchOptions } from "@/lib/fine-data";
+import { fineBoard, fineHistory, matchOptions } from "@/lib/fine-data";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
 import type { ChallengeStatus } from "@prisma/client";
 import { readInZone, relativeDay } from "@/lib/time";
@@ -16,7 +16,8 @@ import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { ActionButton } from "@/components/action-button";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
-import { deleteFine, resetFines } from "@/app/actions/fines";
+import { resetFines } from "@/app/actions/fines";
+import { FineDetails } from "@/components/fine-history";
 
 /** How many settled challenges and finished jobs the page shows; the open ones are always all there. */
 const RECENT = 10;
@@ -47,23 +48,7 @@ export default async function PlayerPage({
   const managesFines = canManageFines(user, user.teamId);
 
   const [fines, matches, openChallenges, pastChallenges, openTasks, doneTasks] = await Promise.all([
-    db.fine.findMany({
-      where: { playerId: id },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        reason: true,
-        note: true,
-        units: true,
-        unitPriceKr: true,
-        createdAt: true,
-        clearedAt: true,
-        challengeId: true,
-        issuedById: true,
-        issuedBy: { select: { name: true } },
-        match: { select: { opponent: true, title: true } },
-      },
-    }),
+    fineHistory(user.teamId, { playerId: id }),
     matchOptions(user.teamId),
     db.challenge.findMany({
       where: { status: "PENDING", OR: [{ winnerId: id }, { loserId: id }] },
@@ -179,31 +164,34 @@ export default async function PlayerPage({
           <Rows
             items={fines}
             render={(fine) => (
-              <li key={fine.id} className={`flex items-center gap-3 px-4 py-2 ${fine.clearedAt ? "opacity-60" : ""}`}>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{fine.reason}</p>
-                  <p className="truncate text-xs text-slate-500">
-                    {readInZone(fine.createdAt, "d. MMM yyyy")} · {fine.issuedBy.name}
-                    {fine.match && ` · ${fine.match.opponent ?? fine.match.title}`}
-                    {fine.clearedAt && ` · nulstillet ${readInZone(fine.clearedAt, "d. MMM yyyy")}`}
-                    {fine.note && ` · ${fine.note}`}
-                  </p>
-                </div>
-                <span className="shrink-0 text-right text-sm">
-                  {kr(fineAmount(fine))}
-                  <span className="block text-xs text-slate-500">{fineUnits(fine.units)}</span>
-                </span>
-                {canDeleteFine(user, user.teamId, fine) && (
-                  <ActionButton
-                    action={deleteFine}
-                    fields={{ id: fine.id }}
-                    label="Slet"
-                    variant="ghost"
-                    className="-mr-2 px-2! text-xs"
-                    confirm={fine.challengeId ? "Slet bøden? Hele udfordringen bliver trukket tilbage, også den andens del." : "Slet bøden?"}
-                    confirmLabel="Slet bøden"
-                  />
-                )}
+              <li key={fine.id}>
+                {/* Tapped, the fine opens as it does in the history: everything about it, and "Slet". */}
+                <DetailSheet
+                  title={fine.challenge ? "Udfordring" : "Bøde"}
+                  triggerClassName={`press-card flex w-full items-center gap-3 px-4 py-2 text-left ${fine.clearedAt ? "opacity-60" : ""}`}
+                  trigger={
+                    <>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{fine.reason}</span>
+                        <span className="block truncate text-xs text-slate-500">
+                          {readInZone(fine.createdAt, "d. MMM yyyy")} · {fine.issuedBy.name}
+                          {fine.match && ` · ${fine.match.opponent ?? fine.match.title}`}
+                          {fine.clearedAt && ` · nulstillet ${readInZone(fine.clearedAt, "d. MMM yyyy")}`}
+                          {fine.note && ` · ${fine.note}`}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right text-sm">
+                        {kr(fineAmount(fine))}
+                        <span className="block text-xs text-slate-500">{fineUnits(fine.units)}</span>
+                      </span>
+                      <span aria-hidden className="text-slate-300">
+                        ›
+                      </span>
+                    </>
+                  }
+                >
+                  <FineDetails fine={fine} user={user} />
+                </DetailSheet>
               </li>
             )}
           />

@@ -12,7 +12,7 @@ import { DetailSheet } from "@/components/detail-sheet";
 import { deleteFine } from "@/app/actions/fines";
 import { Star } from "@/components/crest";
 
-type HistoryFine = Awaited<ReturnType<typeof fineHistory>>[number];
+export type HistoryFine = Awaited<ReturnType<typeof fineHistory>>[number];
 
 /**
  * Fines as rows, newest first: who, what for, how much. A tap opens the fine — or the
@@ -66,7 +66,8 @@ export function FineHistory({ fines, user }: { fines: HistoryFine[]; user: TeamU
   );
 }
 
-function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
+/** Everything known about one fine, and "Slet" for whoever may — the sheet behind every fine row. */
+export function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
   const amount = fineAmount(fine);
   const status = fine.clearedAt ? `Nulstillet ${readInZone(fine.clearedAt, "d. MMM yyyy")}` : amount < 0 ? "Trækkes fra" : "Udestående";
   const when = readInZone(fine.createdAt, "EEEE d. MMMM yyyy 'kl.' HH:mm");
