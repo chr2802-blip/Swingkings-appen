@@ -10,7 +10,7 @@ import { assertTeamAdmin } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { parseLocalDateTime } from "@/lib/time";
-import { syncTeamCalendar } from "@/lib/kampklar";
+import { syncIfStale, syncTeamCalendar } from "@/lib/kampklar";
 import { addTemplatesToActivity, announceActivityMoves, copyTasksFromActivity, moveTaskDeadlines } from "@/lib/tasks";
 
 function refresh() {
@@ -145,6 +145,17 @@ export async function syncCalendar(): Promise<ActionResult> {
     result.tasksAdded && `${result.tasksAdded} opgaver fordelt`,
   ].filter(Boolean);
   return ok(parts.length ? `Hentet fra KampKlar: ${parts.join(", ")}.` : "Alt er allerede opdateret.");
+}
+
+/**
+ * Run by opening the activities: brings the KampKlar feed in when the last sync is more
+ * than a couple of minutes old. Revalidates nothing — the page refreshes itself when told
+ * `synced`, so no button waits on it.
+ */
+export async function autoSyncCalendar(): Promise<{ synced: boolean }> {
+  const user = await requireTeamUser();
+  const result = await syncIfStale(user.teamId);
+  return { synced: !!result?.ok };
 }
 
 async function activityFrom(teamId: string, formData: FormData) {

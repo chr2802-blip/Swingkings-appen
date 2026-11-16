@@ -25,8 +25,8 @@ export type CalendarEvent = {
   cancelled: boolean;
   /** The entry's own URL property, if the feed gives one (KampKlar writes the link in the description). */
   url?: string | null;
-  /** ATTENDEE lines with a name, and whether they said yes (true), no (false) or nothing (null). */
-  attendees?: { name: string; going: boolean | null }[];
+  /** ATTENDEE lines with a name, and what they answered (TENTATIVE is "til rådighed"); null for nothing yet. */
+  attendees?: { name: string; status: SignupStatus | null }[];
 };
 
 type Property = { name: string; params: Record<string, string>; value: string };
@@ -153,11 +153,18 @@ function toEvent(properties: Property[]): CalendarEvent | null {
       .filter((p) => p.name === "ATTENDEE" && p.params.CN)
       .map((p) => {
         const status = (p.params.PARTSTAT ?? "").toUpperCase();
-        return { name: p.params.CN!.trim(), going: status === "ACCEPTED" ? true : status === "DECLINED" ? false : null };
+        const answer: SignupStatus | null =
+          status === "ACCEPTED" ? "going" : status === "DECLINED" ? "notGoing" : status === "TENTATIVE" ? "available" : null;
+        return { name: p.params.CN!.trim(), status: answer };
       })
       .filter((a) => a.name),
   };
 }
+
+/** KampKlar's answers: tilmeldt, afbud, or til rådighed (can play if needed). */
+export type SignupStatus = "going" | "notGoing" | "available";
+export type SignupLists = Record<SignupStatus, string[]>;
+export const SIGNUP_STATUSES: SignupStatus[] = ["going", "available", "notGoing"];
 
 export type KampKlarDetails = {
   /** The activity in KampKlar, where a KampKlar activity is signed up for. Only an https link on dbu.dk. */
@@ -167,7 +174,7 @@ export type KampKlarDetails = {
   /** What is left of the description to show: "Beskrivelse:" and whatever else the feed wrote. */
   note: string | null;
   /** Who has signed up and who has not, by name — or null when the entry does not say. */
-  signups: { going: string[]; notGoing: string[] } | null;
+  signups: SignupLists | null;
 };
 
 /** Only a link that leads to DBU becomes a button: the feed is somebody else's text. */
@@ -184,12 +191,13 @@ export function dbuLink(raw: string | null | undefined): string | null {
 }
 
 /** The labels KampKlar writes in an entry's description, and what each one is. */
-const SECTIONS: [RegExp, "link" | "place" | "text" | "going" | "notGoing"][] = [
+const SECTIONS: [RegExp, "link" | "place" | "text" | SignupStatus][] = [
   [/^aktivitetslink$/, "link"],
   [/^m(ø|oe)dested$/, "place"],
   [/^beskrivelse$/, "text"],
   [/^(tilmeldte?|deltagere|kommer|deltager)$/, "going"],
   [/^(afbud|afmeldte?|kommer ikke|frameldte?)$/, "notGoing"],
+  [/^(til r(å|aa)dighed|r(å|aa)dighed|reserver?|kan (evt\.? )?spille)$/, "available"],
 ];
 const LABEL = /^\s*([A-Za-zÆØÅæøå ]{3,20}?)\s*(?:\(\d+\))?\s*:\s*(.*)$/;
 
@@ -211,8 +219,8 @@ function names(lines: string[]) {
  *
  *     Aktivitetslink: https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167
  *
- * A label's text runs until the next label. Sign-ups are read from "Tilmeldte:" and
- * "Afbud:" there, or from the entry's ATTENDEE lines. Any other label stays in the note
+ * A label's text runs until the next label. Sign-ups are read from "Tilmeldte:",
+ * "Afbud:" and "Til rådighed:" there, or from the entry's ATTENDEE lines. Any other label stays in the note
  * as written; a description with no labels at all is the note.
  */
 export function kampKlarDetails(event: Pick<CalendarEvent, "description" | "url" | "attendees">): KampKlarDetails {
@@ -236,13 +244,12 @@ export function kampKlarDetails(event: Pick<CalendarEvent, "description" | "url"
   const linkText = sections.get("link")?.join(" ").match(/https?:\/\/\S+/)?.[0];
 
   let signups: KampKlarDetails["signups"] = null;
-  if (sections.has("going") || sections.has("notGoing")) {
-    signups = { going: names(sections.get("going") ?? []), notGoing: names(sections.get("notGoing") ?? []) };
+  if (SIGNUP_STATUSES.some((status) => sections.has(status))) {
+    signups = { going: [], notGoing: [], available: [] };
+    for (const status of SIGNUP_STATUSES) signups[status] = names(sections.get(status) ?? []);
   } else if (event.attendees?.length) {
-    signups = {
-      going: event.attendees.filter((a) => a.going === true).map((a) => a.name),
-      notGoing: event.attendees.filter((a) => a.going === false).map((a) => a.name),
-    };
+    signups = { going: [], notGoing: [], available: [] };
+    for (const a of event.attendees) if (a.status) signups[a.status].push(a.name);
   }
 
   return {

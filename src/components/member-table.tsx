@@ -14,7 +14,16 @@ import { removeMember } from "@/app/actions/teams";
  * The admin's view of the roster: a tick for Bøder, Admin and kontingent per member,
  * saved on the press, and a menu for the rest: the Rettigheder tab of the team settings.
  */
-export function MemberTable({ roster, userId }: { roster: RosterMember[]; userId: string }) {
+export function MemberTable({
+  roster,
+  userId,
+  kampklarNames = [],
+}: {
+  roster: RosterMember[];
+  userId: string;
+  /** The names KampKlar has sent, for linking a member to theirs. */
+  kampklarNames?: string[];
+}) {
   return (
     <>
       <Card className="mb-3 space-y-1 text-sm text-slate-600">
@@ -56,7 +65,7 @@ export function MemberTable({ roster, userId }: { roster: RosterMember[]; userId
               </div>
               <MemberRights userId={member.userId} name={member.name} role={member.role} duesPaid={member.duesPaid} />
               <ActionMenu icon label={`Handlinger for ${member.name}`} title={member.name}>
-                <MemberDialog member={member} />
+                <MemberDialog member={member} kampklarNames={kampklarNames} />
                 {member.userId !== userId && (
                   <ActionButton
                     action={removeMember}

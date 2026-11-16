@@ -8,6 +8,8 @@ export type RosterMember = {
   role: MemberRole;
   shirtNumber: number | null;
   takesTasks: boolean;
+  /** The name KampKlar's feed gives them, when an admin has linked it; null otherwise. */
+  kampklarName: string | null;
   /** Whether this season's kontingent is marked paid. Everybody on the team sees it. */
   duesPaid: boolean;
   /** The installation's super admin, who is that on every team whatever `role` says. */
@@ -21,6 +23,7 @@ export async function teamRoster(teamId: string): Promise<RosterMember[]> {
       role: true,
       shirtNumber: true,
       takesTasks: true,
+      kampklarName: true,
       duesPaidAt: true,
       user: { select: { id: true, name: true, photoId: true, role: true } },
     },
@@ -33,6 +36,7 @@ export async function teamRoster(teamId: string): Promise<RosterMember[]> {
       role: m.role,
       shirtNumber: m.shirtNumber,
       takesTasks: m.takesTasks,
+      kampklarName: m.kampklarName,
       duesPaid: m.duesPaidAt !== null,
       superAdmin: m.user.role === "SUPER_ADMIN",
     }))

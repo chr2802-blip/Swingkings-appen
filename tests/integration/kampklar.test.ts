@@ -250,7 +250,7 @@ describe("applyCalendar and KampKlar's description", () => {
       location: "Læssøgadeskolen",
       note: "Test beskrivelse",
       externalUrl: "https://web.dbu.dk/fodboldapp?page=HOActivity&activityId=7334167",
-      externalSignups: { going: ["Anna", "Bo"], notGoing: ["Carl"] },
+      externalSignups: { going: ["Anna", "Bo"], notGoing: ["Carl"], available: [] },
     });
 
     // A LOCATION of its own wins; a different meeting place stays in the note. No sign-ups: none kept.

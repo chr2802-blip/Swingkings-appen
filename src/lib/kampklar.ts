@@ -160,3 +160,28 @@ export async function syncTeamCalendar(teamId: string, actorId: string | null): 
   if (!feed.ok) return feed;
   return applyCalendar(teamId, team.name, parseCalendar(feed.text), actorId);
 }
+
+/** How long a sync is fresh enough that opening a page does not fetch the feed again. */
+export const AUTO_SYNC_AFTER_MS = 2 * 60_000;
+
+/**
+ * The sync that opening the activities runs, at most once per `AUTO_SYNC_AFTER_MS` per team.
+ * The turn is claimed in one guarded update of `calendarSyncedAt`, so two people opening
+ * the page at once fetch the feed once. A failed fetch puts the time back, so the next
+ * visit tries again. Null when it was not this visit's turn, or the team has no feed.
+ */
+export async function syncIfStale(teamId: string, now: Date = new Date()): Promise<SyncResult | null> {
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { calendarUrl: true, calendarSyncedAt: true } });
+  if (!team?.calendarUrl) return null;
+  const before = new Date(now.getTime() - AUTO_SYNC_AFTER_MS);
+  const claimed = await prisma.team.updateMany({
+    where: { id: teamId, calendarSyncedAt: team.calendarSyncedAt, OR: [{ calendarSyncedAt: null }, { calendarSyncedAt: { lt: before } }] },
+    data: { calendarSyncedAt: now },
+  });
+  if (claimed.count === 0) return null;
+  const result = await syncTeamCalendar(teamId, null).catch((error) => ({ ok: false as const, error: String(error) }));
+  if (!result.ok) {
+    await prisma.team.updateMany({ where: { id: teamId, calendarSyncedAt: now }, data: { calendarSyncedAt: team.calendarSyncedAt } });
+  }
+  return result;
+}

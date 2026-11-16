@@ -20,10 +20,11 @@ import {
   saveActivity,
   saveTaskTemplate,
   setSignup,
+  autoSyncCalendar,
   syncCalendar,
 } from "@/app/actions/activities";
-import { fetchCalendar, syncTeamCalendar } from "@/lib/kampklar";
-import { LISTED_ACTIVITY, copyableActivities, templateOptions } from "@/lib/activity-data";
+import { AUTO_SYNC_AFTER_MS, fetchCalendar, syncIfStale, syncTeamCalendar } from "@/lib/kampklar";
+import { LISTED_ACTIVITY, copyableActivities, kampKlarNames, templateOptions } from "@/lib/activity-data";
 import { KIND_LABEL, activityName, signupSummary } from "@/lib/activity";
 import { teamRoster } from "@/lib/roster";
 import { formData, makeMatch, makeSquad, signIn } from "../helpers/factories";
@@ -210,6 +211,66 @@ describe("deleteActivity", () => {
     expect((await deleteActivity(undefined, formData({ id: synced.id })))?.ok).toBe(false);
     expect(await deleteActivity(undefined, formData({ id: theirs.id }))).toEqual({ ok: true });
     expect(await prisma.match.count()).toBe(2);
+  });
+});
+
+describe("the sync on opening the activities", () => {
+  const url = "https://kampklar.dk/feed.ics";
+
+  it("fetches the feed once while it is fresh, and again once it is not", async () => {
+    const { team, anna } = await makeSquad();
+    await prisma.team.update({ where: { id: team.id }, data: { calendarUrl: url } });
+    feed.respond = () => new Response(ics(vevent("a", "Swingkings - B.93", "20300601T120000Z")));
+    await signIn(anna);
+
+    expect(await autoSyncCalendar()).toEqual({ synced: true });
+    expect(await prisma.match.count({ where: { teamId: team.id } })).toBe(1);
+    // Opened again straight after, and by two at once: nobody fetches.
+    expect(await Promise.all([autoSyncCalendar(), autoSyncCalendar()])).toEqual([{ synced: false }, { synced: false }]);
+    expect(feed.urls).toHaveLength(1);
+
+    const later = new Date(Date.now() + AUTO_SYNC_AFTER_MS + 1000);
+    expect(await syncIfStale(team.id, later)).toMatchObject({ ok: true, updated: 1 });
+    expect(feed.urls).toHaveLength(2);
+  });
+
+  it("claims the turn once when two open the page at the same moment", async () => {
+    const { team } = await makeSquad();
+    await prisma.team.update({ where: { id: team.id }, data: { calendarUrl: url } });
+    feed.respond = () => new Response(ics(vevent("a", "Swingkings - B.93", "20300601T120000Z")));
+    const results = await Promise.all([syncIfStale(team.id), syncIfStale(team.id), syncIfStale(team.id)]);
+    expect(results.filter((r) => r?.ok)).toHaveLength(1);
+    expect(feed.urls).toHaveLength(1);
+    expect(await prisma.match.count({ where: { teamId: team.id } })).toBe(1);
+  });
+
+  it("puts the time back when the fetch fails, so the next visit tries again", async () => {
+    const { team } = await makeSquad();
+    const before = new Date("2026-01-01T10:00:00Z");
+    await prisma.team.update({ where: { id: team.id }, data: { calendarUrl: url, calendarSyncedAt: before } });
+    expect(await syncIfStale(team.id)).toMatchObject({ ok: false });
+    expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).calendarSyncedAt).toEqual(before);
+    expect(feed.urls).toHaveLength(1);
+  });
+
+  it("does nothing for a team with no KampKlar link, and only for the team signed in", async () => {
+    const { anna } = await makeSquad();
+    const other = await makeSquad("Naboerne");
+    await prisma.team.update({ where: { id: other.team.id }, data: { calendarUrl: url } });
+    await signIn(anna);
+    expect(await autoSyncCalendar()).toEqual({ synced: false });
+    expect(feed.urls).toEqual([]);
+  });
+});
+
+describe("kampKlarNames", () => {
+  it("lists every name KampKlar has sent for the team, once each and in order — not another team's", async () => {
+    const { team } = await makeSquad();
+    const other = await makeSquad("Naboerne");
+    await makeMatch(team.id, { source: "KAMPKLAR", externalUid: "1", externalSignups: { going: ["Bo", "Anna"], notGoing: [], available: ["Øjvind"] } });
+    await makeMatch(team.id, { source: "KAMPKLAR", externalUid: "2", externalSignups: { going: ["Anna"], notGoing: ["Carl"], available: [] } });
+    await makeMatch(other.team.id, { source: "KAMPKLAR", externalUid: "3", externalSignups: { going: ["Fremmed"], notGoing: [], available: [] } });
+    expect(await kampKlarNames(team.id)).toEqual(["Anna", "Bo", "Carl", "Øjvind"]);
   });
 });
 

@@ -53,7 +53,10 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
   ]);
 
   await page.goto("/aktiviteter");
-  await expect(page.getByText("1 kommer")).toBeVisible();
+  // Under the row: one coming, one not.
+  const row = page.getByRole("link", { name: /Afslutningsfest/ });
+  await expect(row.getByText("1 kommer", { exact: true })).toBeVisible();
+  await expect(row.getByText("1 kommer ikke", { exact: true })).toBeVisible();
 });
 
 test("the list shows every kind from today, with the earlier ones folded away under Vis tidligere", async ({ page, loginAs }) => {
@@ -149,7 +152,7 @@ test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows w
       source: "KAMPKLAR",
       externalUid: "x",
       externalUrl: link,
-      externalSignups: { going: ["Anna", "Gæst Gæstesen"], notGoing: ["Bo"] },
+      externalSignups: { going: ["Anna", "Gæst Gæstesen"], notGoing: ["Bo"], available: ["Kasserer"] },
     },
   });
   await loginAs(anna);
@@ -159,10 +162,69 @@ test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows w
   await expect(page.getByRole("link", { name: /Åbn i KampKlar/ })).toHaveAttribute("href", link);
   await expect(page.getByRole("heading", { name: "Kommer (2)" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Kommer ikke (1)" })).toBeVisible();
+  // "Kasserer" in KampKlar is the one member whose name starts so.
+  await expect(page.getByRole("heading", { name: "Til rådighed (1)" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Kasserer Kim" })).toBeVisible();
+  // Only an admin is told about names nobody is linked to.
+  await expect(page.getByText(/ikke koblet til en spiller/)).toHaveCount(0);
   // A teammate links to their page; a name nobody here has is only a name.
   await expect(page.getByRole("link", { name: "Anna", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Gæst Gæstesen" })).toHaveCount(0);
   await expect(page.getByText("Gæst Gæstesen")).toHaveCount(1);
+});
+
+test("the list shows who comes, who is available and who has said no", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.match.create({
+    data: {
+      teamId: team.id,
+      title: "Swingkings - AB",
+      opponent: "AB",
+      startsAt: inDays(3),
+      source: "KAMPKLAR",
+      externalUid: "x",
+      externalSignups: { going: ["Anna", "Bo", "Carl"], notGoing: ["Dorte"], available: ["Eva", "Frede"] },
+    },
+  });
+  await loginAs(anna);
+  await page.goto("/aktiviteter");
+  const row = page.getByRole("link", { name: /AB/ });
+  await expect(row.getByText("3 kommer", { exact: true })).toBeVisible();
+  await expect(row.getByText("2 til rådighed", { exact: true })).toBeVisible();
+  await expect(row.getByText("1 kommer ikke", { exact: true })).toBeVisible();
+});
+
+test("an admin links a member to their name in KampKlar, and their sign-up follows", async ({ page, loginAs }) => {
+  const { team, admin } = await squad();
+  const match = await db.match.create({
+    data: {
+      teamId: team.id,
+      title: "Swingkings - AB",
+      opponent: "AB",
+      startsAt: inDays(3),
+      source: "KAMPKLAR",
+      externalUid: "x",
+      externalSignups: { going: ["Thomas Træner-Hansen"], notGoing: [], available: [] },
+    },
+  });
+  await loginAs(admin);
+  await page.goto(`/aktiviteter/${match.id}`);
+  await expect(page.getByText("1 navn fra KampKlar er ikke koblet til en spiller.")).toBeVisible();
+  await page.getByRole("link", { name: "Kobl under Rettigheder ›" }).click();
+  await expect(page).toHaveURL(/\/hold\/rettigheder$/);
+
+  await page.getByRole("button", { name: "Handlinger for Træner Tom" }).click();
+  await page.getByRole("dialog", { name: "Træner Tom" }).getByRole("button", { name: "Ret" }).click();
+  const dialog = page.getByRole("dialog", { name: "Træner Tom" });
+  await dialog.getByLabel("Navn i KampKlar").fill("Thomas Træner-Hansen");
+  await dialog.getByRole("button", { name: "Gem" }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(async () => (await db.teamMember.findFirst({ where: { userId: admin.id } }))?.kampklarName).toBe("Thomas Træner-Hansen");
+
+  await page.goto(`/aktiviteter/${match.id}`);
+  await expect(page.getByRole("heading", { name: "Kommer (1)" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Træner Tom" })).toBeVisible();
+  await expect(page.getByText(/ikke koblet til en spiller/)).toHaveCount(0);
 });
 
 test("an activity from KampKlar whose feed carries no sign-ups says so", async ({ page, loginAs }) => {
