@@ -315,6 +315,13 @@ test("Seneste shows the three newest fines and challenges; the tab merges them a
     "Bøde nummer 3",
   );
   await expect(latest.getByText("Udfordring vundet")).toHaveCount(0);
+  // A fine reads here as it does in the history: whose, how many, how much.
+  await expect(latest.getByRole("listitem").nth(0)).toContainText(
+    `${anna.name} · Bøde nummer 1`,
+  );
+  await expect(latest.getByRole("listitem").nth(0)).toContainText(
+    "1 bøde · 10 kr",
+  );
   await expect(
     page
       .getByRole("tabpanel", { name: "Detaljer" })

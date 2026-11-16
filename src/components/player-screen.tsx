@@ -3,9 +3,9 @@ import type { TeamUser } from "@/lib/auth";
 import { canManageFines, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { fineBoard, fineHistory, matchOptions } from "@/lib/fine-data";
-import { fineAmount, fineUnits, kr } from "@/lib/money";
+import { fineUnits, kr } from "@/lib/money";
 import type { ChallengeStatus } from "@prisma/client";
-import { readInZone, relativeDay } from "@/lib/time";
+import { relativeDay } from "@/lib/time";
 import {
   Badge,
   ButtonLink,
@@ -29,7 +29,7 @@ import {
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { resetFines } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
-import { FineDetails, FineHistory, type HistoryFine } from "@/components/fine-history";
+import { FineHistory, FineRow } from "@/components/fine-history";
 
 /** How many settled challenges and finished jobs the page shows; the open ones are always all there. */
 const RECENT = 10;
@@ -360,46 +360,6 @@ function PlayerHeader({
         </>
       )}
     </div>
-  );
-}
-
-/** A fine as a row; tapped, it opens as in the history: everything about it, and "Slet". */
-function FineRow({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
-  return (
-    <li>
-      <DetailSheet
-        title={fine.challenge ? "Udfordring" : "Bøde"}
-        triggerClassName={`press-card flex w-full items-center gap-3 px-4 py-2 text-left ${fine.clearedAt ? "opacity-60" : ""}`}
-        trigger={
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
-                {fine.reason}
-              </span>
-              <span className="block truncate text-xs text-slate-500">
-                {readInZone(fine.createdAt, "d. MMM yyyy")} ·{" "}
-                {fine.issuedBy.name}
-                {fine.match && ` · ${fine.match.opponent ?? fine.match.title}`}
-                {fine.clearedAt &&
-                  ` · nulstillet ${readInZone(fine.clearedAt, "d. MMM yyyy")}`}
-                {fine.note && ` · ${fine.note}`}
-              </span>
-            </span>
-            <span className="shrink-0 text-right text-sm">
-              {kr(fineAmount(fine))}
-              <span className="block text-xs text-slate-500">
-                {fineUnits(fine.units)}
-              </span>
-            </span>
-            <span aria-hidden className="text-slate-300">
-              ›
-            </span>
-          </>
-        }
-      >
-        <FineDetails fine={fine} user={user} />
-      </DetailSheet>
-    </li>
   );
 }
 
