@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { checkVote, cleanOptions, isOpen, tally } from "@/lib/polls";
+import { checkVote, cleanOptions, isOpen, resultsHidden, tally } from "@/lib/polls";
 import { pollView } from "@/lib/feed";
 
 const now = new Date("2026-11-05T12:00:00Z");
 const base = { closedAt: null, closesAt: null, anonymous: false, multipleChoice: false, optionIds: ["a", "b", "c"] };
 
 describe("polls", () => {
+  it("keeps a result hidden only while it was made hidden and has not been shown", () => {
+    expect(resultsHidden({ hideResults: false, resultsShownAt: null })).toBe(false);
+    expect(resultsHidden({ hideResults: true, resultsShownAt: null })).toBe(true);
+    expect(resultsHidden({ hideResults: true, resultsShownAt: now })).toBe(false);
+  });
+
   it("is open until closed or past its closing time", () => {
     expect(isOpen({ closedAt: null, closesAt: null }, now)).toBe(true);
     expect(isOpen({ closedAt: null, closesAt: new Date("2026-11-05T11:59:00Z") }, now)).toBe(false);
@@ -52,6 +58,8 @@ describe("pollView", () => {
     multipleChoice: false,
     closesAt: null,
     closedAt: null,
+    hideResults: false,
+    resultsShownAt: null,
     match: null,
     options: [
       { id: "a", text: "Anna", playerId: "anna", player: { photoId: null } },

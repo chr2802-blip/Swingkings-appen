@@ -253,6 +253,49 @@ test("an anonymous poll never names who voted", async ({ page, loginAs }) => {
   await expect(page.getByRole("dialog").getByRole("list").getByRole("button")).toHaveText([/Fastgør øverst/]);
 });
 
+test("a poll made with its result hidden shows nothing until its maker shows the result", async ({ page, loginAs }) => {
+  const { anna, bo } = await squad();
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "Nyt opslag" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Tilføj afstemning" }).click();
+  await dialog.getByLabel("Spørgsmål").fill("Hvem er årets spiller?");
+  await dialog.getByRole("textbox", { name: "Svar 1" }).fill("Anna");
+  await dialog.getByRole("textbox", { name: "Svar 2" }).fill("Bo");
+  await dialog.getByLabel(/Anonym/).check();
+  await dialog.getByLabel(/Skjul resultatet/).check();
+  await dialog.getByRole("button", { name: "Del" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Skjult resultat")).toBeVisible();
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "Bo", exact: true }).click();
+  await expect(page.getByText("1 har stemt · du har stemt")).toBeVisible();
+  // Voted, but no count and no bars: only what he chose, and that it is hidden.
+  await expect(page.getByText("Resultatet er skjult, til det bliver offentliggjort.")).toBeVisible();
+  await expect(page.getByText("(din stemme)")).toBeVisible();
+  await expect(page.locator(".animate-bar-grow")).toHaveCount(0);
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Offentliggør resultat" })).toHaveCount(0);
+
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await expect(page.getByText(/Resultatet er skjult, også for dig/)).toBeVisible();
+  await page.getByRole("button", { name: "Handlinger" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Offentliggør resultat" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Offentliggør", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect.poll(async () => (await db.poll.findFirstOrThrow()).resultsShownAt).not.toBeNull();
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await expect(page.getByText("Skjult resultat")).toHaveCount(0);
+  await expect(page.locator(".animate-bar-grow")).toHaveCount(2);
+  await expect(page.getByText("1 · 100%")).toBeVisible();
+});
+
 test("the author edits a post's words, an admin edits anybody's, and a teammate cannot", async ({ page, loginAs }) => {
   const { team, admin, anna, bo } = await squad();
   const post = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Træning kl. 18" } });

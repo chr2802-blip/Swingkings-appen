@@ -135,6 +135,9 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   An anonymous poll's `PollVote` rows have `voterId` null and no timestamp, and who has voted
   is only in `PollBallot` — never add a column, log line or query that links the two, and
   never send results to somebody who has not voted while the poll is open.
+  A poll made with `hideResults` sends its result to nobody — maker and admins included,
+  open or closed — until the maker or an admin shows it (`showPollResults` →
+  `resultsShownAt`, "Offentliggør resultat" in the ⋯ menu, which tells the team).
 - **A feed post's pictures** are `PostPhoto` rows (up to `MAX_POST_PHOTOS`), read with
   `readPhotoChoices`.
 - **A feed post** is edited (`editPost`: words and pictures, never the poll) and deleted by

@@ -10,6 +10,7 @@ import {
   editPost,
   pinPost,
   sendChatMessage,
+  showPollResults,
   vote,
 } from "@/app/actions/social";
 import { feedPosts } from "@/lib/feed";
@@ -489,6 +490,62 @@ describe("polls", () => {
     expect(await closePoll(undefined, formData({ pollId: poll.id }))).toEqual({ ok: true });
     expect((await prisma.poll.findUniqueOrThrow({ where: { id: poll.id } })).closedAt).not.toBeNull();
     expect(await closePoll(undefined, formData({ pollId: "findes-ikke" }))).toEqual({ ok: false, error: "Afstemningen findes ikke." });
+  });
+
+  it("keeps a hidden result from everybody until the maker shows it, and tells the team once", async () => {
+    const { team, anna, bo, admin } = await makeSquad();
+    await signIn(anna);
+    expect(await createPost(undefined, pollForm({ pollOption: ["Fredag", "Lørdag"], pollAnonymous: "on", pollHideResults: "on" }))).toEqual({ ok: true });
+    const poll = await prisma.poll.findFirstOrThrow({ include: { options: { orderBy: { position: "asc" } } } });
+    expect(poll).toMatchObject({ anonymous: true, hideResults: true, resultsShownAt: null });
+
+    await signIn(bo);
+    expect(await vote(undefined, formData({ pollId: poll.id, optionId: poll.options[1]!.id }))).toEqual({ ok: true });
+    await signIn(anna);
+    await closePoll(undefined, formData({ pollId: poll.id }));
+    // Closed, voted and made by her — still nothing to see, not even for an admin.
+    for (const viewer of [anna, bo, admin]) {
+      const [post] = await feedPosts(team.id, { id: viewer.id, canAdminister: viewer === admin });
+      expect(post!.poll).toMatchObject({ open: false, resultsHidden: true });
+      expect(post!.poll!.options.every((o) => o.votes === 0)).toBe(true);
+    }
+
+    // Somebody else may not show it.
+    await signIn(bo);
+    expect(await showPollResults(undefined, formData({ pollId: poll.id }))).toEqual({ ok: false, error: "Det er ikke din afstemning." });
+
+    await signIn(anna);
+    const before = await prisma.notification.count();
+    expect(await showPollResults(undefined, formData({ pollId: poll.id }))).toEqual({ ok: true });
+    const shownAt = (await prisma.poll.findUniqueOrThrow({ where: { id: poll.id } })).resultsShownAt;
+    expect(shownAt).not.toBeNull();
+    // The team hears of it — everybody but her — linked to the post.
+    const told = await prisma.notification.findMany({ where: { title: "Resultatet er offentliggjort 🗳️" } });
+    expect(told.length).toBe((await prisma.teamMember.count({ where: { teamId: team.id } })) - 1);
+    expect(told.every((n) => n.postId === poll.postId && n.userId !== anna.id)).toBe(true);
+    // A second press changes nothing and tells nobody again.
+    expect(await showPollResults(undefined, formData({ pollId: poll.id }))).toEqual({ ok: true });
+    expect((await prisma.poll.findUniqueOrThrow({ where: { id: poll.id } })).resultsShownAt).toEqual(shownAt);
+    expect(await prisma.notification.count()).toBe(before + told.length);
+
+    const [post] = await feedPosts(team.id, { id: bo.id, canAdminister: false });
+    expect(post!.poll).toMatchObject({ resultsHidden: false });
+    expect(post!.poll!.options[0]).toMatchObject({ text: "Lørdag", votes: 1, voters: [] });
+  });
+
+  it("lets an admin show a hidden result, refuses one that was never hidden, and another team's", async () => {
+    const { team, anna, admin } = await makeSquad();
+    const { poll } = await makePoll(team.id, anna.id, { hideResults: true });
+    const plain = await makePoll(team.id, anna.id);
+    await signIn(admin);
+    expect(await showPollResults(undefined, formData({ pollId: plain.poll.id }))).toEqual({ ok: false, error: "Resultatet er ikke skjult." });
+    expect(await showPollResults(undefined, formData({ pollId: poll.id }))).toEqual({ ok: true });
+    expect((await prisma.poll.findUniqueOrThrow({ where: { id: poll.id } })).resultsShownAt).not.toBeNull();
+
+    const other = await makeSquad("Andre");
+    const theirs = await makePoll(other.team.id, other.anna.id, { hideResults: true });
+    expect(await showPollResults(undefined, formData({ pollId: theirs.poll.id }))).toEqual({ ok: false, error: "Afstemningen findes ikke." });
+    expect((await prisma.poll.findUniqueOrThrow({ where: { id: theirs.poll.id } })).resultsShownAt).toBeNull();
   });
 
   it("cannot vote in another team's poll", async () => {

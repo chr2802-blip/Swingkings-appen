@@ -123,6 +123,16 @@ function PostFields({ members }: { members: Member[] }) {
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="hidden" name="pollHideResults" value="off" />
+            <input type="checkbox" name="pollHideResults" value="on" className="mt-0.5 h-4 w-4 accent-[var(--accent)]" />
+            <span>
+              Skjul resultatet
+              <span className="block text-xs text-slate-500">
+                Ingen — heller ikke dig — ser resultatet, før du offentliggør det fra opslagets ⋯-menu.
+              </span>
+            </span>
+          </label>
           <Field label="Slutter (valgfri)" htmlFor="pollClosesAt" hint="Uden sluttidspunkt er den åben, til du lukker den.">
             <Input id="pollClosesAt" name="pollClosesAt" type="datetime-local" />
           </Field>

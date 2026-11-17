@@ -7,6 +7,9 @@
  *   voter, so there is nothing to change. An open poll can be re-voted until it closes.
  * - Results are shown to somebody who has voted, and to everybody once the poll closes,
  *   so the first votes do not steer the rest.
+ * - A poll made with its result hidden shows it to nobody — the maker and the admins
+ *   included — open or closed, until the maker or an admin shows it by hand. Then the
+ *   rule above holds again.
  */
 
 /** At most this many answers, and this many pictures on one post. */
@@ -17,6 +20,11 @@ export type PollState = { closedAt: Date | null; closesAt: Date | null };
 
 export function isOpen(poll: PollState, now: Date = new Date()) {
   return poll.closedAt === null && (poll.closesAt === null || poll.closesAt > now);
+}
+
+/** Whether the result is still kept from everybody. */
+export function resultsHidden(poll: { hideResults: boolean; resultsShownAt: Date | null }) {
+  return poll.hideResults && poll.resultsShownAt === null;
 }
 
 export type VoteCheck = { ok: true; optionIds: string[] } | { ok: false; error: string };
