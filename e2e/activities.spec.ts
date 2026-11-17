@@ -591,3 +591,33 @@ test("the team comments on an activity under its details, answers and reacts, an
   await expect(details.getByRole("button", { name: "Vis alle 5" })).toBeVisible();
   await expect(details.getByText("Skal vi have DJ?")).toBeHidden();
 });
+
+test("a long note is folded to a few lines with Vis mere, a short one is shown whole", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const long = Array.from({ length: 12 }, (_, i) => `Linje ${i + 1}: husk det hele`).join("\n");
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: inDays(10), note: long } });
+  const training = await db.match.create({ data: { teamId: team.id, kind: "TRAINING", title: "Træning", startsAt: inDays(2), note: "Medbring bolde" } });
+  const details = page.getByRole("tabpanel", { name: /^Detaljer/ });
+
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await expect(details.getByText(/^Linje 1: husk det hele/)).toBeVisible();
+  const more = details.getByRole("button", { name: "Vis mere" });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  // Folded, the note is cut off: shorter than its text.
+  const note = details.getByText(/^Linje 1: husk det hele/);
+  await expect.poll(() => note.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await more.click();
+  await expect(details.getByRole("button", { name: "Vis mindre" })).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(() => note.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(false);
+  await details.getByRole("button", { name: "Vis mindre" }).click();
+  await expect(details.getByRole("button", { name: "Vis mere" })).toBeVisible();
+  // The comments sit in the same card, under the details.
+  await expect(details.getByRole("heading", { name: "Kommentarer (0)" })).toBeVisible();
+
+  await page.goto(`/aktiviteter/${training.id}`);
+  await expect(details.getByText("Medbring bolde")).toBeVisible();
+  // Two days off, the day is said as words beside the time.
+  await expect(details.getByText("· om 2 dage")).toBeVisible();
+  await expect(details.getByRole("button", { name: "Vis mere" })).toHaveCount(0);
+});
