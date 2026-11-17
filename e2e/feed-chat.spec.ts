@@ -273,16 +273,19 @@ test("a poll made with its result hidden shows nothing until its maker shows the
   await page.goto("/oversigt");
   await page.getByRole("button", { name: "Bo", exact: true }).click();
   await expect(page.getByText("1 har stemt · du har stemt")).toBeVisible();
-  // Voted, but no count and no bars: only what he chose, and that it is hidden.
+  // Voted, but no count and no bars: only the answers, and that it is hidden. Anonymous,
+  // so not even his own choice is marked — the vote carries no voter.
   await expect(page.getByText("Resultatet er skjult, til det bliver offentliggjort.")).toBeVisible();
-  await expect(page.getByText("(din stemme)")).toBeVisible();
+  await expect(page.getByText("(din stemme)")).toHaveCount(0);
   await expect(page.locator(".animate-bar-grow")).toHaveCount(0);
   await page.getByRole("button", { name: "Handlinger" }).click();
   await expect(page.getByRole("dialog").getByRole("button", { name: "Offentliggør resultat" })).toHaveCount(0);
 
   await loginAs(anna);
   await page.goto("/oversigt");
-  await expect(page.getByText(/Resultatet er skjult, også for dig/)).toBeVisible();
+  // She has not voted, so she is offered the answers to pick — and no count.
+  await expect(page.getByText("Skjult resultat")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Anna", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Handlinger" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Offentliggør resultat" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Offentliggør", exact: true }).click();
