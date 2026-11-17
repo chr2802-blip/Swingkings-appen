@@ -6,14 +6,16 @@ import { Avatar, Photo } from "@/components/photo";
 import { PhotoViewer } from "@/components/photo-viewer";
 import Link from "next/link";
 import { PlayerLink } from "@/components/player-link";
-import { Reactions } from "@/components/reactions";
+import { Holdable, type HoldAction } from "@/components/reactions";
+import { withReplyTag } from "@/lib/mentions";
+import { possessive } from "@/lib/names";
 import { uploadPhoto } from "@/components/photo-field";
 import { PhotoError } from "@/lib/downscale";
 import { MAX_CHAT_PHOTOS, PHOTO_FIELD } from "@/lib/photo-file";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { followTeamSignal } from "@/components/team-signal";
 import { stampLabel } from "@/lib/time";
-import type { ChatPage } from "@/lib/chat";
+import type { ChatItem, ChatPage } from "@/lib/chat";
 import { withLatest, withOlder, without } from "@/lib/chat-pages";
 
 /** Poll fast while the socket is not live, slowly while it is (the poll is then only a safety net). */
@@ -171,6 +173,17 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
     });
   }
 
+  /** "Svar" on a held message: the box starts with its writer tagged, ready to write. */
+  function answer(name: string) {
+    setText((current) => withReplyTag(current, null, name));
+    requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }
+
   function remove(id: string) {
     const data = new FormData();
     data.set("id", id);
@@ -179,6 +192,14 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
       if (result?.ok) setPage((shown) => without(shown, id));
       await refresh();
     });
+  }
+
+  /** What can be done with a held message, besides reacting: answer it, copy it, and — your own, or as an admin — delete it. */
+  function chatActions(message: ChatItem): HoldAction[] {
+    const actions: HoldAction[] = [{ label: "Svar", onSelect: () => answer(message.author.name) }];
+    if (message.body) actions.push({ label: "Kopiér tekst", onSelect: () => void navigator.clipboard?.writeText(message.body).catch(() => {}) });
+    if (message.author.id === viewerId || canModerate) actions.push({ label: "Slet", danger: true, onSelect: () => remove(message.id) });
+    return actions;
   }
 
   return (
@@ -218,35 +239,43 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
                     {message.author.name}
                   </PlayerLink>
                 )}
-                <div
-                  className={`overflow-hidden rounded-2xl ${
-                    own ? "bg-[var(--accent)] text-white" : "border border-slate-200 bg-white"
-                  }`}
+                <Holdable
+                  target="chat"
+                  id={message.id}
+                  reactors={message.reactors}
+                  viewerId={viewerId}
+                  onChanged={refresh}
+                  label={`${possessive(message.author.name)} besked`}
+                  actions={chatActions(message)}
+                  className={`flex max-w-full flex-col ${own ? "items-end" : "items-start"}`}
+                  footer={(summary) => (
+                    <div className={`mt-0.5 flex items-center gap-2 px-1 text-[11px] text-slate-500 ${own ? "flex-row-reverse" : ""}`}>
+                      <span>{stampLabel(new Date(message.createdAt))}</span>
+                      {summary}
+                    </div>
+                  )}
                 >
-                  {message.photoIds.length > 0 && (
-                    <ChatPhotos photoIds={message.photoIds} onOpen={(index) => setViewing({ photoIds: message.photoIds, index })} />
-                  )}
-                  {message.body && <p className="px-3.5 py-2 text-sm whitespace-pre-line">{message.body}</p>}
-                  {message.task && (
-                    <Link
-                      href={`/opgaver/${message.task.id}`}
-                      className={`mx-2 mb-2 block rounded-xl px-3 py-2 text-sm font-medium ${
-                        own ? "bg-white/15 text-white" : "bg-slate-100 text-[var(--accent-text)]"
-                      }`}
-                    >
-                      📋 {message.task.title} · Se opgaven →
-                    </Link>
-                  )}
-                </div>
-                <div className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-slate-500 ${own ? "flex-row-reverse" : ""}`}>
-                  <span>{stampLabel(new Date(message.createdAt))}</span>
-                  {(own || canModerate) && (
-                    <button type="button" onClick={() => remove(message.id)} className="hidden hover:text-red-600 group-hover:inline">
-                      Slet
-                    </button>
-                  )}
-                  <Reactions target="chat" id={message.id} reactions={message.reactions} onChanged={refresh} align={own ? "end" : "start"} />
-                </div>
+                  <div
+                    className={`overflow-hidden rounded-2xl ${
+                      own ? "bg-[var(--accent)] text-white" : "border border-slate-200 bg-white"
+                    }`}
+                  >
+                    {message.photoIds.length > 0 && (
+                      <ChatPhotos photoIds={message.photoIds} onOpen={(index) => setViewing({ photoIds: message.photoIds, index })} />
+                    )}
+                    {message.body && <p className="px-3.5 py-2 text-sm whitespace-pre-line">{message.body}</p>}
+                    {message.task && (
+                      <Link
+                        href={`/opgaver/${message.task.id}`}
+                        className={`mx-2 mb-2 block rounded-xl px-3 py-2 text-sm font-medium ${
+                          own ? "bg-white/15 text-white" : "bg-slate-100 text-[var(--accent-text)]"
+                        }`}
+                      >
+                        📋 {message.task.title} · Se opgaven →
+                      </Link>
+                    )}
+                  </div>
+                </Holdable>
               </div>
             </li>
           );

@@ -1,10 +1,9 @@
 import type { feedPosts } from "@/lib/feed";
-import { reactionSummary, reactorsView } from "@/lib/reactions";
+import { reactorsOf } from "@/lib/reactions";
 import { stampLabel } from "@/lib/time";
 import { Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
-import { ReactorsDrawer } from "@/components/reactors-drawer";
-import { Reactions } from "@/components/reactions";
+import { PostReactions } from "@/components/reactions";
 import { PlayerLink } from "@/components/player-link";
 import { PhotoCarousel } from "@/components/photo-carousel";
 import { PollView } from "@/components/poll-view";
@@ -30,7 +29,7 @@ export function FeedPostCard({
   /** The team, for tagging in comments. */
   members: CommentMember[];
 }) {
-  const reactors = reactorsView(post.reactions);
+  const reactors = reactorsOf(post.reactions);
   return (
     <PostState>
       <Card padded={false} className="overflow-hidden">
@@ -68,12 +67,13 @@ export function FeedPostCard({
         )}
         <div className="space-y-3 px-4 py-3">
           {post.poll && <PollView poll={post.poll} />}
-          <div className="flex flex-wrap items-center gap-1">
-            <Reactions target="post" id={post.id} reactions={reactionSummary(post.reactions, viewerId)} className="-ml-1" />
+          {/* The reactions in short above, then the bar: the crown button and the comments. */}
+          <PostReactions target="post" id={post.id} reactors={reactors} viewerId={viewerId}>
             <CommentsDrawer
               postId={post.id}
               members={members}
               viewerId={viewerId}
+              reactors={reactors}
               comments={post.comments.map((comment) => ({
                 id: comment.id,
                 parentId: comment.parentId,
@@ -81,12 +81,10 @@ export function FeedPostCard({
                 stamp: stampLabel(comment.createdAt),
                 author: { id: comment.author.id, name: comment.author.name, photoId: comment.author.photoId },
                 canDelete: comment.author.id === viewerId || admin,
-                reactions: reactionSummary(comment.reactions, viewerId),
+                reactors: reactorsOf(comment.reactions),
               }))}
             />
-            {/* Who reacted, as overlapping faces; pressing them lists everybody and what they gave. */}
-            {reactors.faces.length > 0 && <ReactorsDrawer reactors={reactors.people} shown={reactors.faces.length} label={reactors.label} />}
-          </div>
+          </PostReactions>
         </div>
       </Card>
     </PostState>

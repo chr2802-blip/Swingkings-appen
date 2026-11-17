@@ -4,68 +4,37 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransitio
 import { createPortal } from "react-dom";
 import type { ReactionKind } from "@prisma/client";
 import { react } from "@/app/actions/reactions";
-import { Crown } from "@/components/crest";
-import { DEFAULT_REACTION, REACTIONS, applyPress, myReaction, nameList, type ReactionTarget, type ReactionView } from "@/lib/reactions";
+import { ReactionGlyph } from "@/components/reaction-glyph";
+import { ReactorsDrawer } from "@/components/reactors-drawer";
+import { DEFAULT_REACTION, REACTIONS, pressReaction, reactorsLabel, tallyReactions, type Reactor, type ReactionTarget } from "@/lib/reactions";
 
-/** The picker's size, to place it inside the screen: seven reactions of 40px and its padding. */
-const PICKER_WIDTH = 300;
-const PICKER_HEIGHT = 52;
-/** How long a press is held before the other reactions come up. */
+export { ReactionGlyph };
+
+/** How long a press is held before the reactions (and, on a comment, what else can be done) come up. */
 export const HOLD_MS = 450;
+/** A finger that moves this far is scrolling, not holding. */
+const HOLD_SLOP_PX = 10;
+/** The menu's width: seven reactions of 40px and its padding. */
+const MENU_WIDTH = 300;
 
-/** A reaction as it is drawn: the crest's crown, or the emoji. */
-export function ReactionGlyph({ kind, size = "sm" }: { kind: ReactionKind; size?: "sm" | "md" | "lg" }) {
-  if (kind === "CROWN") {
-    return <Crown className={size === "lg" ? "h-7 w-7" : size === "md" ? "h-5 w-5" : "h-4 w-4"} />;
-  }
-  const emoji = REACTIONS.find((r) => r.kind === kind)!.emoji;
-  return (
-    <span aria-hidden className={`leading-none ${size === "lg" ? "text-2xl" : size === "md" ? "text-base" : "text-[13px]"}`}>
-      {emoji}
-    </span>
-  );
-}
+type Thing = { target: ReactionTarget; id: string; reactors: Reactor[]; viewerId: string; onChanged?: () => void };
 
 /**
- * The reactions on one thing. The button gives a crown — the crest's — or, when the viewer
- * has reacted, takes their reaction back; held, it brings up all of them to choose one,
- * which takes the place of whatever the viewer had. Beside it, each kind given as a small
- * pill with its count; pressing one makes it yours, or takes it back if it is.
- *
- * The change shows at once and is sent after; it is undone if it is refused. `onChanged`
+ * Who reacted to one thing, with the viewer's presses on top until the server sends anew.
+ * A choice shows at once and is sent after; it is undone if it is refused. `onChanged`
  * runs once it has been saved, for a list that fetches itself (the chat).
  */
-export function Reactions({
-  target,
-  id,
-  reactions,
-  onChanged,
-  align = "start",
-  className = "",
-}: {
-  target: ReactionTarget;
-  id: string;
-  reactions: ReactionView[];
-  onChanged?: () => void;
-  align?: "start" | "end";
-  className?: string;
-}) {
-  // What the server last sent, and the viewer's presses on top of it until it sends anew.
-  const sent = JSON.stringify(reactions);
-  const [state, setState] = useState({ sent, list: reactions });
-  if (state.sent !== sent) setState({ sent, list: reactions });
+function useReactions({ target, id, reactors, viewerId, onChanged }: Thing) {
+  const sent = JSON.stringify(reactors);
+  const [state, setState] = useState({ sent, list: reactors });
+  if (state.sent !== sent) setState({ sent, list: reactors });
   const list = state.list;
-  const mine = myReaction(list);
-  const [open, setOpen] = useState(false);
+  const tally = tallyReactions(list, viewerId);
   const [, startTransition] = useTransition();
-  const button = useRef<HTMLButtonElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  const hold = useRef<{ timer: ReturnType<typeof setTimeout> | null; held: boolean }>({ timer: null, held: false });
 
   function choose(kind: ReactionKind, on: boolean) {
-    setOpen(false);
     const before = list;
-    setState((current) => ({ ...current, list: applyPress(current.list, kind, on) }));
+    setState((current) => ({ ...current, list: pressReaction(current.list, viewerId, kind, on) }));
     const data = new FormData();
     data.set("target", target);
     data.set("id", id);
@@ -78,149 +47,96 @@ export function Reactions({
     });
   }
 
-  /** A kind pressed in the row or on a pill: yours if it was not, taken back if it was. */
-  const toggle = (kind: ReactionKind) => choose(kind, mine !== kind);
-
-  function startHold() {
-    hold.current.held = false;
-    if (hold.current.timer) clearTimeout(hold.current.timer);
-    hold.current.timer = setTimeout(() => {
-      hold.current.held = true;
-      hold.current.timer = null;
-      navigator.vibrate?.(10);
-      setOpen(true);
-    }, HOLD_MS);
-  }
-  function endHold() {
-    if (hold.current.timer) clearTimeout(hold.current.timer);
-    hold.current.timer = null;
-  }
-  useEffect(() => {
-    const timers = hold.current;
-    return () => {
-      if (timers.timer) clearTimeout(timers.timer);
-    };
-  }, []);
-
-  const mineMeta = mine && REACTIONS.find((r) => r.kind === mine)!;
-
-  return (
-    <div className={`flex flex-wrap items-center gap-1 ${align === "end" ? "justify-end" : ""} ${className}`}>
-      <button
-        ref={button}
-        type="button"
-        onPointerDown={startHold}
-        onPointerUp={endHold}
-        onPointerLeave={endHold}
-        onPointerCancel={endHold}
-        // A long press on a phone, or a right click, opens the row instead of a menu.
-        onContextMenu={(event) => {
-          event.preventDefault();
-          endHold();
-          hold.current.held = true;
-          setOpen(true);
-        }}
-        onClick={() => {
-          // The press that opened the row is not also a crown.
-          if (hold.current.held) {
-            hold.current.held = false;
-            return;
-          }
-          if (mine) choose(mine, false);
-          else choose(DEFAULT_REACTION, true);
-        }}
-        onKeyDown={(event) => {
-          // From the keyboard, arrow up brings up the row.
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            setOpen(true);
-          }
-        }}
-        aria-label={mineMeta ? `Fjern din reaktion (${mineMeta.label} ${mineMeta.emoji})` : "Giv en krone 👑"}
-        aria-pressed={mine !== null}
-        aria-haspopup="true"
-        aria-expanded={open}
-        title="Tryk for en krone – hold for flere"
-        style={{ WebkitTouchCallout: "none" }}
-        className={`press-button flex h-7 min-w-8 touch-manipulation items-center justify-center rounded-full px-1.5 select-none ${
-          mine ? "bg-[color-mix(in_srgb,var(--gold)_22%,white)]" : "text-slate-400 hover:bg-slate-100"
-        }`}
-      >
-        {mine ? <ReactionGlyph kind={mine} size="md" /> : <CrownOutline />}
-      </button>
-      {/* For a keyboard or a screen reader: the row without holding. */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Vælg en anden reaktion"
-        className="sr-only focus:not-sr-only focus:rounded-full focus:px-2 focus:text-xs focus:text-slate-600"
-      >
-        Flere
-      </button>
-      {list.map((reaction) => {
-        const who = nameList(reaction.names);
-        return (
-          <button
-            key={reaction.kind}
-            type="button"
-            onClick={() => toggle(reaction.kind)}
-            aria-pressed={reaction.mine}
-            aria-label={`${reaction.emoji} ${reaction.count}: ${who}`}
-            title={who}
-            className={`press-button flex h-6 items-center gap-1 rounded-full border px-1.5 text-xs font-medium tabular-nums ${
-              reaction.mine
-                ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,white)] text-[var(--accent-text)]"
-                : "border-slate-200 bg-white text-slate-600"
-            }`}
-          >
-            <ReactionGlyph kind={reaction.kind} />
-            {reaction.count}
-          </button>
-        );
-      })}
-      {open && <Picker anchor={button} list={list} onPick={toggle} onClose={close} />}
-    </div>
-  );
-}
-
-/** The crown before anybody here has reacted: an outline, to be pressed. */
-function CrownOutline() {
-  return (
-    <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-      <path d="M3 6.5 7.5 12 12 3l4.5 9L21 6.5 19 20H5L3 6.5Z" />
-    </svg>
-  );
+  /** A kind chosen in the row: yours, or taken back if it already was. */
+  const toggle = (kind: ReactionKind) => choose(kind, tally.mine !== kind);
+  return { list, tally, choose, toggle };
 }
 
 /**
- * Every reaction in a row, laid over the page next to the button — above it where
- * there is room — so no list or drawer around it cuts it off. Pressing outside it, or
- * Escape, closes it and nothing else.
+ * A press held for `HOLD_MS` calls `onHold` — or a right click, or a long press that the
+ * phone turns into a context menu. The click that ends a hold is swallowed (`guard`), so
+ * holding a picture does not also open it. A finger that moves is scrolling and holds nothing.
  */
-function Picker({
+function useHold(onHold: () => void) {
+  const state = useRef<{ timer: ReturnType<typeof setTimeout> | null; held: boolean; x: number; y: number }>({ timer: null, held: false, x: 0, y: 0 });
+  const stop = useCallback(() => {
+    if (state.current.timer) clearTimeout(state.current.timer);
+    state.current.timer = null;
+  }, []);
+  useEffect(() => {
+    return stop;
+  }, [stop]);
+
+  const handlers = {
+    onPointerDown(event: React.PointerEvent) {
+      if (event.button !== 0) return;
+      stop();
+      state.current.held = false;
+      state.current.x = event.clientX;
+      state.current.y = event.clientY;
+      state.current.timer = setTimeout(() => {
+        state.current.timer = null;
+        state.current.held = true;
+        navigator.vibrate?.(10);
+        onHold();
+      }, HOLD_MS);
+    },
+    onPointerMove(event: React.PointerEvent) {
+      if (Math.hypot(event.clientX - state.current.x, event.clientY - state.current.y) > HOLD_SLOP_PX) stop();
+    },
+    onPointerUp: stop,
+    onPointerLeave: stop,
+    onPointerCancel: stop,
+    onContextMenu(event: React.MouseEvent) {
+      event.preventDefault();
+      stop();
+      state.current.held = true;
+      onHold();
+    },
+  };
+  /** True — once — when the click about to happen ends a hold. */
+  function held() {
+    const was = state.current.held;
+    state.current.held = false;
+    return was;
+  }
+  return { handlers, held };
+}
+
+/** Something to do with a comment or message, offered under the reactions when it is held. */
+export type HoldAction = { label: string; onSelect: () => void; danger?: boolean };
+
+/**
+ * The reactions in a row — the crown first — and, held on a comment or message, what else
+ * can be done with it below them. Laid over the page beside what was held, above it where
+ * there is room, and kept there every frame while open (a drawer still sliding up, a chat
+ * that scrolls); scrolling it out of sight closes it. Pressing outside, or Escape, closes
+ * it and nothing else.
+ */
+function ReactionMenu({
   anchor,
-  list,
+  mine,
   onPick,
+  actions = [],
   onClose,
 }: {
-  anchor: React.RefObject<HTMLButtonElement | null>;
-  list: ReactionView[];
+  anchor: React.RefObject<HTMLElement | null>;
+  mine: ReactionKind | null;
   onPick: (kind: ReactionKind) => void;
+  actions?: HoldAction[];
   onClose: () => void;
 }) {
   const [place, setPlace] = useState<{ top: number; left: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    // Kept by the button every frame while open — a drawer still sliding up, a chat that
-    // scrolls to a new message — and inside the screen. Only scrolling the button out of
-    // sight closes it; a button that has not slid into sight yet does not.
-    function place() {
+    function placeIt() {
       const rect = anchor.current?.getBoundingClientRect();
+      const height = box.current?.offsetHeight ?? 52;
       if (!rect) return;
-      const left = Math.min(Math.max(8, rect.left + rect.width / 2 - PICKER_WIDTH / 2), window.innerWidth - PICKER_WIDTH - 8);
-      const above = rect.top - PICKER_HEIGHT - 8;
-      const top = Math.min(above >= 8 ? above : rect.bottom + 8, window.innerHeight - PICKER_HEIGHT - 8);
+      const left = Math.min(Math.max(8, rect.left + rect.width / 2 - MENU_WIDTH / 2), window.innerWidth - MENU_WIDTH - 8);
+      const above = rect.top - height - 8;
+      const top = Math.max(8, Math.min(above >= 8 ? above : rect.bottom + 8, window.innerHeight - height - 8));
       setPlace((was) => (was && was.top === top && was.left === left ? was : { top, left }));
     }
     function scrolled() {
@@ -228,10 +144,10 @@ function Picker({
       if (rect && (rect.bottom < 0 || rect.top > window.innerHeight)) onClose();
     }
     let frame = requestAnimationFrame(function follow() {
-      place();
+      placeIt();
       frame = requestAnimationFrame(follow);
     });
-    place();
+    placeIt();
     window.addEventListener("scroll", scrolled, true);
     return () => {
       cancelAnimationFrame(frame);
@@ -253,37 +169,233 @@ function Picker({
   return createPortal(
     <div
       ref={box}
-      role="group"
-      aria-label="Vælg en reaktion"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
-          // Closes the row, not the drawer it may sit in.
+          // Closes the menu, not the drawer it may sit in.
           event.preventDefault();
           event.stopPropagation();
           onClose();
-          anchor.current?.focus();
         }
       }}
-      style={{ top: place?.top ?? -9999, left: place?.left ?? -9999, width: PICKER_WIDTH, height: PICKER_HEIGHT }}
-      className="animate-pop fixed z-[70] flex items-center justify-between rounded-full bg-white px-2 shadow-xl ring-1 ring-slate-200"
+      style={{ top: place?.top ?? -9999, left: place?.left ?? -9999, width: MENU_WIDTH }}
+      className="animate-pop fixed z-[70] overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-slate-200"
     >
-      {REACTIONS.map((reaction) => {
-        const mine = list.some((r) => r.kind === reaction.kind && r.mine);
-        return (
+      <div role="group" aria-label="Vælg en reaktion" className="flex h-[52px] items-center justify-between px-2">
+        {REACTIONS.map((reaction) => (
           <button
             key={reaction.kind}
             type="button"
             onClick={() => onPick(reaction.kind)}
             aria-label={`${reaction.label} ${reaction.emoji}`}
-            aria-pressed={mine}
+            aria-pressed={mine === reaction.kind}
             title={reaction.label}
-            className={`press-icon flex h-10 w-10 items-center justify-center rounded-full text-2xl leading-none ${mine ? "bg-slate-100" : ""}`}
+            className={`press-icon flex h-10 w-10 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${mine === reaction.kind ? "bg-slate-100" : ""}`}
           >
             <ReactionGlyph kind={reaction.kind} size="lg" />
           </button>
-        );
-      })}
+        ))}
+      </div>
+      {actions.length > 0 && (
+        <div role="group" aria-label="Handlinger" className="border-t border-slate-100 py-1">
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={() => {
+                onClose();
+                action.onSelect();
+              }}
+              className={`block w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-slate-50 ${action.danger ? "text-red-600" : "text-slate-800"}`}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>,
     document.body,
+  );
+}
+
+/**
+ * The reactions on a thing in short, as Facebook draws them: the most given kinds stacked,
+ * then how many reacted. Pressing it lists who, by kind (`ReactorsDrawer`). Nothing when
+ * nobody has reacted.
+ */
+export function ReactionSummary({ reactors, small = false }: { reactors: Reactor[]; small?: boolean }) {
+  const [open, setOpen] = useState(false);
+  if (reactors.length === 0) return null;
+  const tally = tallyReactions(reactors, "");
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`${tally.total} ${tally.total === 1 ? "reaktion" : "reaktioner"}: ${reactorsLabel(reactors)}`}
+        className={`press-button flex shrink-0 items-center rounded-full text-slate-600 tabular-nums ${
+          small ? "h-5 gap-1 bg-white pr-1.5 pl-0.5 text-[11px] shadow-sm ring-1 ring-slate-200" : "h-7 gap-1.5 pr-1 text-sm"
+        }`}
+      >
+        <span className="flex items-center">
+          {tally.top.map((kind) => (
+            <span
+              key={kind}
+              className={`-ml-1 flex items-center justify-center rounded-full bg-white ring-2 ring-white first:ml-0 ${small ? "h-4 w-4" : "h-6 w-6"}`}
+            >
+              <ReactionGlyph kind={kind} size={small ? "xs" : "sm"} />
+            </span>
+          ))}
+        </span>
+        {tally.total}
+      </button>
+      <ReactorsDrawer open={open} onClose={() => setOpen(false)} reactors={reactors} />
+    </>
+  );
+}
+
+/**
+ * A post's reactions: the summary above, then the bar with the reaction button — a press
+ * gives the crest's crown, or takes the viewer's reaction back; held, every reaction comes
+ * up — and whatever else the bar holds (`children`, the comments).
+ */
+export function PostReactions({ children, ...thing }: Thing & { children?: React.ReactNode }) {
+  const { list, tally, choose, toggle } = useReactions(thing);
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  const button = useRef<HTMLButtonElement>(null);
+  const { handlers, held } = useHold(() => setOpen(true));
+  const meta = tally.mine && REACTIONS.find((r) => r.kind === tally.mine)!;
+
+  return (
+    <div className="space-y-2">
+      {list.length > 0 && (
+        <div className="flex items-center">
+          <ReactionSummary reactors={list} />
+        </div>
+      )}
+      <div className="-mx-1 flex items-center gap-1 border-t border-slate-100 pt-2">
+        <button
+          ref={button}
+          type="button"
+          {...handlers}
+          onClick={() => {
+            if (held()) return;
+            if (tally.mine) choose(tally.mine, false);
+            else choose(DEFAULT_REACTION, true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setOpen(true);
+            }
+          }}
+          aria-label={meta ? `Fjern din reaktion (${meta.label} ${meta.emoji})` : "Giv en krone 👑"}
+          aria-pressed={tally.mine !== null}
+          aria-haspopup="true"
+          aria-expanded={open}
+          title="Tryk for en krone – hold for flere"
+          style={{ WebkitTouchCallout: "none" }}
+          className={`press-button flex h-9 touch-manipulation items-center gap-1.5 rounded-xl px-2 text-sm font-medium select-none ${
+            tally.mine ? "text-[var(--accent-text)]" : "text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          {tally.mine ? <ReactionGlyph kind={tally.mine} size="md" /> : <CrownOutline />}
+          {meta ? meta.label : "Krone"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Vælg en anden reaktion"
+          className="sr-only focus:not-sr-only focus:rounded-full focus:px-2 focus:text-xs focus:text-slate-600"
+        >
+          Flere
+        </button>
+        {children}
+      </div>
+      {open && <ReactionMenu anchor={button} mine={tally.mine} onPick={(kind) => { close(); toggle(kind); }} onClose={close} />}
+    </div>
+  );
+}
+
+/**
+ * A comment or a chat message that is held to do anything with it: holding it brings up
+ * the reactions and `actions` (answer, copy, delete). Nothing shows on it until then but
+ * the reactions it has, which `footer` places (it is handed the summary). For a keyboard
+ * or a screen reader there is a button — seen only when it has the focus — that does the
+ * same as holding.
+ */
+export function Holdable({
+  label,
+  actions,
+  footer,
+  children,
+  className = "",
+  ...thing
+}: Thing & {
+  /** Whose, in words: "Annas kommentar". */
+  label: string;
+  actions: HoldAction[];
+  footer: (summary: React.ReactNode) => React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { list, tally, toggle } = useReactions(thing);
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  const anchor = useRef<HTMLDivElement>(null);
+  const { handlers, held } = useHold(() => setOpen(true));
+
+  return (
+    <div className={className}>
+      <div
+        ref={anchor}
+        {...handlers}
+        onClickCapture={(event) => {
+          // The click that ends a hold opens nothing inside (a picture, a link).
+          if (held()) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        data-holdable=""
+        style={{ WebkitTouchCallout: "none" }}
+        // While its menu is open, what was held stands out a little, as on Facebook.
+        className={`touch-manipulation transition-[filter] select-none ${open ? "brightness-90" : ""}`}
+      >
+        {children}
+      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Reager eller svar på ${label}`}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="sr-only focus:not-sr-only focus:rounded-full focus:px-2 focus:text-xs focus:text-slate-600"
+      >
+        Handlinger
+      </button>
+      {footer(list.length > 0 ? <ReactionSummary reactors={list} small /> : null)}
+      {open && (
+        <ReactionMenu
+          anchor={anchor}
+          mine={tally.mine}
+          onPick={(kind) => {
+            close();
+            toggle(kind);
+          }}
+          actions={actions}
+          onClose={close}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The crown before the viewer has reacted: an outline, to be pressed. */
+function CrownOutline() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M3 6.5 7.5 12 12 3l4.5 9L21 6.5 19 20H5L3 6.5Z" />
+    </svg>
   );
 }

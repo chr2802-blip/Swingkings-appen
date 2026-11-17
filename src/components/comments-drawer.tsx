@@ -4,14 +4,17 @@ import { useState } from "react";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { CommentForm, type CommentMember, type ReplyTarget } from "@/components/comment-form";
 import { CommentThreads, type CommentView } from "@/components/comment-thread";
+import { ReactionSummary } from "@/components/reactions";
 import { addComment, deleteComment } from "@/app/actions/social";
+import type { Reactor } from "@/lib/reactions";
 
 export type { CommentView };
 
 /**
  * A post's comments, the Facebook way: the card shows only a 💬 and the count, and the
  * comments open in a drawer from the bottom with the box to write in at its foot.
- * Answers sit indented under the comment they answer; "Svar" turns the box into an answer.
+ * The post's reactions lead it, as on the card. Answers sit indented under the comment
+ * they answer; holding a comment and choosing "Svar" turns the box into an answer to it.
  * The drawer stays open while comments are added or deleted, as the page renders anew.
  */
 export function CommentsDrawer({
@@ -19,8 +22,11 @@ export function CommentsDrawer({
   comments,
   members,
   viewerId,
+  reactors = [],
 }: {
   postId: string;
+  /** Who reacted to the post, shown at the top of the drawer. */
+  reactors?: Reactor[];
   comments: CommentView[];
   /** The team, to tag in a comment and to make the tagged names links. */
   members: CommentMember[];
@@ -50,10 +56,15 @@ export function CommentsDrawer({
       </button>
       <Modal open={open} onClose={close} title="Kommentarer" size="drawer">
         <ModalBody>
+          {reactors.length > 0 && (
+            <div className="-mt-1 mb-4 flex">
+              <ReactionSummary reactors={reactors} />
+            </div>
+          )}
           {count === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">Ingen kommentarer endnu. Skriv den første!</p>
           ) : (
-            <CommentThreads comments={comments} members={members} onReply={setReplyTo} target="comment" onDelete={deleteComment} />
+            <CommentThreads comments={comments} members={members} onReply={setReplyTo} target="comment" onDelete={deleteComment} viewerId={viewerId} />
           )}
         </ModalBody>
         <ModalFooter>

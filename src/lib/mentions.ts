@@ -92,3 +92,23 @@ export function insertMention(value: string, start: number, caret: number, name:
   const inserted = `@${name.trim()}${after.startsWith(" ") ? "" : " "}`;
   return { value: value.slice(0, start) + inserted + after, caret: start + inserted.length + (after.startsWith(" ") ? 1 : 0) };
 }
+
+/**
+ * The words in the box once it answers `to` instead of `from`: an answer starts with its
+ * writer tagged ("@Anna "), which can be deleted like any word. The tag for whoever was
+ * answered before goes; what was typed after it stays. `to` null: no longer an answer.
+ */
+export function withReplyTag(value: string, from: string | null, to: string | null): string {
+  let rest = value;
+  if (from && rest.startsWith(`@${from} `)) rest = rest.slice(from.length + 2);
+  if (!to || rest.startsWith(`@${to} `)) return rest;
+  return `@${to} ${rest}`;
+}
+
+/** The emojis offered in a row above the box to write a comment in. */
+export const EMOJI_ROW = ["❤️", "🙌", "🔥", "👏", "😢", "😍", "😮", "😂"] as const;
+
+/** `text` put into `value` where the caret is (in place of any selection), and where the caret goes after it. */
+export function insertAt(value: string, start: number, end: number, text: string): { value: string; caret: number } {
+  return { value: value.slice(0, start) + text + value.slice(end), caret: start + text.length };
+}

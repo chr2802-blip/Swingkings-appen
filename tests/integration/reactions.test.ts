@@ -150,7 +150,7 @@ describe("react", () => {
     ).rejects.toThrow();
   });
 
-  it("shows the chat's reactions to the viewer, with theirs marked", async () => {
+  it("tells the chat who reacted to a message, and with what, first to react first", async () => {
     const { team, anna, bo } = await makeSquad();
     const { message } = await things(team, anna);
     await prisma.reaction.createMany({
@@ -159,10 +159,11 @@ describe("react", () => {
         { teamId: team.id, chatMessageId: message.id, userId: anna.id, kind: "LAUGH" },
       ],
     });
-    const [forBo] = (await latestMessages(team.id, bo.id)).messages;
-    expect(forBo!.reactions).toEqual([{ kind: "LAUGH", emoji: "😂", label: "Griner", count: 2, mine: true, names: [bo.name, anna.name] }]);
-    const [forAdmin] = (await latestMessages(team.id, "somebody-else")).messages;
-    expect(forAdmin!.reactions[0]!.mine).toBe(false);
+    const [message0] = (await latestMessages(team.id, bo.id)).messages;
+    expect(message0!.reactors).toEqual([
+      { id: bo.id, name: bo.name, photoId: null, kind: "LAUGH" },
+      { id: anna.id, name: anna.name, photoId: null, kind: "LAUGH" },
+    ]);
   });
 
   it("needs a session", async () => {

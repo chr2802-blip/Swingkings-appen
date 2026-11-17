@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeMention, insertMention, mentionSegments, mentionedIds, suggestMembers } from "@/lib/mentions";
+import { EMOJI_ROW, activeMention, insertAt, insertMention, mentionSegments, mentionedIds, suggestMembers, withReplyTag } from "@/lib/mentions";
 
 const anna = { userId: "a", name: "Anna" };
 const annaH = { userId: "ah", name: "Anna Hansen" };
@@ -52,5 +52,36 @@ describe("mentions", () => {
   it("writes the chosen name in place of what was typed", () => {
     expect(insertMention("Hej @An", 4, 7, "Anna Hansen")).toEqual({ value: "Hej @Anna Hansen ", caret: 17 });
     expect(insertMention("@B er god", 0, 2, "Bo")).toEqual({ value: "@Bo er god", caret: 4 });
+  });
+});
+
+describe("withReplyTag", () => {
+  it("starts an answer with its writer tagged, keeping what was typed", () => {
+    expect(withReplyTag("", null, "Anna")).toBe("@Anna ");
+    expect(withReplyTag("enig!", null, "Anna Berg")).toBe("@Anna Berg enig!");
+  });
+
+  it("swaps the tag when another comment is answered, and drops it when the answer is cancelled", () => {
+    expect(withReplyTag("@Anna enig", "Anna", "Bo")).toBe("@Bo enig");
+    expect(withReplyTag("@Anna enig", "Anna", null)).toBe("enig");
+  });
+
+  it("does not tag twice, and leaves a tag the writer has already deleted deleted", () => {
+    expect(withReplyTag("@Anna enig", null, "Anna")).toBe("@Anna enig");
+    expect(withReplyTag("enig", "Anna", null)).toBe("enig");
+  });
+});
+
+describe("insertAt", () => {
+  it("puts the emoji where the caret is, over a selection, and moves the caret after it", () => {
+    expect(insertAt("Flot kamp", 4, 4, " 🔥")).toEqual({ value: "Flot 🔥 kamp", caret: 7 });
+    expect(insertAt("Flot kamp", 5, 9, "❤️")).toEqual({ value: "Flot ❤️", caret: 7 });
+    expect(insertAt("", 0, 0, "😂")).toEqual({ value: "😂", caret: 2 });
+  });
+});
+
+describe("EMOJI_ROW", () => {
+  it("offers eight emojis, each once", () => {
+    expect(new Set(EMOJI_ROW).size).toBe(8);
   });
 });
