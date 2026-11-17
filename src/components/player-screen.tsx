@@ -54,8 +54,8 @@ export function playerTabHref(userId: string, tab: PlayerTab = "") {
  *   waiting above it.
  * - **Opgaver**: their jobs.
  *
- * What their fines come to (and, once the box is open for payment, "Betal" on your own)
- * stands above the tabs.
+ * What their fines come to, how many fines and open jobs they have (and, once the box is
+ * open for payment, "Betal" on your own) stands above the tabs.
  * Every name in the app
  * links here. On your own page it is also your profile, with "Rediger" to change it.
  */
@@ -152,6 +152,7 @@ export async function PlayerScreen({
         board={board}
         matches={matches}
         managesFines={managesFines}
+        openTasks={openTasks.length}
       />
 
       <SwipePages
@@ -266,6 +267,7 @@ function PlayerHeader({
   board,
   matches,
   managesFines,
+  openTasks,
 }: {
   id: string;
   self: boolean;
@@ -275,6 +277,8 @@ function PlayerHeader({
   board: Board;
   matches: Awaited<ReturnType<typeof matchOptions>>;
   managesFines: boolean;
+  /** Their jobs not yet done, counted beside their fines. */
+  openTasks: number;
 }) {
   const paying = board.paymentOpenedAt !== null;
   const paid = board.paid.has(id);
@@ -336,7 +340,7 @@ function PlayerHeader({
           )}
         </div>
       </div>
-      <dl className="mt-3 grid grid-cols-2 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
+      <dl className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
         <Stat
           label={paid ? "betalt" : paying ? "skal betales" : "bøder i alt"}
           value={kr(account.owesKr)}
@@ -346,6 +350,7 @@ function PlayerHeader({
           label={account.units === 1 ? "bøde" : "bøder"}
           value={String(account.units)}
         />
+        <Stat label={openTasks === 1 ? "opgave" : "opgaver"} value={String(openTasks)} />
       </dl>
       {paying && paid && (
         <p className="mt-3 text-center text-sm font-medium text-emerald-700">✅ Bøderne er betalt</p>
