@@ -8,3 +8,6 @@ export function teamTopic(teamId: string) {
 
 /** A new chat message was posted. Carries only that something happened — never the text. */
 export const CHAT_POSTED = "chat-posted";
+
+/** Somebody on the team got a notification; each phone asks for its own count. Never says whom. */
+export const NOTIFIED = "notified";

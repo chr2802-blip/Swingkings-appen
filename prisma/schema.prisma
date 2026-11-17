@@ -85,48 +85,66 @@ enum ChallengeStatus {
   SETTLED
 }
 
+/**
+ * What a notification is about, for the notification center and the settings on it. A
+ * person can turn push off per category (`TeamMember.mutedPush`); the center shows
+ * everything regardless. TEAM (an admin's notices, a new season) cannot be turned off,
+ * nor can a few single kinds that wait on the person (`always` in `src/lib/notifications.ts`).
+ */
+enum NotificationCategory {
+  FINES
+  CHALLENGES
+  TASKS
+  REMINDERS
+  ACTIVITIES
+  FEED
+  COMMENTS
+  CHAT
+  TEAM
+}
+
 model Team {
-  id               String    @id @default(cuid())
-  name             String
-  photoId          String?
-  theme            TeamTheme @default(SWINGKINGS)
+  id                  String    @id @default(cuid())
+  name                String
+  photoId             String?
+  theme               TeamTheme @default(SWINGKINGS)
   /**
    * What one fine (én bøde) costs in kroner. A fine type costs a number of these, so
    * "for sent til træning" can be 2 bøder and "rødt kort" 10. Each Fine copies the
    * price as it was when it was given, so changing this never rewrites what somebody
    * already owes.
    */
-  finePriceKr      Int       @default(10)
+  finePriceKr         Int       @default(10)
   /**
    * The team's calendar link from DBU KampKlar ("Eksporter kalender"): an iCalendar
    * feed, read by the sync on the matches page and by the daily job.
    */
-  calendarUrl      String?
+  calendarUrl         String?
   /// When the calendar was last read successfully.
-  calendarSyncedAt DateTime?
+  calendarSyncedAt    DateTime?
   /**
    * The team's MobilePay Box, as its own pay-in link (https://qr.mobilepay.dk/box/<id>/pay-in)
    * from "Del" on the box in MobilePay. "Betal" opens it with the amount and the message
    * filled in (`src/lib/pay.ts`). MobilePay Box has no API, so nothing is marked paid by it.
    */
-  mobilePayLink    String?
+  mobilePayLink       String?
   /// What a season's kontingent costs in kroner, shown on "Betal kontingent"; null when not set.
-  duesKr           Int?
+  duesKr              Int?
   /// Made by "Opret testhold" (`src/lib/demo-team.ts`); the only team "Slet testhold" removes.
-  isDemo           Boolean   @default(false)
+  isDemo              Boolean   @default(false)
   /**
    * When the current season began ("Start ny sæson", `src/lib/season.ts`); null until the
    * first, when the season counts from `createdAt`. The KampKlar sync brings nothing back
    * from before it.
    */
-  seasonStartedAt  DateTime?
+  seasonStartedAt     DateTime?
   /**
    * When an admin opened the fine box for payment ("Åbn for betaling") at the end of the
    * season; null while it is not open. While it is open, "Betal" shows and nobody can give
    * fines or report challenges, so what each player owes stands still. A new season closes it.
    */
   finePaymentOpenedAt DateTime?
-  createdAt        DateTime  @default(now())
+  createdAt           DateTime  @default(now())
 
   members         TeamMember[]
   activeFor       User[]           @relation("ActiveTeam")
@@ -143,6 +161,7 @@ model Team {
   polls           Poll[]
   activitySignups ActivitySignup[]
   seasons         Season[]
+  notifications   Notification[]
   photos          Photo[]          @relation("PhotoTeam")
   photo           Photo?           @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
 
@@ -172,6 +191,7 @@ model User {
   memberships        TeamMember[]
   pushSubscriptions  PushSubscription[]
   pushPauses         PushPause[]
+  notifications      Notification[]
   inviteLinksCreated InviteLink[]       @relation("InviteLinkCreatedBy")
 
   finesReceived Fine[] @relation("FinePlayer")
@@ -203,31 +223,35 @@ model User {
 
 /// One person on one team, and what they may do there.
 model TeamMember {
-  userId       String
-  teamId       String
-  role         MemberRole @default(PLAYER)
+  userId              String
+  teamId              String
+  role                MemberRole             @default(PLAYER)
   /// Shirt number, shown beside the name. Optional: not everybody on a team plays.
-  shirtNumber  Int?
+  shirtNumber         Int?
   /**
    * Whether the automatic task distribution may hand this person jobs. A coach who
    * never washes the kit can be on the team without being picked for it.
    */
-  takesTasks   Boolean    @default(true)
+  takesTasks          Boolean                @default(true)
   /// When this person last had the feed in view; posts after it are "nye opslag".
-  feedSeenAt   DateTime?
+  feedSeenAt          DateTime?
   /// When this person last had the team chat open; a chat push is held back while it is recent.
-  chatSeenAt   DateTime?
+  chatSeenAt          DateTime?
   /// When an admin marked this season's kontingent (membership fee) paid; null while it is not. A new season clears it.
-  duesPaidAt   DateTime?
+  duesPaidAt          DateTime?
   /**
    * When the treasurer marked this person's fines paid, once the box is open for payment.
    * All or nothing: a player has paid the season's fines, or owes all of them. A new season clears it.
    */
-  finesPaidAt  DateTime?
+  finesPaidAt         DateTime?
   /// The name KampKlar's feed gives this person, set by an admin when it is not their name here.
   /// Their sign-ups in KampKlar are matched by it first.
-  kampklarName String?
-  createdAt    DateTime   @default(now())
+  kampklarName        String?
+  /// When this person last opened the notification center; the bell counts what came after.
+  notificationsSeenAt DateTime?
+  /// The categories this person gets no push for on this team. The center still shows them.
+  mutedPush           NotificationCategory[] @default([])
+  createdAt           DateTime               @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -292,7 +316,7 @@ model FineType {
  * with positive, so the stake moves from one to the other.
  */
 model Fine {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   teamId      String
   playerId    String
   fineTypeId  String?
@@ -305,7 +329,7 @@ model Fine {
   matchId     String?
   /// The challenge this fine came from: the loser's (positive) and the winner's (negative).
   challengeId String?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   player    User       @relation("FinePlayer", fields: [playerId], references: [id], onDelete: Cascade)
@@ -313,6 +337,8 @@ model Fine {
   issuedBy  User       @relation("FineIssuedBy", fields: [issuedById], references: [id], onDelete: Cascade)
   match     Match?     @relation(fields: [matchId], references: [id], onDelete: SetNull)
   challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  notifications Notification[]
 
   @@index([teamId, createdAt])
   @@index([playerId])
@@ -349,6 +375,8 @@ model Challenge {
   approvedBy User?  @relation("ChallengeApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
   match      Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
   fines      Fine[]
+
+  notifications Notification[]
 
   @@index([teamId, createdAt])
   @@index([reportedById])
@@ -396,6 +424,8 @@ model Match {
   polls      Poll[]
   signups    ActivitySignup[]
 
+  notifications Notification[]
+
   @@unique([teamId, externalUid])
   @@index([teamId, startsAt])
 }
@@ -427,6 +457,8 @@ model Task {
   assignees    TaskAssignee[]
   handovers    TaskHandover[]
   chatMessages ChatMessage[]
+
+  notifications Notification[]
 
   @@index([teamId, dueAt])
   @@index([matchId])
@@ -552,6 +584,8 @@ model Post {
   poll     Poll?
   likes    PostLike[]
   comments PostComment[]
+
+  notifications Notification[]
 
   @@index([teamId, createdAt])
   @@index([teamId, pinnedAt])
@@ -799,4 +833,48 @@ model PushSubscription {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/**
+ * One notification to one person on one team, shown in the notification center (the bell
+ * beside the chat). Written by `notify` (`src/lib/notifications.ts`) whether or not a push
+ * goes out. It goes with what it is about: a task, a post, an activity, a challenge or a
+ * fine deleted takes its notifications with it. `readAt` null is "ny" until it is opened.
+ * Comments on one's own post are one row per post while unread (`groupKey`), its
+ * `updatedAt` moving with each. The daily job deletes rows older than `KEEP_DAYS`.
+ */
+model Notification {
+  id          String               @id @default(cuid())
+  teamId      String
+  userId      String
+  category    NotificationCategory
+  title       String
+  body        String
+  url         String
+  groupKey    String?
+  taskId      String?
+  postId      String?
+  matchId     String?
+  challengeId String?
+  fineId      String?
+  readAt      DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @default(now()) @updatedAt
+
+  team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task      Task?      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  post      Post?      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  match     Match?     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  fine      Fine?      @relation(fields: [fineId], references: [id], onDelete: Cascade)
+
+  @@index([userId, teamId, updatedAt])
+  @@index([teamId])
+  @@index([updatedAt])
+  @@index([taskId])
+  @@index([postId])
+  @@index([matchId])
+  @@index([challengeId])
+  @@index([fineId])
 }

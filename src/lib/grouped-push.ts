@@ -8,7 +8,8 @@ import { PUSH_PAUSE_MS, chatSummary, chatText, commentSummary, isActive, latest,
 /**
  * Grouped notifications for the team chat and the comments on a post. The rules and the
  * wording are in `src/lib/push-summary.ts`; this reads who has seen what and sends. It
- * all runs after the response, like `notifyLater`, and only with VAPID keys.
+ * all runs after the response, like `notify` (`src/lib/notifications.ts`), and only with VAPID keys.
+ * Somebody who muted the chat (or comments) on the team in the notification center hears nothing.
  */
 
 /** The most unread messages one notification counts; past it, it says "99+". */
@@ -48,7 +49,7 @@ export function notifyChatLater(teamId: string, teamName: string, authorId: stri
 export async function pushChat(teamId: string, teamName: string, authorId: string, now: Date = new Date()) {
   const db = teamDb(teamId);
   const members = await db.teamMember.findMany({
-    where: { userId: { not: authorId }, user: { pushSubscriptions: { some: {} } } },
+    where: { userId: { not: authorId }, NOT: { mutedPush: { has: "CHAT" } }, user: { pushSubscriptions: { some: {} } } },
     select: { userId: true, chatSeenAt: true, createdAt: true },
   });
   const listening = members.filter((m) => !isActive(m.chatSeenAt, now));
@@ -92,7 +93,7 @@ export async function pushComments(postId: string, commenterId: string, now: Dat
   const post = await prisma.post.findUnique({ where: { id: postId }, select: { teamId: true, authorId: true, createdAt: true } });
   if (!post || post.authorId === commenterId) return;
   const member = await teamDb(post.teamId).teamMember.findFirst({
-    where: { userId: post.authorId, user: { pushSubscriptions: { some: {} } } },
+    where: { userId: post.authorId, NOT: { mutedPush: { has: "COMMENTS" } }, user: { pushSubscriptions: { some: {} } } },
     select: { feedSeenAt: true },
   });
   if (!member || isActive(member.feedSeenAt, now)) return;

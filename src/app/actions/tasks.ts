@@ -12,7 +12,7 @@ import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { field, MAX_MESSAGE, optionalText, readForm, requiredText } from "@/lib/form";
 import { deadlineOn } from "@/lib/time";
 import { createDistributedTasks, taskUrl } from "@/lib/tasks";
-import { notifyLater } from "@/lib/notify";
+import { notify } from "@/lib/notifications";
 import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
@@ -78,11 +78,13 @@ export async function createTask(_prev: ActionResult, formData: FormData): Promi
       data: { ...data, teamId: user.teamId, createdById: user.id, assignees: { create: picked.map((userId) => ({ userId })) } },
     });
     taskId = task.id;
-    notifyLater(picked, user.id, {
+    await notify(user.teamId, picked, user.id, {
+      category: "TASKS",
       title: `Ny opgave: ${task.title}`,
       body: `${user.name} har givet dig en opgave.`,
       url: taskUrl(task),
       tag: `task-${task.id}`,
+      taskId: task.id,
     });
   }
   refresh(taskId, match.id);
@@ -140,11 +142,13 @@ export async function updateTask(_prev: ActionResult, formData: FormData): Promi
     }),
   ]);
   const added = picked.filter((id) => !before.some((b) => b.userId === id));
-  notifyLater(added, user.id, {
+  await notify(user.teamId, added, user.id, {
+    category: "TASKS",
     title: `Ny opgave: ${form.fields.title}`,
     body: `${user.name} har givet dig en opgave.`,
     url: taskUrl(task),
     tag: `task-${task.id}`,
+    taskId: task.id,
   });
   refresh(task.id, task.matchId);
   return ok();
@@ -233,11 +237,15 @@ export async function offerTask(_prev: ActionResult, formData: FormData): Promis
     if (alreadyAsking(error)) return fail(ALREADY_ASKING);
     throw error;
   }
-  notifyLater([toId], user.id, {
+  await notify(user.teamId, [toId], user.id, {
+    category: "TASKS",
     title: `Vil du overtage: ${task.title}?`,
     body: `${user.name} spørger, om du kan tage opgaven.`,
     url: taskUrl(task),
     tag: `handover-${task.id}`,
+    // It waits on an answer, so it is pushed whatever the settings say.
+    always: true,
+    taskId: task.id,
   });
   refresh(task.id, task.matchId);
   return ok();
@@ -342,7 +350,9 @@ export async function answerHandover(_prev: ActionResult, formData: FormData): P
     refresh(handover.task.id, handover.task.matchId);
     return fail(`${handover.from.name} har ikke længere opgaven.`);
   }
-  notifyLater([handover.fromId], user.id, {
+  await notify(user.teamId, [handover.fromId], user.id, {
+    category: "TASKS",
+    taskId: handover.task.id,
     title: outcome === "accepted" ? `${user.name} har overtaget: ${handover.task.title}` : `${user.name} kan ikke tage: ${handover.task.title}`,
     body: outcome === "accepted" ? "Du er taget af opgaven." : "Du har stadig opgaven. Spørg en anden.",
     url: taskUrl(handover.task),

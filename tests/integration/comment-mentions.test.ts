@@ -54,10 +54,15 @@ describe("tagging in a comment", () => {
     await signIn(bo);
     expect(await addComment(undefined, formData({ postId: post.id, parentId: comment.id, body: "@Anna @Kasserer @Træner enig" }))).toEqual({ ok: true });
     await runAfter();
-    expect(sent).toEqual([
-      { to: [anna.id], title: "Bo svarede på din kommentar" },
-      { to: [admin.id, treasurer.id].sort(), title: "Bo nævnte dig i en kommentar" },
-    ]);
+    // One push each.
+    expect(sent[0]).toEqual({ to: [anna.id], title: "Bo svarede på din kommentar" });
+    expect(sent.slice(1)).toEqual(
+      expect.arrayContaining([
+        { to: [admin.id], title: "Bo nævnte dig i en kommentar" },
+        { to: [treasurer.id], title: "Bo nævnte dig i en kommentar" },
+      ]),
+    );
+    expect(sent).toHaveLength(3);
   });
 
   it("without a tag, only the author hears of it, as before", async () => {

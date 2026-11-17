@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { presentsCronSecret } from "@/lib/cron-secret";
-import { sendPushToUsers } from "@/lib/push";
+import { clearOldNotifications, pushNotifications, recordNotifications } from "@/lib/notifications";
 import { syncTeamCalendar } from "@/lib/kampklar";
 import { clearOldPushPauses } from "@/lib/grouped-push";
 import { OPEN_TASK, taskUrl } from "@/lib/tasks";
@@ -17,8 +17,10 @@ const SYNC_BUDGET_MS = 30_000;
  * The daily job, run by Vercel Cron each morning. It reads across every team on purpose,
  * which is why it uses `prisma` directly rather than `teamDb`.
  *
- * 1. Reminds each assignee of an open job due by tomorrow evening — once a day at most.
- * 2. Forgets the chat and comment push pauses that are long over.
+ * 1. Reminds each assignee of an open job due by tomorrow evening — once a day at most,
+ *    in the notification center and, unless they muted reminders, by push.
+ * 2. Forgets the chat and comment push pauses that are long over, and the notifications
+ *    older than `KEEP_DAYS`.
  * 3. Reads every team's KampKlar calendar (the one read longest ago first), so a moved or
  *    new match shows up without anybody pressing "Hent fra KampKlar".
  */
@@ -35,24 +37,30 @@ export async function GET(request: Request) {
       OR: [{ lastNotifiedAt: null }, { lastNotifiedAt: { lt: cutoff } }],
       assignees: { some: {} },
     },
-    select: { id: true, title: true, dueAt: true, matchId: true, assignees: { select: { userId: true } } },
+    select: { id: true, teamId: true, title: true, dueAt: true, matchId: true, assignees: { select: { userId: true } } },
   });
   let sent = 0;
   for (const task of due) {
-    sent += await sendPushToUsers(
-      task.assignees.map((a) => a.userId),
-      {
+    const recorded = await recordNotifications(
+      task.teamId,
+      null,
+      task.assignees.map((a) => ({
+        userId: a.userId,
+        category: "REMINDERS" as const,
         title: `Husk: ${task.title}`,
         body: task.dueAt ? deadlineLabel(task.dueAt, now).text : "Opgaven venter på dig.",
         url: taskUrl(task),
         tag: `task-${task.id}`,
-      },
+        taskId: task.id,
+      })),
     );
+    sent += await pushNotifications(recorded);
   }
   if (due.length) {
     await prisma.task.updateMany({ where: { id: { in: due.map((t) => t.id) } }, data: { lastNotifiedAt: now } });
   }
   await clearOldPushPauses(now);
+  await clearOldNotifications(now);
   // The reminders are what people notice, so they go first; the calendars use what is left
   // of the time, and a team not reached today is reached tomorrow.
   const started = Date.now();

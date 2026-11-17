@@ -105,6 +105,8 @@ export async function startSeason(teamId: string, name: string, now: Date = new 
 
     await tx.fine.deleteMany({ where: { teamId } });
     await tx.challenge.deleteMany({ where: { teamId } });
+    // What the center said about them goes too: the fines it named and the money asked for.
+    await tx.notification.deleteMany({ where: { teamId, category: { in: ["FINES", "CHALLENGES"] } } });
     // Jobs and sign-ups go with their activity (onDelete: Cascade).
     await tx.match.deleteMany({ where: { teamId, startsAt: { lt: now } } });
     await tx.task.deleteMany({ where: { teamId, matchId: null, doneAt: { not: null } } });

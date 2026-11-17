@@ -35,17 +35,46 @@ beforeEach(() => {
 });
 
 describe("sendTeamNotice", () => {
-  it("sends to everybody on the team who has notifications on, but not the sender, and says who was missed", async () => {
+  it("puts it under everybody's bell but the sender's, pushes it to those with notifications on, and says who was missed", async () => {
     // The treasurer has no device with notifications on.
-    const { admin, anna, bo } = await makeSquad();
+    const { team, admin, anna, bo, treasurer } = await makeSquad();
     await Promise.all([subscribe(admin.id, "admin"), subscribe(anna.id, "anna"), subscribe(bo.id, "bo")]);
     await signIn(admin);
-    expect(await sendTeamNotice(undefined, notice())).toEqual({ ok: true, note: "Sendt til 2 personer. 1 har ikke slået notifikationer til." });
-    await runAfter();
-    expect(sentTo()).toEqual({
-      anna: { title: "Husk kontingent", body: "Senest fredag.", url: "/oversigt" },
-      bo: { title: "Husk kontingent", body: "Senest fredag.", url: "/oversigt" },
+    expect(await sendTeamNotice(undefined, notice())).toEqual({
+      ok: true,
+      note: "Sendt til 3 personer. 1 har ikke slået notifikationer til og ser den kun under klokken.",
     });
+    await runAfter();
+    const rows = await prisma.notification.findMany({ where: { teamId: team.id }, select: { id: true, userId: true, category: true, title: true } });
+    expect(rows.map((r) => r.userId).sort()).toEqual([anna.id, bo.id, treasurer.id].sort());
+    expect(rows.every((r) => r.category === "TEAM" && r.title === "Husk kontingent")).toBe(true);
+    const id = (userId: string) => rows.find((r) => r.userId === userId)!.id;
+    expect(sentTo()).toEqual({
+      anna: { title: "Husk kontingent", body: "Senest fredag.", url: "/oversigt", notificationId: id(anna.id) },
+      bo: { title: "Husk kontingent", body: "Senest fredag.", url: "/oversigt", notificationId: id(bo.id) },
+    });
+  });
+
+  it("is pushed even to somebody who muted everything", async () => {
+    const { team, admin, anna } = await makeSquad();
+    await prisma.teamMember.update({
+      where: { userId_teamId: { userId: anna.id, teamId: team.id } },
+      data: { mutedPush: ["FINES", "CHALLENGES", "TASKS", "REMINDERS", "ACTIVITIES", "FEED", "COMMENTS", "CHAT"] },
+    });
+    await subscribe(anna.id, "anna");
+    await signIn(admin);
+    await sendTeamNotice(undefined, notice({ to: "valgte", recipientId: anna.id }));
+    await runAfter();
+    expect(Object.keys(sentTo())).toEqual(["anna"]);
+  });
+
+  it("lets an admin send one to themselves", async () => {
+    const { admin } = await makeSquad();
+    await subscribe(admin.id, "admin");
+    await signIn(admin);
+    expect(await sendTeamNotice(undefined, notice({ to: "valgte", recipientId: admin.id }))).toEqual({ ok: true, note: "Sendt til Træner." });
+    await runAfter();
+    expect(Object.keys(sentTo())).toEqual(["admin"]);
   });
 
   it("sends to one person, opening their own MobilePay kontingent", async () => {
@@ -112,15 +141,20 @@ describe("sendTeamNotice", () => {
     expect(push.sent).toHaveLength(0);
   });
 
-  it("says so when nobody it is for has notifications on", async () => {
-    const { admin, anna, bo } = await makeSquad();
+  it("still reaches the bell when nobody it is for has notifications on, and says so", async () => {
+    const { team, admin, anna, bo } = await makeSquad();
     await signIn(admin);
-    expect(await sendTeamNotice(undefined, notice())).toEqual({ ok: false, error: "Ingen på holdet har slået notifikationer til endnu." });
-    expect(await sendTeamNotice(undefined, notice({ to: "valgte", recipientId: anna.id }))).toEqual({ ok: false, error: "Personen har ikke slået notifikationer til." });
-    expect(await sendTeamNotice(undefined, notice({ to: "valgte", recipientId: [anna.id, bo.id] }))).toEqual({
-      ok: false,
-      error: "Ingen af de valgte har slået notifikationer til.",
+    expect(await sendTeamNotice(undefined, notice({ to: "valgte", recipientId: anna.id }))).toEqual({
+      ok: true,
+      note: "Sendt til Anna. Personen har ikke slået notifikationer til og ser den under klokken.",
     });
+    expect(await sendTeamNotice(undefined, notice({ to: "valgte", recipientId: [anna.id, bo.id] }))).toEqual({
+      ok: true,
+      note: "Sendt til 2 personer. 2 har ikke slået notifikationer til og ser den kun under klokken.",
+    });
+    await runAfter();
+    expect(push.sent).toHaveLength(0);
+    expect(await prisma.notification.count({ where: { teamId: team.id, userId: anna.id } })).toBe(2);
   });
 
   it("treats somebody on another team as not found", async () => {

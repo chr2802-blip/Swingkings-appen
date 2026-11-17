@@ -88,7 +88,7 @@ export function teamDb(teamId: string) {
             scoped.where = { ...((scoped.where as Args) ?? {}), teamId };
           } else if (operation === "create") {
             scoped.data = { ...((scoped.data as Args) ?? {}), teamId };
-          } else if (operation === "createMany") {
+          } else if (operation === "createMany" || operation === "createManyAndReturn") {
             const rows = scoped.data as Args | Args[];
             scoped.data = Array.isArray(rows) ? rows.map((row) => ({ ...row, teamId })) : { ...rows, teamId };
           } else if (operation === "upsert") {
