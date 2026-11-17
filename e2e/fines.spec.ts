@@ -1,6 +1,7 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 import type { Page } from "@playwright/test";
+import { choose, openChoices } from "./helpers/select";
 
 /** The fine box's "+": a drawer of what can be made there, and then one of them. */
 async function create(page: Page, name: string) {
@@ -10,6 +11,69 @@ async function create(page: Page, name: string) {
     .getByRole("button", { name })
     .click();
 }
+
+test("the catalogue drop-down searches its choices, and Escape closes it and not the dialog", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  await db.fineType.createMany({
+    data: [
+      { teamId: team.id, name: "For sent", units: 2 },
+      { teamId: team.id, name: "Glemte benskinner", units: 1 },
+      { teamId: team.id, name: "Rødt kort", units: 5 },
+    ],
+  });
+  await loginAs(anna);
+  await page.goto("/boder");
+  await create(page, "Giv bøde");
+  const dialog = page.getByRole("dialog", { name: "Giv bøde" });
+  const field = dialog.getByLabel("Bøde fra kataloget");
+  // Not the browser's own <select>, but the app's, with a search field.
+  await expect(field).toHaveRole("combobox");
+  await expect(field).toHaveText("Skriv selv…");
+
+  const list = await openChoices(field);
+  await expect(list).toHaveAccessibleName("Bøde fra kataloget");
+  await expect(list.getByRole("option")).toHaveCount(4);
+  const search = page.getByRole("searchbox", { name: "Søg" });
+  await search.fill("BENSKIN");
+  await expect(list.getByRole("option")).toHaveText(["Glemte benskinner (1 bøde)"]);
+  await search.fill("rød");
+  await expect(list.getByRole("option")).toHaveText(["Rødt kort (5 bøder)"]);
+  await search.fill("ingenting");
+  await expect(list.getByRole("option")).toHaveCount(0);
+  await expect(list.getByText("Ingen match")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(list).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(field).toHaveText("Skriv selv…");
+
+  // The keyboard: type, then Enter takes the first that answers.
+  await openChoices(field);
+  await search.fill("kort");
+  await search.press("Enter");
+  await expect(field).toHaveText("Rødt kort (5 bøder)");
+  await expect(field).toHaveAttribute("aria-expanded", "false");
+  await expect(dialog.getByLabel("Hvad er bøden for?")).toHaveCount(0);
+  await expect(dialog.getByText("I alt 50 kr pr. spiller.")).toBeVisible();
+  await dialog.getByRole("checkbox", { name: "Anna" }).check();
+  await dialog.getByRole("button", { name: "Giv bøde" }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => db.fine.count({ where: { playerId: anna.id, units: 5, reason: "Rødt kort" } })).toBe(1);
+});
+
+test("a required drop-down left on its placeholder stops the form", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/boder");
+  await create(page, "Meld udfordring");
+  const dialog = page.getByRole("dialog", { name: "Meld en udfordring" });
+  await expect(dialog.getByLabel("Hvem spillede du mod?")).toHaveText("Vælg spiller…");
+  await dialog.getByLabel("Hvad gik udfordringen ud på?").fill("Overliggeren");
+  await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
+  // The browser refuses the empty choice; nothing is sent and the dialog stays.
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Hvem spillede du mod?")).toBeFocused();
+  expect(await db.challenge.count()).toBe(0);
+});
 
 test("a treasurer gives two players a catalogue fine, and the board and their accounts show it", async ({
   page,
@@ -26,9 +90,7 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
   await dialog.getByRole("checkbox", { name: "Anna" }).check();
   await dialog.getByRole("checkbox", { name: "Bo" }).check();
-  await dialog
-    .getByLabel("Bøde fra kataloget")
-    .selectOption({ label: "For sent (2 bøder)" });
+  await choose(dialog.getByLabel("Bøde fra kataloget"), "For sent (2 bøder)", { search: "sent" });
   await expect(dialog.getByText("I alt 20 kr pr. spiller.")).toBeVisible();
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
@@ -196,10 +258,8 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
   await page.goto("/boder");
   await create(page, "Meld udfordring");
   const dialog = page.getByRole("dialog", { name: "Meld en udfordring" });
-  await dialog
-    .getByLabel("Hvem spillede du mod?")
-    .selectOption({ label: "Bo" });
-  await dialog.getByLabel("Hvem vandt?").selectOption({ label: "Jeg vandt" });
+  await choose(dialog.getByLabel("Hvem spillede du mod?"), "Bo");
+  await choose(dialog.getByLabel("Hvem vandt?"), "Jeg vandt");
   await dialog
     .getByLabel("Hvad gik udfordringen ud på?")
     .fill("Flest mål på træning");
@@ -287,12 +347,8 @@ test("a challenge is reported from inside the challenges' sheet and lands in it"
   const sheet = page.getByRole("dialog", { name: "Udfordringer" });
   await sheet.getByRole("button", { name: "Meld udfordring" }).click();
   const dialog = page.getByRole("dialog", { name: "Meld en udfordring" });
-  await dialog
-    .getByLabel("Hvem spillede du mod?")
-    .selectOption({ label: "Bo" });
-  await dialog
-    .getByLabel("Hvem vandt?")
-    .selectOption({ label: "Min modstander vandt" });
+  await choose(dialog.getByLabel("Hvem spillede du mod?"), "Bo");
+  await choose(dialog.getByLabel("Hvem vandt?"), "Min modstander vandt");
   await dialog
     .getByLabel("Hvad gik udfordringen ud på?")
     .fill("Straffesparkskonkurrence");

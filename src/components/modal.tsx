@@ -10,6 +10,9 @@ export const EXIT_MS = 200;
 // Sheets can overlap — the action drawer is still closing as the dialog it opened comes
 // up — so the page is locked while any is mounted, and unlocked by the last to go.
 let locks = 0;
+
+/** The open sheets, oldest first: Escape closes only the one on top (a picker over its dialog). */
+const openSheets: object[] = [];
 let unlocked = "";
 export function lockScroll() {
   if (locks++ === 0) {
@@ -66,16 +69,22 @@ export function Modal({
   }, [open]);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!open) return;
+    const sheet = {};
+    openSheets.push(sheet);
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCloseRef.current();
+      if (event.key === "Escape" && openSheets.at(-1) === sheet) onCloseRef.current();
     };
     document.addEventListener("keydown", onKeyDown);
-    const unlock = lockScroll();
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      unlock();
+      openSheets.splice(openSheets.indexOf(sheet), 1);
     };
+  }, [open]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    return lockScroll();
   }, [mounted]);
 
   if (!mounted || typeof document === "undefined") return null;

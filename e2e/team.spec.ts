@@ -1,5 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, member, squad } from "./helpers/database";
+import { choose } from "./helpers/select";
 
 test("a coach renames the team, then changes the price of a fine on its own tab", async ({ page, loginAs }) => {
   const { team, admin } = await squad();
@@ -63,7 +64,7 @@ test("an admin makes a standard job automatic on away matches only", async ({ pa
   await page.getByRole("button", { name: "Ny standardopgave" }).click();
   const dialog = page.getByRole("dialog", { name: "Ny standardopgave" });
   await dialog.getByLabel("Opgave").fill("Kørsel");
-  await dialog.getByLabel("Tilføj automatisk til nye kampe fra KampKlar").selectOption({ label: "Kun udekampe" });
+  await choose(dialog.getByLabel("Tilføj automatisk til nye kampe fra KampKlar"), "Kun udekampe");
   await dialog.getByRole("button", { name: "Gem" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Automatisk · ude")).toBeVisible();
@@ -74,7 +75,7 @@ test("an admin makes a standard job automatic on away matches only", async ({ pa
   await page.getByRole("button", { name: "Handlinger for Kørsel" }).click();
   await page.getByRole("dialog", { name: "Kørsel" }).getByRole("button", { name: "Ret", exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Ret standardopgave" });
-  await expect(edit.getByLabel("Tilføj automatisk til nye kampe fra KampKlar")).toHaveValue("AWAY");
+  await expect(edit.getByLabel("Tilføj automatisk til nye kampe fra KampKlar")).toHaveText("Kun udekampe");
 });
 
 test("a KampKlar link that is not a web address is refused with a reason", async ({ page, loginAs }) => {
@@ -160,18 +161,18 @@ test("a coach sends a reminder to the players ticked, opening MobilePay with the
   await loginAs(admin);
   await page.goto("/hold/besked");
   const tab = page.getByRole("tabpanel", { name: "Besked" });
-  await tab.getByLabel("Til", { exact: true }).selectOption({ label: "Udvalgte spillere" });
+  await choose(tab.getByLabel("Til", { exact: true }), "Udvalgte spillere");
   const recipients = tab.getByRole("group", { name: "Modtagere" });
   await recipients.getByLabel("Anna").check();
   await recipients.getByLabel("Bo").check();
-  await tab.getByLabel("Åbner", { exact: true }).selectOption({ label: "MobilePay: betal kontingent" });
+  await choose(tab.getByLabel("Åbner", { exact: true }), "MobilePay: betal kontingent");
   await tab.getByLabel("Overskrift", { exact: true }).fill("Husk kontingent");
   await tab.getByRole("textbox", { name: "Besked" }).fill("Senest fredag.");
   await tab.getByRole("button", { name: "Send notifikation" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Sendt til 2 personer." })).toBeVisible();
 
   // An outside link that is not https is refused before anything is sent.
-  await tab.getByLabel("Åbner", { exact: true }).selectOption({ label: "Et andet link…" });
+  await choose(tab.getByLabel("Åbner", { exact: true }), "Et andet link…");
   await tab.getByLabel("Link", { exact: true }).fill("https://localhost");
   await tab.getByLabel("Overskrift", { exact: true }).fill("Stævne");
   await tab.getByRole("textbox", { name: "Besked" }).fill("Se mere her.");

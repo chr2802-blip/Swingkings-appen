@@ -30,7 +30,7 @@ export function TeamNoticeForm({
   return (
     <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
       <Field label="Til" htmlFor="notice-to">
-        <Select id="notice-to" name="to" value={to} onChange={(event) => setTo(event.target.value as typeof to)}>
+        <Select id="notice-to" name="to" value={to} onValueChange={(v) => setTo(v as typeof to)}>
           <option value="alle">Hele holdet</option>
           <option value="valgte">Udvalgte spillere</option>
         </Select>
@@ -40,7 +40,7 @@ export function TeamNoticeForm({
           id="notice-destination"
           name="destination"
           value={destination}
-          onChange={(event) => setDestination(event.target.value as NoticeDestination)}
+          onValueChange={(v) => setDestination(v as NoticeDestination)}
         >
           {destinations.map((d) => (
             <option key={d.value} value={d.value}>

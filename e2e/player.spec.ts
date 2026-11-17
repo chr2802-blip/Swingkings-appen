@@ -1,5 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
+import { choose, openChoices } from "./helpers/select";
 
 test("a player's page shows their latest fines and challenges and their next job, and no way to edit somebody else", async ({
   page,
@@ -223,9 +224,9 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Meld udfordring" }).click();
   const challenge = page.getByRole("dialog", { name: "Meld en udfordring" });
-  await expect(challenge.getByLabel("Hvem spillede du mod?")).toHaveValue(bo.id);
+  await expect(challenge.getByLabel("Hvem spillede du mod?")).toHaveText("Bo");
   // Bo, who has a fine now, won: the stake moves from Bo's fines to Anna's.
-  await challenge.getByLabel("Hvem vandt?").selectOption("lost");
+  await choose(challenge.getByLabel("Hvem vandt?"), "Min modstander vandt");
   await challenge.getByLabel("Hvad gik udfordringen ud på?").fill("Flest straffe");
   await challenge.getByRole("button", { name: "Send til godkendelse" }).click();
   await expect(challenge).toBeHidden();
@@ -237,11 +238,15 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await menu.getByRole("button", { name: "Opret opgave" }).click();
   const task = page.getByRole("dialog", { name: "Ny opgave" });
   const activity = task.getByLabel("Aktivitet");
-  await expect(activity.getByRole("option", { name: /FC Naboen/ })).toHaveCount(1);
-  await expect(activity.getByRole("option", { name: /Gammel fest/ })).toHaveCount(0);
-  await activity.selectOption({ label: (await activity.getByRole("option", { name: /FC Naboen/ }).textContent())! });
+  const choices = await openChoices(activity);
+  await expect(choices.getByRole("option", { name: /FC Naboen/ })).toHaveCount(1);
+  await expect(choices.getByRole("option", { name: /Gammel fest/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(choices).toHaveCount(0);
+  await expect(task).toBeVisible();
+  await choose(activity, /FC Naboen/);
   await task.getByLabel("Opgave", { exact: true }).fill("Vaske trøjer");
-  await expect(task.getByLabel("Hvem skal gøre det?")).toHaveValue("pick");
+  await expect(task.getByLabel("Hvem skal gøre det?")).toHaveText("Jeg vælger selv");
   await expect(task.getByRole("checkbox", { name: /Bo$/ })).toBeChecked();
   await task.getByRole("button", { name: "Opret opgave" }).click();
   await expect(task).toBeHidden();
