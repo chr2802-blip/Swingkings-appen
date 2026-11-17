@@ -13,14 +13,13 @@ const TEAM_SCOPED = new Set(
 
 /**
  * The models with no `teamId`, one entry each. Some read as though they belong to a
- * team and do not — a task's assignees, a post's likes — and scoping them would pass the
+ * team and do not — a task's assignees, a post's comments — and scoping them would pass the
  * query straight through, unscoped: those are refused. The rest have nothing to do with
  * teams and are passed through. A model in neither is an error, not a default.
  */
 const NO_TEAM_ID: Record<string, { refuse: true; because: string } | { refuse: false }> = {
   User: { refuse: true, because: "a user is on several teams; ask teamMember and include the user" },
   TaskAssignee: { refuse: true, because: "reached through its task" },
-  PostLike: { refuse: true, because: "reached through its post" },
   PostComment: { refuse: true, because: "reached through its post" },
   PostPhoto: { refuse: true, because: "reached through its post" },
   ChatPhoto: { refuse: true, because: "reached through its chat message" },

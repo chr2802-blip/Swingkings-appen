@@ -5,7 +5,7 @@ import { ChatRoom } from "@/components/chat-room";
 
 export default async function ChatPage() {
   const user = await requireTeamUser();
-  const [messages] = await Promise.all([latestMessages(user.teamId), markChatSeen(user.teamId, user.id)]);
+  const [messages] = await Promise.all([latestMessages(user.teamId, user.id), markChatSeen(user.teamId, user.id)]);
   return (
     <div>
       <h1 className="mb-4 text-2xl font-semibold">Chat</h1>

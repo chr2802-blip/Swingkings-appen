@@ -284,21 +284,9 @@ export async function closePoll(_prev: ActionResult, formData: FormData): Promis
   return ok();
 }
 
-/** Likes and comments carry no team of their own; the post is found through `teamDb` first. */
+/** Comments carry no team of their own; the post is found through `teamDb` first. */
 async function postInTeam(teamId: string, postId: string) {
   return teamDb(teamId).post.findFirst({ where: { id: postId }, select: { id: true, authorId: true } });
-}
-
-export async function toggleLike(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  const user = await requireTeamUser();
-  const post = await postInTeam(user.teamId, field(formData, "postId"));
-  if (!post) return fail("Opslaget findes ikke.");
-  const key = { postId_userId: { postId: post.id, userId: user.id } };
-  const liked = await prisma.postLike.findUnique({ where: key });
-  if (liked) await prisma.postLike.delete({ where: key });
-  else await prisma.postLike.create({ data: { postId: post.id, userId: user.id } });
-  revalidatePath("/oversigt");
-  return ok();
 }
 
 /**

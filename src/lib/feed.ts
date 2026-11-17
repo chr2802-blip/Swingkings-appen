@@ -6,6 +6,7 @@ import { FEED_PAGE } from "./feed-page";
 import { isOpen, tally } from "./polls";
 import { kickoffLabel, readInZone } from "./time";
 import type { PollViewData } from "@/components/poll-view";
+import { reactionRows } from "./reactions";
 
 export { FEED_PAGE };
 
@@ -63,9 +64,12 @@ export async function feedPosts(
     pinnedAt: true,
     author: person,
     photos: { orderBy: { position: "asc" }, select: { photoId: true } },
-    // Shown as faces, first to like first — hence the picture and the order.
-    likes: { orderBy: [{ createdAt: "asc" }, { userId: "asc" }], select: { userId: true, user: { select: { name: true, photoId: true } } } },
-    comments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, parentId: true, body: true, createdAt: true, author: person } },
+    // Shown as faces, first to react first — hence the picture and the order.
+    reactions: reactionRows,
+    comments: {
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, parentId: true, body: true, createdAt: true, author: person, reactions: reactionRows },
+    },
     poll: {
       select: {
         id: true,
@@ -187,26 +191,6 @@ function whoVoted(votes: PollRow["votes"]) {
   const voters = new Map<string, NonNullable<PollRow["votes"][number]["voter"]>>();
   for (const vote of votes) if (vote.voter) voters.set(vote.voter.id, vote.voter);
   return [...voters.values()].sort((a, b) => a.name.localeCompare(b.name, "da") || a.id.localeCompare(b.id));
-}
-
-/** A post shows this many of the faces that liked it; the rest are a number. */
-export const LIKERS_SHOWN = 5;
-
-/**
- * Who liked a post, as the feed shows it: the first few as faces, the rest counted, and
- * one sentence naming them for somebody who cannot see the faces.
- */
-export function likersView<T extends { user: { name: string } }>(likes: T[], shown = LIKERS_SHOWN) {
-  const faces = likes.slice(0, shown);
-  const more = likes.length - faces.length;
-  const names = faces.map((like) => like.user.name);
-  const list =
-    more > 0
-      ? `${names.join(", ")} og ${more} mere`
-      : names.length > 1
-        ? `${names.slice(0, -1).join(", ")} og ${names.at(-1)}`
-        : (names[0] ?? "");
-  return { faces, more, label: list ? `${list} synes godt om opslaget` : "" };
 }
 
 /**
