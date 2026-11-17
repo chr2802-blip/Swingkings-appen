@@ -13,14 +13,17 @@ import { MAX_CHAT_PHOTOS, PHOTO_FIELD } from "@/lib/photo-file";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { followTeamSignal } from "@/components/team-signal";
 import { stampLabel } from "@/lib/time";
-import type { ChatItem } from "@/lib/chat";
+import type { ChatPage } from "@/lib/chat";
+import { withLatest, withOlder, without } from "@/lib/chat-pages";
 
 /** Poll fast while the socket is not live, slowly while it is (the poll is then only a safety net). */
 const POLL_MS = 5_000;
 const LIVE_POLL_MS = 45_000;
 
-export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem[]; viewerId: string; canModerate: boolean }) {
-  const [messages, setMessages] = useState(initial);
+export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage; viewerId: string; canModerate: boolean }) {
+  const [page, setPage] = useState(initial);
+  const messages = page.messages;
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [live, setLive] = useState(false);
   const [text, setText] = useState("");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
@@ -30,7 +33,11 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
   const [pending, startTransition] = useTransition();
   const bottom = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const lastId = useRef(initial.at(-1)?.id);
+  const lastId = useRef(initial.messages.at(-1)?.id);
+  const top = useRef<HTMLDivElement>(null);
+  const fetchingOlder = useRef(false);
+  /** How far the page was from its bottom when older messages were asked for, to stay put when they land above. */
+  const fromBottom = useRef<number | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
   // The box is as tall as its text (up to max-h-32, then it scrolls), and shrinks back when sent.
@@ -45,8 +52,8 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
     try {
       const response = await fetch("/api/chat", { cache: "no-store" });
       if (!response.ok) return;
-      const body = (await response.json()) as { messages: ChatItem[] };
-      setMessages(body.messages);
+      const latest = (await response.json()) as ChatPage;
+      setPage((shown) => withLatest(shown, latest));
     } catch {
       // The next poll will try again.
     }
@@ -67,6 +74,49 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [live, refresh]);
+
+  /** The page before the oldest message on screen, put in front of it without moving what is read. */
+  const loadOlder = useCallback(async (beforeId: string) => {
+    if (fetchingOlder.current) return;
+    fetchingOlder.current = true;
+    setLoadingOlder(true);
+    try {
+      const response = await fetch(`/api/chat?before=${encodeURIComponent(beforeId)}`, { cache: "no-store" });
+      if (response.status === 404) {
+        // Deleted since it was drawn: take it away, and the next ask starts from the one after it.
+        setPage((shown) => without(shown, beforeId));
+      } else if (response.ok) {
+        const older = (await response.json()) as ChatPage;
+        fromBottom.current = document.documentElement.scrollHeight - window.scrollY;
+        setPage((shown) => withOlder(shown, older));
+      }
+    } catch {
+      // Scrolling to the top again tries again.
+    } finally {
+      fetchingOlder.current = false;
+      setLoadingOlder(false);
+    }
+  }, []);
+
+  // The top of the chat in view fetches the page before it. Watched afresh whenever the oldest
+  // message changes, so a page too short to fill the screen fetches the next at once.
+  const oldestId = messages[0]?.id;
+  useEffect(() => {
+    const el = top.current;
+    if (!el || !page.more || !oldestId) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadOlder(oldestId);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [oldestId, page.more, loadOlder]);
+
+  // Older messages landed above: keep the same distance to the bottom, so what was read stays put.
+  useLayoutEffect(() => {
+    if (fromBottom.current === null) return;
+    window.scrollTo({ top: document.documentElement.scrollHeight - fromBottom.current });
+    fromBottom.current = null;
+  }, [page]);
 
   // Scroll to the newest message when one arrives, not on every redraw.
   useEffect(() => {
@@ -125,13 +175,26 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
     const data = new FormData();
     data.set("id", id);
     startTransition(async () => {
-      await deleteChatMessage(undefined, data);
+      const result = await deleteChatMessage(undefined, data);
+      if (result?.ok) setPage((shown) => without(shown, id));
       await refresh();
     });
   }
 
   return (
     <div className="flex min-h-[calc(100dvh-14rem)] flex-col">
+      <div ref={top} className="flex justify-center pb-3">
+        {page.more && oldestId && (
+          <button
+            type="button"
+            onClick={() => void loadOlder(oldestId)}
+            disabled={loadingOlder}
+            className="rounded-full px-3 py-1 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-60"
+          >
+            {loadingOlder ? "Henter ældre beskeder…" : "Vis ældre beskeder"}
+          </button>
+        )}
+      </div>
       <ol className="flex-1 space-y-3 pb-4">
         {messages.length === 0 && (
           <li className="py-16 text-center text-sm text-slate-500">Ingen beskeder endnu. Sig hej til holdet 👋</li>

@@ -1,10 +1,11 @@
+import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
 import { latest } from "./push-summary";
 import { UNREAD_UP_TO } from "./chat-count";
 import { reactionRows, reactionSummary, type ReactionView } from "./reactions";
 
-/** How many messages the chat shows at once. */
-export const CHAT_PAGE = 60;
+/** How many messages the chat fetches at a time: on opening, and each time it is scrolled to the top. */
+export const CHAT_PAGE = 25;
 
 export type ChatItem = {
   id: string;
@@ -19,11 +20,32 @@ export type ChatItem = {
   reactions: ReactionView[];
 };
 
+/** A page of messages, oldest first, and whether there are older ones still to fetch. */
+export type ChatPage = { messages: ChatItem[]; more: boolean };
+
 /** The latest messages, oldest first, as the chat page and `/api/chat` both draw them for the viewer. */
-export async function latestMessages(teamId: string, viewerId: string): Promise<ChatItem[]> {
+export function latestMessages(teamId: string, viewerId: string): Promise<ChatPage> {
+  return messagesPage(teamId, viewerId, {});
+}
+
+/**
+ * The page of messages just before `beforeId`, oldest first, fetched as the chat is scrolled
+ * up. Null when there is no such message on this team (another team's id, or deleted).
+ */
+export async function olderMessages(teamId: string, viewerId: string, beforeId: string): Promise<ChatPage | null> {
+  const cursor = await teamDb(teamId).chatMessage.findFirst({ where: { id: beforeId }, select: { id: true, createdAt: true } });
+  if (!cursor) return null;
+  return messagesPage(teamId, viewerId, {
+    OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+  });
+}
+
+async function messagesPage(teamId: string, viewerId: string, where: Prisma.ChatMessageWhereInput): Promise<ChatPage> {
   const rows = await teamDb(teamId).chatMessage.findMany({
-    orderBy: { createdAt: "desc" },
-    take: CHAT_PAGE,
+    where,
+    // The id breaks ties, so a page ends at the same message every time it is asked.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: CHAT_PAGE + 1,
     select: {
       id: true,
       body: true,
@@ -34,12 +56,17 @@ export async function latestMessages(teamId: string, viewerId: string): Promise<
       reactions: reactionRows,
     },
   });
-  return rows.reverse().map(({ photos, reactions, ...row }) => ({
-    ...row,
-    photoIds: photos.map((photo) => photo.photoId),
-    reactions: reactionSummary(reactions, viewerId),
-    createdAt: row.createdAt.toISOString(),
-  }));
+  const more = rows.length > CHAT_PAGE;
+  const messages = rows
+    .slice(0, CHAT_PAGE)
+    .reverse()
+    .map(({ photos, reactions, ...row }) => ({
+      ...row,
+      photoIds: photos.map((photo) => photo.photoId),
+      reactions: reactionSummary(reactions, viewerId),
+      createdAt: row.createdAt.toISOString(),
+    }));
+  return { messages, more };
 }
 
 /** How often an open chat writes that it is open: once in this long is enough to hold a push back. */
