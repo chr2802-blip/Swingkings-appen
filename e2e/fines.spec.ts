@@ -91,6 +91,13 @@ test("a player sees the catalogue but cannot change it", async ({
   await page.goto("/boder/katalog");
   await expect(page.getByText("For sent")).toBeVisible();
   await expect(page.getByRole("button", { name: "Ny bøde" })).toHaveCount(0);
+  // Nor is it in the "+": only who manages the fines makes one.
+  await page.getByRole("button", { name: "Opret" }).click();
+  const menu = page.getByRole("dialog", { name: "Opret" });
+  await expect(menu.getByRole("button", { name: "Giv bøde" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Ny bøde i kataloget" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
   // The fine is a row to read, not a button: nothing opens it.
   await expect(page.getByRole("button", { name: /For sent/ })).toHaveCount(0);
   await page.getByText("For sent").click();
@@ -145,35 +152,29 @@ test("a treasurer taps a fine in the catalogue to change it, and deletes it from
   expect(await db.fineType.count({ where: { teamId: team.id } })).toBe(0);
 });
 
-test("a treasurer adds to the catalogue", async ({ page, loginAs }) => {
-  const { team, treasurer } = await squad();
+test("a treasurer and an admin add to the catalogue from the +, not from the list", async ({ page, loginAs }) => {
+  const { team, treasurer, admin } = await squad();
   await loginAs(treasurer);
   await page.goto("/boder/katalog");
-  await page.getByRole("button", { name: "Ny bøde" }).click();
-  const dialog = page.getByRole("dialog");
+  // The list has no row of its own for making one.
+  await expect(page.getByRole("tabpanel").getByRole("button", { name: "Ny bøde" })).toHaveCount(0);
+  await create(page, "Ny bøde i kataloget");
+  const dialog = page.getByRole("dialog", { name: "Ny bøde i kataloget" });
   await dialog.getByLabel("Navn").fill("Rødt kort");
   await dialog.getByLabel("Antal bøder").fill("10");
   await dialog.getByRole("button", { name: "Gem" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Rødt kort")).toBeVisible();
   await expect(page.getByText("100 kr")).toBeVisible();
-  // The new fine lands in the list, and the row that made it stays last, ready for the next.
   const rows = page.getByRole("tabpanel").getByRole("listitem");
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Rødt kort");
-  await expect(
-    rows.last().getByRole("button", { name: "Ny bøde" }),
-  ).toBeVisible();
-  // It is a row like the others: as tall and as wide, with its words in the middle.
-  const [fine, add] = [
-    (await rows.first().boundingBox())!,
-    (await rows.last().boundingBox())!,
-  ];
-  expect(Math.abs(add.height - fine.height)).toBeLessThanOrEqual(1);
-  const button = rows.last().getByRole("button", { name: "Ny bøde" });
-  expect((await button.boundingBox())!.width).toBe(add.width);
-  await expect(button).toHaveCSS("justify-content", "center");
   expect(await db.fineType.count({ where: { teamId: team.id } })).toBe(1);
+
+  await loginAs(admin);
+  await page.goto("/boder");
+  await create(page, "Ny bøde i kataloget");
+  await expect(page.getByRole("dialog", { name: "Ny bøde i kataloget" })).toBeVisible();
 });
 
 test("a challenge is reported, approved in the sheet by a third player, and the stake moves to the loser", async ({
@@ -700,14 +701,8 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
   await expect(page).toHaveURL(/\/boder\/katalog$/);
   await expect(page.getByText("For sent")).toBeVisible();
-  // Making a new one is the last row of the list, not a button beside the names.
-  await expect(
-    page
-      .getByRole("tabpanel")
-      .getByRole("listitem")
-      .last()
-      .getByRole("button", { name: "Ny bøde" }),
-  ).toBeVisible();
+  // Making a new one is in the "+", not a row of the list.
+  await expect(page.getByRole("tabpanel").getByRole("button", { name: "Ny bøde" })).toHaveCount(0);
   // The last page: there is nothing further to the right.
   await swipe(-290);
   await expect(tab("Katalog")).toHaveAttribute("aria-selected", "true");
