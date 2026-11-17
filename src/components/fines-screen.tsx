@@ -177,7 +177,7 @@ export async function FinesScreen({
               history.length === 0 ? (
                 <EmptyState icon="😇">Ingen bøder endnu. Det varer nok ikke længe.</EmptyState>
               ) : (
-                <FineHistory fines={history} user={user} />
+                <FineHistory fines={history} />
               ),
           },
           {

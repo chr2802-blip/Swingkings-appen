@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { MemberRole } from "@prisma/client";
 import { teamDb } from "./team-db";
 
@@ -18,8 +19,11 @@ export type RosterMember = {
   superAdmin: boolean;
 };
 
-/** Everybody on the team, by name. The one way a page asks "who is on this team". */
-export async function teamRoster(teamId: string): Promise<RosterMember[]> {
+/**
+ * Everybody on the team, by name. The one way a page asks "who is on this team". Cached for
+ * the request: the front page's balances and its feed both ask, and need one answer.
+ */
+export const teamRoster = cache(async (teamId: string): Promise<RosterMember[]> => {
   const members = await teamDb(teamId).teamMember.findMany({
     select: {
       role: true,
@@ -45,4 +49,4 @@ export async function teamRoster(teamId: string): Promise<RosterMember[]> {
       superAdmin: m.user.role === "SUPER_ADMIN",
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "da"));
-}
+});

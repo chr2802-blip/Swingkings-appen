@@ -441,6 +441,10 @@ describe("fine data", () => {
     // Another team's player or activity is nobody here.
     expect(await fineHistory(team.id, { playerId: other.anna.id })).toEqual([]);
     expect(await fineHistory(other.team.id, { matchId: match.id })).toEqual([]);
+    // One fine by its id, for its sheet — and another team's id finds nothing.
+    const one = await prisma.fine.findFirstOrThrow({ where: { teamId: team.id, reason: "Annas første" } });
+    expect((await fineHistory(team.id, { id: one.id })).map((f) => f.reason)).toEqual(["Annas første"]);
+    expect(await fineHistory(other.team.id, { id: one.id })).toEqual([]);
   });
 
   it("carries what a fine's sheet shows: the giver, the note, the activity and the challenge it came from", async () => {

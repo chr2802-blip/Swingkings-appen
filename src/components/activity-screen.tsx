@@ -286,7 +286,7 @@ export async function ActivityScreen({
             children: (
               <div>
                 {/* The history's rows: a tap opens the fine with everything about it. */}
-                {fines.length === 0 ? <EmptyState>Ingen bøder endnu.</EmptyState> : <FineHistory fines={fines} user={user} />}
+                {fines.length === 0 ? <EmptyState>Ingen bøder endnu.</EmptyState> : <FineHistory fines={fines} />}
                 {match.challenges.length > 0 && (
                   <section className="mt-8">
                     <SectionTitle>Udfordringer</SectionTitle>
