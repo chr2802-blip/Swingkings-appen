@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useFormAction } from "@/components/use-form-action";
 import { Avatar } from "@/components/photo";
 import type { ActionResult } from "@/lib/action-result";
-import { activeMention, insertMention, suggestMembers } from "@/lib/mentions";
+import { EMOJI_ROW, activeMention, insertAt, insertMention, suggestMembers, withReplyTag } from "@/lib/mentions";
 
 /** Who is being answered, when the comment is an answer: the comment and its writer. */
 export type ReplyTarget = { id: string; name: string };
@@ -42,16 +42,47 @@ export function CommentForm({
   const input = useRef<HTMLInputElement>(null);
   const { state, pending, handleSubmit } = useFormAction(action, {
     onSuccess: () => {
+      tagged.current = null;
       setValue("");
       setCaret(0);
       setDismissed(null);
       onSent?.();
     },
   });
-  // Pressing "Svar" puts the cursor in the box, ready to write the answer.
+  // Answering a comment tags its writer first ("@Anna "), and puts the cursor after it,
+  // ready to write; answering another swaps the tag, and cancelling takes it away.
+  const tagged = useRef<string | null>(null);
   useEffect(() => {
-    if (replyTo) input.current?.focus();
+    const to = replyTo?.name ?? null;
+    if (to === tagged.current) return;
+    const from = tagged.current;
+    tagged.current = to;
+    setValue((current) => {
+      const next = withReplyTag(current, from, to);
+      if (to) {
+        requestAnimationFrame(() => {
+          input.current?.focus();
+          input.current?.setSelectionRange(next.length, next.length);
+        });
+      }
+      setCaret(next.length);
+      return next;
+    });
   }, [replyTo]);
+
+  /** An emoji from the row, put in where the cursor is. */
+  function addEmoji(emoji: string) {
+    const element = input.current;
+    const start = element?.selectionStart ?? value.length;
+    const end = element?.selectionEnd ?? value.length;
+    const next = insertAt(value, start, end, emoji);
+    setValue(next.value);
+    setCaret(next.caret);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(next.caret, next.caret);
+    });
+  }
 
   const mention = activeMention(value, caret);
   const suggestions = mention && mention.start !== dismissed ? suggestMembers(mention.query, members, viewerId) : [];
@@ -120,6 +151,21 @@ export function CommentForm({
           ))}
         </ul>
       )}
+      <div role="group" aria-label="Indsæt emoji" className="scrollbar-hidden -mx-1 flex justify-between gap-1 overflow-x-auto pb-1">
+        {EMOJI_ROW.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            // Pressing must not take the focus from the box, or the caret is lost.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => addEmoji(emoji)}
+            aria-label={`Indsæt ${emoji}`}
+            className="press-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[22px] leading-none hover:bg-slate-100"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
       {replyTo && (
         <p className="flex items-center gap-2 px-1 text-xs text-slate-500">
           <span>

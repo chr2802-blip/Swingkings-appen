@@ -97,6 +97,7 @@ export function ActivityComments({
               }}
               target="activityComment"
               onDelete={deleteActivityComment}
+              viewerId={viewerId}
             />
           </>
         )}

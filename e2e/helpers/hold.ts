@@ -13,3 +13,9 @@ export async function hold(page: Page, button: Locator) {
   await expect(page.getByRole("group", { name: "Vælg en reaktion" })).toBeVisible();
   await page.mouse.up();
 }
+
+/** Holds a comment or message, then chooses one of the things that can be done with it ("Svar", "Slet", …). */
+export async function holdAndChoose(page: Page, bubble: Locator, action: string) {
+  await hold(page, bubble);
+  await page.getByRole("group", { name: "Handlinger" }).getByRole("button", { name: action, exact: true }).click();
+}

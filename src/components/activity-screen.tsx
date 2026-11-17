@@ -6,7 +6,7 @@ import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
 import { fineBoard, fineHistory } from "@/lib/fine-data";
 import { kickoffLabel, readInZone, relativeDay, stampLabel, toLocalDateTimeInput } from "@/lib/time";
-import { reactionRows, reactionSummary } from "@/lib/reactions";
+import { reactionRows, reactorsOf } from "@/lib/reactions";
 import { Badge, buttonClass, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { TaskDialog } from "@/components/task-dialog";
@@ -125,7 +125,7 @@ export async function ActivityScreen({
     stamp: stampLabel(comment.createdAt),
     author: comment.author,
     canDelete: comment.author.id === user.id || admin,
-    reactions: reactionSummary(comment.reactions, user.id),
+    reactors: reactorsOf(comment.reactions),
   }));
 
   const day = relativeDay(match.startsAt);

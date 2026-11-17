@@ -24,27 +24,46 @@ export const DEFAULT_REACTION: ReactionKind = "CROWN";
 export const REACTION_TARGETS = ["post", "comment", "chat", "activityComment"] as const;
 export type ReactionTarget = (typeof REACTION_TARGETS)[number];
 
-/** The rows to read for `reactionSummary` and `reactorsView`: first to react first. */
+/** The rows to read for `reactorsOf`: first to react first. */
 export const reactionRows = {
   orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   select: { kind: true, userId: true, user: { select: { name: true, photoId: true } } },
 } satisfies Prisma.ReactionFindManyArgs;
 
-type Row = { kind: ReactionKind; userId: string; user: { name: string } };
+type Row = { kind: ReactionKind; userId: string; user: { name: string; photoId: string | null } };
 
-/** One kind of reaction on a thing, as it is drawn: the emoji, how many, whether the viewer is one, and who. */
-export type ReactionView = { kind: ReactionKind; emoji: string; label: string; count: number; mine: boolean; names: string[] };
+/** Somebody who reacted to a thing, and with what. What reaches the browser for each post, comment and message. */
+export type Reactor = { id: string; name: string; photoId: string | null; kind: ReactionKind };
 
 /**
- * The reactions on one thing, a kind per entry, in the order they are offered; a kind
- * nobody has given is left out. Names in the order they reacted.
+ * Who reacted to a thing: each person once, first to react first. Should a person still
+ * have two (from before one each), the later stands, in the first one's place.
  */
-export function reactionSummary(rows: Row[], viewerId: string): ReactionView[] {
-  return REACTIONS.flatMap(({ kind, emoji, label }) => {
-    const given = rows.filter((row) => row.kind === kind);
-    if (given.length === 0) return [];
-    return [{ kind, emoji, label, count: given.length, mine: given.some((row) => row.userId === viewerId), names: given.map((row) => row.user.name) }];
-  });
+export function reactorsOf(rows: Row[]): Reactor[] {
+  const people = new Map<string, Reactor>();
+  for (const row of rows) people.set(row.userId, { id: row.userId, name: row.user.name, photoId: row.user.photoId, kind: row.kind });
+  return [...people.values()];
+}
+
+/** How many gave each kind, most first (ties in the order offered), and the viewer's own. */
+export type ReactionTally = {
+  total: number;
+  kinds: { kind: ReactionKind; count: number }[];
+  /** The kinds drawn stacked beside the total: the three most given. */
+  top: ReactionKind[];
+  mine: ReactionKind | null;
+};
+
+export function tallyReactions(reactors: Reactor[], viewerId: string): ReactionTally {
+  const kinds = REACTIONS.map(({ kind }) => ({ kind, count: reactors.filter((r) => r.kind === kind).length }))
+    .filter((k) => k.count > 0)
+    .sort((a, b) => b.count - a.count || order(a.kind) - order(b.kind));
+  return {
+    total: reactors.length,
+    kinds,
+    top: kinds.slice(0, 3).map((k) => k.kind),
+    mine: reactors.find((r) => r.id === viewerId)?.kind ?? null,
+  };
 }
 
 /** "Anna", "Anna og Bo", "Anna, Bo og Carl". */
@@ -52,58 +71,29 @@ export function nameList(names: string[]): string {
   return names.length > 1 ? `${names.slice(0, -1).join(", ")} og ${names.at(-1)}` : (names[0] ?? "");
 }
 
-/** A post shows this many of the faces that reacted to it; the rest are a number. */
-export const REACTORS_SHOWN = 5;
+/** Named in words, at most this many; the rest are a number. */
+export const NAMES_SHOWN = 3;
 
-/**
- * Who reacted to a post, as the feed shows it: each person once, first to react first,
- * with what they gave; the first few as faces and the rest counted, and one sentence
- * naming them for somebody who cannot see the faces.
- */
-export function reactorsView(rows: (Row & { user: { photoId: string | null } })[], shown = REACTORS_SHOWN) {
-  const people = new Map<string, { id: string; name: string; photoId: string | null; kind: ReactionKind }>();
-  // One reaction each; should a person still have two, the later stands, in the first one's place.
-  for (const row of rows) people.set(row.userId, { id: row.userId, name: row.user.name, photoId: row.user.photoId, kind: row.kind });
-  const everybody = [...people.values()];
-  const faces = everybody.slice(0, shown);
-  const more = everybody.length - faces.length;
-  const names = faces.map((person) => person.name);
-  const list = more > 0 ? `${names.join(", ")} og ${more} mere` : nameList(names);
-  return { people: everybody, faces, more, label: list ? `${list} har reageret` : "" };
-}
-
-/** The viewer's reaction on a thing, or null. */
-export function myReaction(list: ReactionView[]): ReactionKind | null {
-  return list.find((r) => r.mine)?.kind ?? null;
+/** One sentence for somebody who cannot see the icons: "Anna, Bo og 2 mere har reageret". */
+export function reactorsLabel(reactors: Reactor[], shown = NAMES_SHOWN): string {
+  if (reactors.length === 0) return "";
+  const names = reactors.slice(0, shown).map((r) => r.name);
+  const more = reactors.length - names.length;
+  return `${more > 0 ? `${names.join(", ")} og ${more} mere` : nameList(names)} har reageret`;
 }
 
 /**
- * The list as it is once the viewer has chosen `kind` (`on`) — in place of whatever they
- * had — or taken it back. "Dig" stands in for their name until the server answers.
+ * Who reacted once the viewer has chosen `kind` (`on`) — in place of whatever they had —
+ * or taken it back. The viewer keeps their place in the order; new, they come last, as
+ * "Dig" until the server answers with their name.
  */
-export function applyPress(list: ReactionView[], kind: ReactionKind, on: boolean): ReactionView[] {
-  const mine = myReaction(list);
-  if (on && mine === kind) return list;
-  if (!on && mine !== kind) return list;
-  // First the viewer's own reaction goes, whichever it was.
-  let next = list
-    .map((r) => (r.mine ? { ...r, count: r.count - 1, mine: false, names: withoutViewer(r.names) } : r))
-    .filter((r) => r.count > 0);
-  if (!on) return next;
-  const existing = next.find((r) => r.kind === kind);
-  if (existing) {
-    next = next.map((r) => (r.kind === kind ? { ...r, count: r.count + 1, mine: true, names: [...r.names, "Dig"] } : r));
-  } else {
-    const meta = REACTIONS.find((r) => r.kind === kind)!;
-    next = [...next, { kind, emoji: meta.emoji, label: meta.label, count: 1, mine: true, names: ["Dig"] }];
+export function pressReaction(reactors: Reactor[], viewerId: string, kind: ReactionKind, on: boolean): Reactor[] {
+  const mine = reactors.find((r) => r.id === viewerId);
+  if (on) {
+    if (mine?.kind === kind) return reactors;
+    return mine ? reactors.map((r) => (r.id === viewerId ? { ...r, kind } : r)) : [...reactors, { id: viewerId, name: "Dig", photoId: null, kind }];
   }
-  return next.sort((a, b) => order(a.kind) - order(b.kind));
-}
-
-/** Which name was the viewer's is not known here; "Dig" if they pressed it, else the last, until the server says. */
-function withoutViewer(names: string[]) {
-  const at = names.lastIndexOf("Dig");
-  return at >= 0 ? names.filter((_, index) => index !== at) : names.slice(0, -1);
+  return mine?.kind === kind ? reactors.filter((r) => r.id !== viewerId) : reactors;
 }
 
 function order(kind: ReactionKind) {

@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
 import { latest } from "./push-summary";
 import { UNREAD_UP_TO } from "./chat-count";
-import { reactionRows, reactionSummary, type ReactionView } from "./reactions";
+import { reactionRows, reactorsOf, type Reactor } from "./reactions";
 
 /** How many messages the chat fetches at a time: on opening, and each time it is scrolled to the top. */
 export const CHAT_PAGE = 25;
@@ -16,8 +16,8 @@ export type ChatItem = {
   task: { id: string; title: string } | null;
   createdAt: string;
   author: { id: string; name: string; photoId: string | null };
-  /** The reactions on it, as the viewer sees them (`reactionSummary`). */
-  reactions: ReactionView[];
+  /** Who reacted to it, and with what (`reactorsOf`). */
+  reactors: Reactor[];
 };
 
 /** A page of messages, oldest first, and whether there are older ones still to fetch. */
@@ -63,7 +63,7 @@ async function messagesPage(teamId: string, viewerId: string, where: Prisma.Chat
     .map(({ photos, reactions, ...row }) => ({
       ...row,
       photoIds: photos.map((photo) => photo.photoId),
-      reactions: reactionSummary(reactions, viewerId),
+      reactors: reactorsOf(reactions),
       createdAt: row.createdAt.toISOString(),
     }));
   return { messages, more };

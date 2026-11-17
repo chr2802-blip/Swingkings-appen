@@ -1,6 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
-import { hold } from "./helpers/hold";
+import { hold, holdAndChoose } from "./helpers/hold";
 
 test("a post with words shows in the feed, and a teammate reacts and comments", async ({ page, loginAs }) => {
   const { anna, bo } = await squad();
@@ -16,31 +16,33 @@ test("a post with words shows in the feed, and a teammate reacts and comments", 
   await loginAs(bo);
   await page.goto("/oversigt");
   await expect(page.getByText("Sikke en sejr i dag!")).toBeVisible();
-  // A press gives the crest's crown, shown as a pill with its count.
-  const post = page.getByRole("button", { name: "Giv en krone 👑" });
-  await post.click();
-  await expect(page.getByRole("button", { name: "👑 1: Bo" })).toHaveAttribute("aria-pressed", "true");
+  // A press gives the crest's crown; the reactions in short show above the bar.
+  await page.getByRole("button", { name: "Giv en krone 👑" }).click();
+  await expect(page.getByRole("button", { name: "1 reaktion: Bo har reageret" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fjern din reaktion (Krone 👑)" })).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => db.reaction.count({ where: { kind: "CROWN", userId: bo.id } })).toBe(1);
   // Held, it brings up the rest; the one chosen takes the crown's place — one reaction each.
   await hold(page, page.getByRole("button", { name: "Fjern din reaktion (Krone 👑)" }));
   await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Elsker ❤️" }).click();
   await expect(page.getByRole("group", { name: "Vælg en reaktion" })).toBeHidden();
-  await expect(page.getByRole("button", { name: "❤️ 1: Bo" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: /^👑 \d/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Fjern din reaktion (Elsker ❤️)" })).toBeVisible();
   await expect.poll(() => db.reaction.findMany({ where: { userId: bo.id }, select: { kind: true } })).toEqual([{ kind: "HEART" }]);
-  // Who reacted is shown as a face, not written out as a name; pressing the face names them and what they gave.
+  // The summary opens who reacted, in tabs: everybody, then each kind given.
   await page.reload();
-  const reactors = page.getByRole("button", { name: "Bo har reageret" });
-  await expect(reactors).toHaveText("B");
-  await reactors.click();
+  await page.getByRole("button", { name: "1 reaktion: Bo har reageret" }).click();
   const reacted = page.getByRole("dialog", { name: "Reaktioner" });
-  await expect(reacted.getByRole("listitem")).toHaveText([/Bo\s*❤️\s*Elsker$/]);
-  await expect(reacted.getByRole("link", { name: /Bo$/ })).toHaveAttribute("href", `/spiller/${bo.id}`);
+  await expect(reacted.getByRole("tab", { name: "Alle 1" })).toHaveAttribute("aria-selected", "true");
+  await expect(reacted.getByRole("tab", { name: "Elsker 1" })).toBeVisible();
+  await expect(reacted.getByRole("listitem")).toHaveText([/Bo\s*Elsker$/]);
+  await expect(reacted.getByRole("link", { name: /Bo/ })).toHaveAttribute("href", `/spiller/${bo.id}`);
+  await reacted.getByRole("tab", { name: "Elsker 1" }).click();
+  await expect(reacted.getByRole("tab", { name: "Elsker 1" })).toHaveAttribute("aria-selected", "true");
+  await expect(reacted.getByRole("listitem")).toHaveCount(1);
   await page.keyboard.press("Escape");
   await expect(reacted).toBeHidden();
   // A press on the button now takes the reaction back.
   await page.getByRole("button", { name: "Fjern din reaktion (Elsker ❤️)" }).click();
-  await expect(page.getByRole("button", { name: /^❤️/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /reaktion: / })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Giv en krone 👑" })).toBeVisible();
   await expect.poll(() => db.reaction.count()).toBe(0);
   await page.getByRole("button", { name: "0 kommentarer" }).click();
@@ -328,8 +330,12 @@ test("comments open in a drawer, each apart with its writer, and only its writer
   const comments = page.getByRole("dialog", { name: "Kommentarer" }).getByRole("list", { name: "Kommentarer" }).getByRole("listitem");
   await expect(comments).toHaveCount(2);
   await expect(comments.nth(0)).toContainText("Anna");
-  await expect(comments.nth(0).getByRole("button", { name: "Slet" })).toHaveCount(0);
-  await comments.nth(1).getByRole("button", { name: "Slet" }).click();
+  // Nothing to press on a comment until it is held; then Bo may delete his own, not Anna's.
+  await expect(comments.getByRole("button", { name: /^(Svar|Slet)$/ })).toHaveCount(0);
+  await hold(page, comments.nth(0).getByText("Hvilken kamp"));
+  await expect(page.getByRole("group", { name: "Handlinger" }).getByRole("button", { name: "Slet" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await holdAndChoose(page, comments.nth(1).getByText("Det mål i 89. minut"), "Slet");
   await expect(comments).toHaveCount(1);
   expect(await db.postComment.count()).toBe(1);
 });
@@ -371,26 +377,35 @@ test("a comment is answered from the drawer, and the answer sits under it", asyn
   await page.goto("/oversigt");
   await page.getByRole("button", { name: "1 kommentar", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "Kommentarer" });
-  await drawer.getByRole("button", { name: "Svar Anna" }).click();
+  // Holding the comment and choosing "Svar" readies the box, with its writer tagged first.
+  await holdAndChoose(page, drawer.getByText("Hvilken kamp"), "Svar");
   await expect(drawer.getByText("Svarer Anna")).toBeVisible();
-  // The box is ready for the answer the moment "Svar" is pressed.
   const box = drawer.getByRole("textbox", { name: "Svar", exact: true });
   await expect(box).toBeFocused();
-  await box.fill("Det var den bedste i år");
+  await expect(box).toHaveValue("@Anna ");
+  await box.pressSequentially("Det var den bedste i år");
   await box.press("Enter");
 
   const answers = drawer.getByRole("list", { name: "Svar til Anna" }).getByRole("listitem");
   await expect(answers).toHaveCount(1);
-  await expect(answers.nth(0)).toContainText("Det var den bedste i år");
+  await expect(answers.nth(0)).toContainText("@Anna Det var den bedste i år");
+  await expect(answers.nth(0).getByRole("link", { name: "@Anna" })).toHaveAttribute("href", `/spiller/${anna.id}`);
   // After sending, the box writes a plain comment again.
   await expect(drawer.getByRole("textbox", { name: "Kommentar", exact: true })).toHaveValue("");
   await expect(drawer.getByText("Svarer Anna")).toHaveCount(0);
   expect((await db.postComment.findFirstOrThrow({ where: { authorId: bo.id } })).parentId).toBe(first.id);
 
-  // "Annuller" turns an answer back into a comment on the post.
-  await drawer.getByRole("button", { name: "Svar Anna" }).click();
+  // "Annuller" turns an answer back into a comment on the post, and the tag goes with it.
+  await holdAndChoose(page, drawer.getByText("Hvilken kamp"), "Svar");
   await drawer.getByRole("button", { name: "Annuller" }).click();
-  await expect(drawer.getByRole("textbox", { name: "Kommentar", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("textbox", { name: "Kommentar", exact: true })).toHaveValue("");
+
+  // The emoji row puts an emoji where the cursor is.
+  const plain = drawer.getByRole("textbox", { name: "Kommentar", exact: true });
+  await plain.fill("Flot");
+  await drawer.getByRole("group", { name: "Indsæt emoji" }).getByRole("button", { name: "Indsæt 🔥" }).click();
+  await expect(plain).toHaveValue("Flot🔥");
+  await expect(plain).toBeFocused();
 });
 
 test("a poll's answers are ticked on the roster, with several answers allowed and anonymous", async ({ page, loginAs }) => {
@@ -600,35 +615,43 @@ test("a comment and a chat message are reacted to, and the reaction stands after
   await page.goto("/oversigt");
   await page.getByRole("button", { name: "1 kommentar", exact: true }).click();
   const comments = page.getByRole("dialog", { name: "Kommentarer" });
-  // Without holding — from the keyboard or a screen reader — "Vælg en anden reaktion" brings up the row.
-  await comments.getByRole("button", { name: "Vælg en anden reaktion" }).focus();
+  // From the keyboard or a screen reader, a button does what holding does.
+  await comments.getByRole("button", { name: "Reager eller svar på Annas kommentar" }).focus();
   await page.keyboard.press("Enter");
-  // The row lies over the drawer; choosing one leaves the drawer open.
+  // The menu lies over the drawer; choosing a reaction leaves the drawer open.
   await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Griner 😂" }).click();
-  await expect(comments.getByRole("button", { name: "😂 1: Bo" })).toHaveAttribute("aria-pressed", "true");
+  await expect(comments.getByRole("button", { name: "1 reaktion: Bo har reageret" })).toBeVisible();
   await expect.poll(() => db.reaction.count({ where: { postCommentId: { not: null }, kind: "LAUGH" } })).toBe(1);
-  // Escape closes the row and not the drawer.
-  await hold(page, comments.getByRole("button", { name: "Fjern din reaktion (Griner 😂)" }));
+  // Held, the comment brings up the reactions, the viewer's marked; Escape closes the menu and not the drawer.
+  await hold(page, comments.getByText("Husk benskinner"));
+  await expect(page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Griner 😂" })).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("group", { name: "Vælg en reaktion" })).toBeHidden();
   await expect(comments).toBeVisible();
-  // Holding opened the row and gave nothing.
-  await expect(comments.getByRole("button", { name: "😂 1: Bo" })).toHaveAttribute("aria-pressed", "true");
+  // Holding gave nothing of itself.
+  await expect.poll(() => db.reaction.count()).toBe(1);
 
+  // A chat message is held the same way: the crown, first in the row.
   await page.goto("/chat");
-  await expect(page.getByText("Hvem kører?")).toBeVisible();
-  await page.getByRole("button", { name: "Giv en krone 👑" }).click();
+  await hold(page, page.getByText("Hvem kører?"));
+  await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Krone 👑" }).click();
   await expect.poll(() => db.reaction.count({ where: { chatMessageId: { not: null }, kind: "CROWN" } })).toBe(1);
   await page.reload();
-  await expect(page.getByRole("button", { name: "👑 1: Bo" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "1 reaktion: Bo har reageret" })).toBeVisible();
 
-  // Anna sees Bo's reaction, not marked as hers.
+  // "Svar" tags the writer in the chat box.
+  await holdAndChoose(page, page.getByText("Hvem kører?"), "Svar");
+  await expect(page.getByRole("textbox", { name: "Besked" })).toHaveValue("@Anna ");
+
+  // Anna sees Bo's reaction in the tabs, and may delete her own message from the menu.
   await loginAs(anna);
   await page.goto("/chat");
-  const bos = page.getByRole("button", { name: "👑 1: Bo" });
-  await expect(bos).toHaveAttribute("aria-pressed", "false");
-  // Pressing Bo's pill gives Anna the same.
-  await bos.click();
-  await expect(page.getByRole("button", { name: /^👑 2: Bo og / })).toHaveAttribute("aria-pressed", "true");
-  await expect.poll(() => db.reaction.count({ where: { chatMessageId: { not: null }, kind: "CROWN" } })).toBe(2);
+  await page.getByRole("button", { name: "1 reaktion: Bo har reageret" }).click();
+  const reacted = page.getByRole("dialog", { name: "Reaktioner" });
+  await expect(reacted.getByRole("tab", { name: "Krone 1" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(reacted).toBeHidden();
+  await holdAndChoose(page, page.getByText("Hvem kører?"), "Slet");
+  await expect(page.getByText("Hvem kører?")).toHaveCount(0);
+  await expect.poll(() => db.chatMessage.count()).toBe(0);
 });

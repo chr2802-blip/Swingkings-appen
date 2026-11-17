@@ -1,6 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
-import { hold } from "./helpers/hold";
+import { hold, holdAndChoose } from "./helpers/hold";
 
 /** The jobs' tab: a job of your own is also named on the details. */
 const jobsTab = (page: import("@playwright/test").Page) => page.getByRole("tabpanel", { name: /^Opgaver/ });
@@ -555,17 +555,17 @@ test("the team comments on an activity under its details, answers and reacts, an
 
   await loginAs(bo);
   await page.goto(`/aktiviteter/${party.id}`);
-  await details.getByRole("button", { name: "Svar Anna" }).click();
-  await details.getByRole("textbox", { name: "Svar" }).fill("Jeg har en højttaler");
-  await details.getByRole("textbox", { name: "Svar" }).press("Enter");
+  await holdAndChoose(page, details.getByText("Skal vi have DJ?"), "Svar");
+  const answer = details.getByRole("textbox", { name: "Svar" });
+  await expect(answer).toHaveValue("@Anna ");
+  await answer.pressSequentially("Jeg har en højttaler");
+  await answer.press("Enter");
   await expect(details.getByRole("list", { name: "Svar til Anna" }).getByText("Jeg har en højttaler")).toBeVisible();
   // Bo may delete his own answer, not Anna's comment.
-  await expect(details.getByRole("button", { name: "Slet", exact: true })).toHaveCount(1);
-
-  const annas = details.getByRole("listitem").filter({ hasText: "Skal vi have DJ?" }).first();
-  await hold(page, annas.getByRole("button", { name: "Giv en krone 👑" }).first());
+  await hold(page, details.getByText("Skal vi have DJ?"));
+  await expect(page.getByRole("group", { name: "Handlinger" }).getByRole("button", { name: "Slet" })).toHaveCount(0);
   await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Ild 🔥" }).click();
-  await expect(details.getByRole("button", { name: "🔥 1: Bo" })).toBeVisible();
+  await expect(details.getByRole("button", { name: "1 reaktion: Bo har reageret" })).toBeVisible();
   await expect.poll(() => db.reaction.count({ where: { activityCommentId: { not: null }, kind: "FIRE", userId: bo.id } })).toBe(1);
 
   // Five comments: folded together, the latest two show, and the rest are one press away.
