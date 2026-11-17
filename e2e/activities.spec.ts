@@ -39,8 +39,9 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
   await page.goto(`/aktiviteter/${party.id}`);
   await expect(page.getByText("Kommer du?")).toBeVisible();
   await page.getByRole("button", { name: "Jeg kommer", exact: true }).click();
-  await expect(page.getByText("Du kommer ✅")).toBeVisible();
   await expect(page.getByRole("button", { name: "Jeg kommer", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // The chosen button says it; no line above repeats it.
+  await expect(page.getByText("Kommer du?")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Jeg kommer ikke" })).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByRole("heading", { name: "Tilmeldte (1)" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Anna", exact: true })).toBeVisible();
@@ -48,7 +49,6 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
   await loginAs(bo);
   await page.goto(`/aktiviteter/${party.id}`);
   await page.getByRole("button", { name: "Jeg kommer ikke" }).click();
-  await expect(page.getByText("Du kommer ikke", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Jeg kommer ikke" })).toHaveAttribute("aria-pressed", "true");
   // Only those coming are shown: Bo's no is not.
   await expect(page.getByRole("heading", { name: "Tilmeldte (1)" })).toBeVisible();

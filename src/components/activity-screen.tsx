@@ -200,9 +200,8 @@ export async function ActivityScreen({
                   <Card className="space-y-5">
                     {!fromKampKlar && !match.cancelledAt && !past && (
                       <div className="space-y-3">
-                        <p className="text-sm font-medium">
-                          {mine === true ? "Du kommer ✅" : mine === false ? "Du kommer ikke" : "Kommer du?"}
-                        </p>
+                        {/* Once answered, the chosen half of the choice says it; no line repeats it. */}
+                        {mine === undefined && <p className="text-sm font-medium">Kommer du?</p>}
                         <SignupChoice activityId={match.id} mine={mine} />
                       </div>
                     )}
