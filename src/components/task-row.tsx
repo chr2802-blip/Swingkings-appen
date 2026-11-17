@@ -4,7 +4,7 @@ import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { Badge } from "@/components/ui";
 import { ActionButton } from "@/components/action-button";
-import { setTaskDone, toggleTakeTask } from "@/app/actions/tasks";
+import { setTaskDone } from "@/app/actions/tasks";
 import { deadlineLabel } from "@/lib/time";
 import { activityName } from "@/lib/activity";
 
@@ -17,31 +17,55 @@ export type TaskView = {
   assignees: { user: { id: string; name: string; photoId: string | null } }[];
 };
 
-/** One job: what, when, for which activity, who — and Done, or "Jeg tager den" when nobody has it. */
-export function TaskRow({ task, viewerId, showMatch = true }: { task: TaskView; viewerId: string; showMatch?: boolean }) {
+/**
+ * One job: what, when, for which activity, who — and its tick. Only those on the job (or
+ * an admin, `admin`) can press the tick; everybody else just sees it.
+ */
+export function TaskRow({
+  task,
+  viewerId,
+  admin = false,
+  showMatch = true,
+}: {
+  task: TaskView;
+  viewerId: string;
+  admin?: boolean;
+  showMatch?: boolean;
+}) {
   const due = task.dueAt ? deadlineLabel(task.dueAt) : null;
   const mine = task.assignees.some((a) => a.user.id === viewerId);
   const done = task.doneAt !== null;
+  const tick = (
+    <span
+      className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${
+        done ? "animate-pop border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent"
+      }`}
+    >
+      <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3">
+        <path d="m5 12 5 5 9-10" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
   return (
     <li className="flex items-center gap-3 px-4 py-3">
-      <ActionButton
-        action={setTaskDone}
-        fields={{ id: task.id, done: String(!done) }}
-        variant="ghost"
-        className="p-0!"
-        label={
-          <span
-            className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${
-              done ? "animate-pop border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent"
-            }`}
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3">
-              <path d="m5 12 5 5 9-10" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="sr-only">{done ? "Markér som ikke udført" : "Markér som udført"}</span>
-          </span>
-        }
-      />
+      {mine || admin ? (
+        <ActionButton
+          action={setTaskDone}
+          fields={{ id: task.id, done: String(!done) }}
+          variant="ghost"
+          className="p-0!"
+          label={
+            <>
+              {tick}
+              <span className="sr-only">{done ? "Markér som ikke udført" : "Markér som udført"}</span>
+            </>
+          }
+        />
+      ) : (
+        <span role="img" aria-label={done ? "Udført" : "Ikke udført"} className="opacity-60">
+          {tick}
+        </span>
+      )}
       <Link href={`/opgaver/${task.id}`} className="press-card -my-1 min-w-0 flex-1 rounded-lg py-1">
         <p className={`truncate font-medium ${done ? "text-slate-400 line-through" : ""}`}>{task.title}</p>
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
@@ -61,9 +85,6 @@ export function TaskRow({ task, viewerId, showMatch = true }: { task: TaskView; 
           </PlayerLink>
         ))}
       </div>
-      {!done && task.assignees.length === 0 && !mine && (
-        <ActionButton action={toggleTakeTask} fields={{ id: task.id }} label="Tag den" />
-      )}
     </li>
   );
 }

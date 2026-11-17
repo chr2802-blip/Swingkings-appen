@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam } from "@/lib/access";
+import { canAdministerTeam, canFinishTask } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
@@ -12,8 +12,8 @@ import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
-import { HandoverDialog } from "@/components/handover-dialog";
-import { answerHandover, deleteTask, setTaskDone, toggleTakeTask, withdrawHandover } from "@/app/actions/tasks";
+import { AskInChatDialog, HandoverDialog } from "@/components/handover-dialog";
+import { answerHandover, deleteTask, setTaskDone, withdrawHandover } from "@/app/actions/tasks";
 
 const HANDOVER_STATUS = {
   PENDING: { text: "Venter på svar", tone: "amber" },
@@ -45,10 +45,14 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     }),
   ]);
   const pending = handovers.filter((h) => h.status === "PENDING");
+  const mine = task.assignees.some((a) => a.user.id === user.id);
   const askedMe = task.doneAt ? undefined : pending.find((h) => h.toId === user.id);
+  /** Asked in the chat by somebody on the job: anybody not on it may say yes. */
+  const askedTeam = task.doneAt || mine ? [] : pending.filter((h) => h.inChat);
   const myRequest = pending.find((h) => h.fromId === user.id);
   const canEdit = task.createdById === user.id || canAdministerTeam(user, user.teamId);
-  const mine = task.assignees.some((a) => a.user.id === user.id);
+  const canFinish = canFinishTask(user, user.teamId, { assignees: task.assignees.map((a) => ({ userId: a.user.id })) });
+  const canHandOver = !task.doneAt && mine && !myRequest;
   const due = task.dueAt ? deadlineLabel(task.dueAt) : null;
 
   return (
@@ -56,22 +60,8 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       <PageHeader
         title={task.title}
         action={
-          <ActionMenu>
-            <ActionButton
-              action={setTaskDone}
-              fields={{ id: task.id, done: String(!task.doneAt) }}
-              label={task.doneAt ? "Markér som ikke udført" : "Markér som udført ✓"}
-            />
-            {!task.doneAt && (
-              <ActionButton action={toggleTakeTask} fields={{ id: task.id }} label={mine ? "Tag mig af opgaven" : "Jeg tager den"} />
-            )}
-            {!task.doneAt && mine && !myRequest && (
-              <HandoverDialog
-                taskId={task.id}
-                members={roster.filter((m) => !task.assignees.some((a) => a.user.id === m.userId))}
-              />
-            )}
-            {canEdit && (
+          canEdit && (
+            <ActionMenu>
               <EditTaskDialog
                 members={roster}
                 task={{
@@ -83,8 +73,6 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
                   assigneeIds: task.assignees.map((a) => a.user.id),
                 }}
               />
-            )}
-            {canEdit && (
               <ActionButton
                 action={deleteTask}
                 fields={{ id: task.id }}
@@ -93,10 +81,31 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
                 confirm="Slet opgaven?"
                 confirmLabel="Slet opgaven"
               />
-            )}
-          </ActionMenu>
+            </ActionMenu>
+          )
         }
       />
+      {(canFinish || canHandOver) && (
+        <Card className="mb-4 space-y-3">
+          {canHandOver && <p className="text-sm text-slate-600">Kan du ikke? Spørg holdet i chatten eller en bestemt, om de vil overtage.</p>}
+          <div className="flex flex-wrap gap-2">
+            {canFinish && (
+              <ActionButton
+                action={setTaskDone}
+                fields={{ id: task.id, done: String(!task.doneAt) }}
+                label={task.doneAt ? "Markér som ikke udført" : "Markér som udført ✓"}
+                variant={task.doneAt ? "secondary" : "primary"}
+              />
+            )}
+            {canHandOver && (
+              <>
+                <AskInChatDialog taskId={task.id} />
+                <HandoverDialog taskId={task.id} members={roster.filter((m) => !task.assignees.some((a) => a.user.id === m.userId))} />
+              </>
+            )}
+          </div>
+        </Card>
+      )}
       {askedMe && (
         <Card className="mb-4 space-y-3 border-amber-300 bg-amber-50">
           <p className="text-sm font-medium">
@@ -109,11 +118,26 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           </div>
         </Card>
       )}
+      {askedTeam.map((h) => (
+        <Card key={h.id} className="mb-4 space-y-3 border-amber-300 bg-amber-50">
+          <p className="text-sm font-medium">
+            <PlayerLink userId={h.from.id}>{h.from.name}</PlayerLink> spørger i chatten, om nogen vil overtage opgaven.
+          </p>
+          {h.note && <p className="text-sm whitespace-pre-line text-slate-700">“{h.note}”</p>}
+          <ActionButton action={answerHandover} fields={{ id: h.id, answer: "accept" }} label="Jeg tager den" variant="primary" />
+        </Card>
+      ))}
       {myRequest && (
         <Card className="mb-4 space-y-3">
           <p className="text-sm">
-            Du har spurgt <PlayerLink userId={myRequest.to.id}>{myRequest.to.name}</PlayerLink>, om de vil overtage opgaven. Du har
-            den, indtil de siger ja.
+            {myRequest.to ? (
+              <>
+                Du har spurgt <PlayerLink userId={myRequest.to.id}>{myRequest.to.name}</PlayerLink>, om de vil overtage opgaven. Du har
+                den, indtil de siger ja.
+              </>
+            ) : (
+              <>Du har spurgt i chatten, om nogen vil overtage opgaven. Du har den, indtil nogen siger ja.</>
+            )}
           </p>
           <ActionButton action={withdrawHandover} fields={{ id: myRequest.id }} label="Træk forespørgslen tilbage" />
         </Card>
@@ -167,7 +191,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
                   .filter((h) => h.fromId === a.user.id)
                   .map((h) => (
                     <p key={h.id} className="ml-10 text-xs text-amber-700">
-                      Har spurgt {h.to.name}, om de vil overtage
+                      {h.to ? `Har spurgt ${h.to.name}, om de vil overtage` : "Har spurgt i chatten, om nogen vil overtage"}
                     </p>
                   ))}
               </li>
@@ -185,8 +209,24 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
                 <li key={h.id} className="text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
-                      <PlayerLink userId={h.from.id}>{h.from.name}</PlayerLink> bad <PlayerLink userId={h.to.id}>{h.to.name}</PlayerLink>{" "}
-                      overtage opgaven
+                      <PlayerLink userId={h.from.id}>{h.from.name}</PlayerLink>{" "}
+                      {h.inChat ? (
+                        <>
+                          spurgte i chatten, om nogen ville overtage opgaven
+                          {h.to && (
+                            <>
+                              {" — "}
+                              <PlayerLink userId={h.to.id}>{h.to.name}</PlayerLink> tog den
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        h.to && (
+                          <>
+                            bad <PlayerLink userId={h.to.id}>{h.to.name}</PlayerLink> overtage opgaven
+                          </>
+                        )
+                      )}
                     </span>
                     <Badge tone={HANDOVER_STATUS[h.status].tone}>{HANDOVER_STATUS[h.status].text}</Badge>
                   </div>
