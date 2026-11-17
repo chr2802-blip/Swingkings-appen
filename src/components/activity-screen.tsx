@@ -21,7 +21,8 @@ import { ActionButton } from "@/components/action-button";
 import { SwipePages, TurnButton } from "@/components/swipe-pages";
 import { AutoSync } from "@/components/auto-sync";
 import { ActivityComments } from "@/components/activity-comments";
-import { deleteActivity, setSignup } from "@/app/actions/activities";
+import { deleteActivity } from "@/app/actions/activities";
+import { SignupChoice } from "@/components/signup-choice";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
 import {
   activityName,
@@ -226,20 +227,7 @@ export async function ActivityScreen({
                         <p className="text-sm font-medium">
                           {mine === true ? "Du kommer ✅" : mine === false ? "Du kommer ikke" : "Kommer du?"}
                         </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <ActionButton
-                            action={setSignup}
-                            fields={{ activityId: match.id, going: "yes" }}
-                            label="Jeg kommer"
-                            variant={mine === true ? "primary" : "secondary"}
-                          />
-                          <ActionButton
-                            action={setSignup}
-                            fields={{ activityId: match.id, going: "no" }}
-                            label="Jeg kommer ikke"
-                            variant={mine === false ? "primary" : "secondary"}
-                          />
-                        </div>
+                        <SignupChoice activityId={match.id} mine={mine} />
                       </div>
                     )}
                     {going.length > 0 ? <SignupFaces people={going} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu.</p>}
