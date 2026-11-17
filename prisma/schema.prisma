@@ -796,9 +796,11 @@ model PushSubscription {
 }
 
 /**
- * The six reactions, in the order they are offered: 👍 ❤️ 😂 😮 😢 🔥 (`src/lib/reactions.ts`).
+ * The reactions, in the order they are offered: the crown from the club's crest — what a
+ * press gives — then 👍 ❤️ 😂 😮 😢 🔥 (`src/lib/reactions.ts`).
  */
 enum ReactionKind {
+  CROWN
   THUMBS
   HEART
   LAUGH
@@ -809,8 +811,9 @@ enum ReactionKind {
 
 /**
  * Somebody's reaction to a post, a comment on one, a chat message or a comment on an
- * activity — exactly one of the four (a CHECK in the migration). Each person gives each
- * kind once per thing; a ❤️ on a post is what a like used to be. Carries the team, so
+ * activity — exactly one of the four (a CHECK in the migration). Each person has one
+ * reaction on a thing; choosing another changes it. A ❤️ on a post may be a like from
+ * before reactions. Carries the team, so
  * `teamDb` scopes it, and goes with the thing it is on.
  */
 model Reaction {
@@ -831,10 +834,10 @@ model Reaction {
   chatMessage     ChatMessage?     @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
   activityComment ActivityComment? @relation(fields: [activityCommentId], references: [id], onDelete: Cascade)
 
-  @@unique([postId, userId, kind])
-  @@unique([postCommentId, userId, kind])
-  @@unique([chatMessageId, userId, kind])
-  @@unique([activityCommentId, userId, kind])
+  @@unique([postId, userId])
+  @@unique([postCommentId, userId])
+  @@unique([chatMessageId, userId])
+  @@unique([activityCommentId, userId])
   @@index([teamId])
   @@index([userId])
 }

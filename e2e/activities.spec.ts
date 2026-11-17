@@ -1,5 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
+import { hold } from "./helpers/hold";
 
 /** The jobs' tab: a job of your own is also named on the details. */
 const jobsTab = (page: import("@playwright/test").Page) => page.getByRole("tabpanel", { name: /^Opgaver/ });
@@ -562,7 +563,7 @@ test("the team comments on an activity under its details, answers and reacts, an
   await expect(details.getByRole("button", { name: "Slet", exact: true })).toHaveCount(1);
 
   const annas = details.getByRole("listitem").filter({ hasText: "Skal vi have DJ?" }).first();
-  await annas.getByRole("button", { name: "Reager" }).first().click();
+  await hold(page, annas.getByRole("button", { name: "Giv en krone 👑" }).first());
   await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Ild 🔥" }).click();
   await expect(details.getByRole("button", { name: "🔥 1: Bo" })).toBeVisible();
   await expect.poll(() => db.reaction.count({ where: { activityCommentId: { not: null }, kind: "FIRE", userId: bo.id } })).toBe(1);
