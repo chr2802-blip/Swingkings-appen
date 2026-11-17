@@ -704,3 +704,8 @@ h1,
     transition: none;
   }
 }
+
+/* A chat message reached by pressing a quote of it: marked for a moment. */
+.chat-flash {
+  background-color: color-mix(in srgb, var(--gold) 22%, transparent);
+}

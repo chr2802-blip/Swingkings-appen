@@ -33,6 +33,30 @@ describe("chat", () => {
     expect(typeof messages[0]!.createdAt).toBe("string");
   });
 
+  it("answers a message, quoted above the answer; another team's message cannot be answered", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const asked = await prisma.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "Hvem kører?" } });
+    const theirs = await prisma.chatMessage.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "Hemmeligt" } });
+    await signIn(bo);
+    expect(await sendChatMessage(undefined, formData({ body: "Jeg kan", replyToId: asked.id }))).toEqual({ ok: true });
+    expect(await sendChatMessage(undefined, formData({ body: "Kapret", replyToId: theirs.id }))).toEqual({
+      ok: false,
+      error: "Beskeden, du svarer på, findes ikke længere.",
+    });
+    const { messages } = await latestMessages(team.id, bo.id);
+    expect(messages.map((m) => [m.body, m.replyTo])).toEqual([
+      ["Hvem kører?", null],
+      ["Jeg kan", { id: asked.id, authorName: anna.name, body: "Hvem kører?", photo: false }],
+    ]);
+
+    // The answered message deleted, the answer stays without its quote.
+    await signIn(anna);
+    await deleteChatMessage(undefined, formData({ id: asked.id }));
+    const after = await latestMessages(team.id, bo.id);
+    expect(after.messages.map((m) => [m.body, m.replyTo])).toEqual([["Jeg kan", null]]);
+  });
+
   it("sends several pictures in one message, in the order chosen, with words or without", async () => {
     const { team, anna } = await makeSquad();
     const [a, b, c] = [await makePhoto(team.id), await makePhoto(team.id), await makePhoto(team.id)];

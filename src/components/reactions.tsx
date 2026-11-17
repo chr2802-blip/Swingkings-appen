@@ -218,8 +218,7 @@ function ReactionMenu({
 }
 
 /**
- * The reactions on a thing in short, as Facebook draws them: the most given kinds stacked,
- * then how many reacted. Pressing it lists who, by kind (`ReactorsDrawer`). Nothing when
+ * The reactions on a thing in short: the kind most given, then how many reacted. Pressing it lists who, by kind (`ReactorsDrawer`). Nothing when
  * nobody has reacted.
  */
 export function ReactionSummary({ reactors, small = false }: { reactors: Reactor[]; small?: boolean }) {
@@ -233,19 +232,10 @@ export function ReactionSummary({ reactors, small = false }: { reactors: Reactor
         onClick={() => setOpen(true)}
         aria-label={`${tally.total} ${tally.total === 1 ? "reaktion" : "reaktioner"}: ${reactorsLabel(reactors)}`}
         className={`press-button flex shrink-0 items-center rounded-full text-slate-600 tabular-nums ${
-          small ? "h-5 gap-1 bg-white pr-1.5 pl-0.5 text-[11px] shadow-sm ring-1 ring-slate-200" : "h-7 gap-1.5 pr-1 text-sm"
+          small ? "h-5 gap-1 bg-white px-1.5 text-[11px] shadow-sm ring-1 ring-slate-200" : "h-9 gap-1.5 px-2 text-sm"
         }`}
       >
-        <span className="flex items-center">
-          {tally.top.map((kind) => (
-            <span
-              key={kind}
-              className={`-ml-1 flex items-center justify-center rounded-full bg-white ring-2 ring-white first:ml-0 ${small ? "h-4 w-4" : "h-6 w-6"}`}
-            >
-              <ReactionGlyph kind={kind} size={small ? "xs" : "sm"} />
-            </span>
-          ))}
-        </span>
+        {tally.top && <ReactionGlyph kind={tally.top} size={small ? "xs" : "md"} />}
         {tally.total}
       </button>
       <ReactorsDrawer open={open} onClose={() => setOpen(false)} reactors={reactors} />
@@ -254,9 +244,9 @@ export function ReactionSummary({ reactors, small = false }: { reactors: Reactor
 }
 
 /**
- * A post's reactions: the summary above, then the bar with the reaction button — a press
- * gives the crest's crown, or takes the viewer's reaction back; held, every reaction comes
- * up — and whatever else the bar holds (`children`, the comments).
+ * A post's bar: the reaction button — a press gives the crest's crown, or takes the
+ * viewer's reaction back; held, every reaction comes up — whatever else the bar holds
+ * (`children`, the comments), and at its end how many reacted.
  */
 export function PostReactions({ children, ...thing }: Thing & { children?: React.ReactNode }) {
   const { list, tally, choose, toggle } = useReactions(thing);
@@ -267,13 +257,8 @@ export function PostReactions({ children, ...thing }: Thing & { children?: React
   const meta = tally.mine && REACTIONS.find((r) => r.kind === tally.mine)!;
 
   return (
-    <div className="space-y-2">
-      {list.length > 0 && (
-        <div className="flex items-center">
-          <ReactionSummary reactors={list} />
-        </div>
-      )}
-      <div className="-mx-1 flex items-center gap-1 border-t border-slate-100 pt-2">
+    <div>
+      <div className="-mx-1 flex items-center gap-1">
         <button
           ref={button}
           type="button"
@@ -311,6 +296,10 @@ export function PostReactions({ children, ...thing }: Thing & { children?: React
           Flere
         </button>
         {children}
+        {/* How many reacted, on the same row, at its end. */}
+        <span className="ml-auto">
+          <ReactionSummary reactors={list} />
+        </span>
       </div>
       {open && <ReactionMenu anchor={button} mine={tally.mine} onPick={(kind) => { close(); toggle(kind); }} onClose={close} />}
     </div>

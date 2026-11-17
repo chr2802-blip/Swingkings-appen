@@ -49,7 +49,10 @@ test("a post with words shows in the feed, and a teammate reacts and comments", 
   const comments = page.getByRole("dialog", { name: "Kommentarer" });
   await expect(comments.getByText("Ingen kommentarer endnu")).toBeVisible();
   await comments.getByPlaceholder(/kommentar/i).fill("Flot spillet!");
+  // Enter makes a new line; "Send" sends.
   await comments.getByPlaceholder(/kommentar/i).press("Enter");
+  await expect(comments.getByPlaceholder(/kommentar/i)).toHaveValue("Flot spillet!\n");
+  await comments.getByRole("button", { name: "Send" }).click();
   // The drawer stays open, the comment appears in it and the box is ready for the next.
   await expect(comments.getByText("Flot spillet!")).toBeVisible();
   await expect(comments.getByPlaceholder(/kommentar/i)).toHaveValue("");
@@ -359,7 +362,7 @@ test("typing @ in a comment offers teammates, and the tagged name links to their
   await expect(drawer.getByRole("listbox")).toHaveCount(0);
   await box.pressSequentially("og @Bo");
   await expect(drawer.getByRole("listbox")).toHaveCount(0);
-  await box.press("Enter");
+  await drawer.getByRole("button", { name: "Send" }).click();
 
   const comment = drawer.getByRole("list", { name: "Kommentarer" }).getByRole("listitem");
   await expect(comment).toContainText("Godt spillet @Anna og @Bo");
@@ -384,7 +387,7 @@ test("a comment is answered from the drawer, and the answer sits under it", asyn
   await expect(box).toBeFocused();
   await expect(box).toHaveValue("@Anna ");
   await box.pressSequentially("Det var den bedste i år");
-  await box.press("Enter");
+  await drawer.getByRole("button", { name: "Send" }).click();
 
   const answers = drawer.getByRole("list", { name: "Svar til Anna" }).getByRole("listitem");
   await expect(answers).toHaveCount(1);
@@ -400,12 +403,8 @@ test("a comment is answered from the drawer, and the answer sits under it", asyn
   await drawer.getByRole("button", { name: "Annuller" }).click();
   await expect(drawer.getByRole("textbox", { name: "Kommentar", exact: true })).toHaveValue("");
 
-  // The emoji row puts an emoji where the cursor is.
-  const plain = drawer.getByRole("textbox", { name: "Kommentar", exact: true });
-  await plain.fill("Flot");
-  await drawer.getByRole("group", { name: "Indsæt emoji" }).getByRole("button", { name: "Indsæt 🔥" }).click();
-  await expect(plain).toHaveValue("Flot🔥");
-  await expect(plain).toBeFocused();
+  // No row of emojis over the box.
+  await expect(drawer.getByRole("group", { name: "Indsæt emoji" })).toHaveCount(0);
 });
 
 test("a poll's answers are ticked on the roster, with several answers allowed and anonymous", async ({ page, loginAs }) => {
@@ -447,9 +446,15 @@ test("the chat box grows with its lines, stops at its cap and shrinks back when 
   // Nothing is hidden: the box shows every line without scrolling.
   expect(await box.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
 
-  // A very long message stops at the cap (max-h-32) and scrolls inside the box.
+  // A very long message stops at the cap (max-h-48) and scrolls inside the box.
   await box.fill(Array.from({ length: 30 }, (_, i) => `Linje ${i + 1}`).join("\n"));
-  await expect.poll(height).toBe(128);
+  await expect.poll(height).toBe(192);
+
+  // Enter makes a new line in the box; it does not send.
+  await box.fill("Første");
+  await box.press("Enter");
+  await expect(box).toHaveValue("Første\n");
+  expect(await db.chatMessage.count()).toBe(0);
 
   await box.fill("Kort");
   await expect.poll(height).toBe(oneLine);
@@ -609,7 +614,7 @@ test("a comment and a chat message are reacted to, and the reaction stands after
   const { team, anna, bo } = await squad();
   const post = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Kamp i morgen" } });
   await db.postComment.create({ data: { postId: post.id, authorId: anna.id, body: "Husk benskinner" } });
-  await db.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "Hvem kører?" } });
+  const asked = await db.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "Hvem kører?" } });
   await loginAs(bo);
 
   await page.goto("/oversigt");
@@ -639,11 +644,26 @@ test("a comment and a chat message are reacted to, and the reaction stands after
   await page.reload();
   await expect(page.getByRole("button", { name: "1 reaktion: Bo har reageret" })).toBeVisible();
 
-  // "Svar" tags the writer in the chat box.
-  await holdAndChoose(page, page.getByText("Hvem kører?"), "Svar");
-  await expect(page.getByRole("textbox", { name: "Besked" })).toHaveValue("@Anna ");
+  // "Svar" quotes the message above the box, as in Messenger; the answer shows it quoted.
+  const original = page.locator(`#chat-message-${asked.id}`).getByText("Hvem kører?", { exact: true });
+  await holdAndChoose(page, original, "Svar");
+  const box = page.getByRole("textbox", { name: "Besked" });
+  await expect(page.getByText("Svarer Anna")).toBeVisible();
+  await expect(box).toBeFocused();
+  await expect(box).toHaveValue("");
+  await box.fill("Jeg kan køre");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const quote = page.getByRole("button", { name: "Svar på Annas besked: Hvem kører?" });
+  await expect(quote).toBeVisible();
+  await expect(page.getByText("Svarer Anna")).toHaveCount(0);
+  await expect.poll(async () => (await db.chatMessage.findFirst({ where: { authorId: bo.id } }))?.replyToId).toBe(asked.id);
+  // "Annuller svar" sends a plain message.
+  await holdAndChoose(page, original, "Svar");
+  await page.getByRole("button", { name: "Annuller svar" }).click();
+  await expect(page.getByText("Svarer Anna")).toHaveCount(0);
 
-  // Anna sees Bo's reaction in the tabs, and may delete her own message from the menu.
+  // Anna sees Bo's reaction in the tabs, and may delete her own message from the menu;
+  // the answer stays, without the quote.
   await loginAs(anna);
   await page.goto("/chat");
   await page.getByRole("button", { name: "1 reaktion: Bo har reageret" }).click();
@@ -651,7 +671,9 @@ test("a comment and a chat message are reacted to, and the reaction stands after
   await expect(reacted.getByRole("tab", { name: "Krone 1" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(reacted).toBeHidden();
-  await holdAndChoose(page, page.getByText("Hvem kører?"), "Slet");
-  await expect(page.getByText("Hvem kører?")).toHaveCount(0);
-  await expect.poll(() => db.chatMessage.count()).toBe(0);
+  await holdAndChoose(page, page.locator(`#chat-message-${asked.id}`).getByText("Hvem kører?", { exact: true }), "Slet");
+  await expect(page.locator(`#chat-message-${asked.id}`)).toHaveCount(0);
+  await expect(page.getByText("Jeg kan køre")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Svar på / })).toHaveCount(0);
+  await expect.poll(() => db.chatMessage.count()).toBe(1);
 });

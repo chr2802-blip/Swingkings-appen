@@ -104,11 +104,3 @@ export function withReplyTag(value: string, from: string | null, to: string | nu
   if (!to || rest.startsWith(`@${to} `)) return rest;
   return `@${to} ${rest}`;
 }
-
-/** The emojis offered in a row above the box to write a comment in. */
-export const EMOJI_ROW = ["❤️", "🙌", "🔥", "👏", "😢", "😍", "😮", "😂"] as const;
-
-/** `text` put into `value` where the caret is (in place of any selection), and where the caret goes after it. */
-export function insertAt(value: string, start: number, end: number, text: string): { value: string; caret: number } {
-  return { value: value.slice(0, start) + text + value.slice(end), caret: start + text.length };
-}

@@ -49,8 +49,8 @@ export function reactorsOf(rows: Row[]): Reactor[] {
 export type ReactionTally = {
   total: number;
   kinds: { kind: ReactionKind; count: number }[];
-  /** The kinds drawn stacked beside the total: the three most given. */
-  top: ReactionKind[];
+  /** The kind drawn beside the total: the one most given (ties in the order offered). */
+  top: ReactionKind | null;
   mine: ReactionKind | null;
 };
 
@@ -61,7 +61,7 @@ export function tallyReactions(reactors: Reactor[], viewerId: string): ReactionT
   return {
     total: reactors.length,
     kinds,
-    top: kinds.slice(0, 3).map((k) => k.kind),
+    top: kinds[0]?.kind ?? null,
     mine: reactors.find((r) => r.id === viewerId)?.kind ?? null,
   };
 }

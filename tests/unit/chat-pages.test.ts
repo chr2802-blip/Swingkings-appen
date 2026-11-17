@@ -9,7 +9,7 @@ const message = (id: string): ChatItem => ({
   task: null,
   createdAt: "2026-11-17T12:00:00.000Z",
   author: { id: "anna", name: "Anna", photoId: null },
-  reactors: [],
+  reactors: [], replyTo: null,
 });
 const page = (ids: string[], more: boolean): ChatPage => ({ messages: ids.map(message), more });
 const ids = (shown: ChatPage) => shown.messages.map((m) => m.id);

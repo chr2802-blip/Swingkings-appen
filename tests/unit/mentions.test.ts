@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMOJI_ROW, activeMention, insertAt, insertMention, mentionSegments, mentionedIds, suggestMembers, withReplyTag } from "@/lib/mentions";
+import { activeMention, insertMention, mentionSegments, mentionedIds, suggestMembers, withReplyTag } from "@/lib/mentions";
 
 const anna = { userId: "a", name: "Anna" };
 const annaH = { userId: "ah", name: "Anna Hansen" };
@@ -69,19 +69,5 @@ describe("withReplyTag", () => {
   it("does not tag twice, and leaves a tag the writer has already deleted deleted", () => {
     expect(withReplyTag("@Anna enig", null, "Anna")).toBe("@Anna enig");
     expect(withReplyTag("enig", "Anna", null)).toBe("enig");
-  });
-});
-
-describe("insertAt", () => {
-  it("puts the emoji where the caret is, over a selection, and moves the caret after it", () => {
-    expect(insertAt("Flot kamp", 4, 4, " 🔥")).toEqual({ value: "Flot 🔥 kamp", caret: 7 });
-    expect(insertAt("Flot kamp", 5, 9, "❤️")).toEqual({ value: "Flot ❤️", caret: 7 });
-    expect(insertAt("", 0, 0, "😂")).toEqual({ value: "😂", caret: 2 });
-  });
-});
-
-describe("EMOJI_ROW", () => {
-  it("offers eight emojis, each once", () => {
-    expect(new Set(EMOJI_ROW).size).toBe(8);
   });
 });
