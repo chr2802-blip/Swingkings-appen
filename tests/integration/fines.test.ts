@@ -5,9 +5,10 @@ import {
   deleteFine,
   giveFine,
   moveChallenge,
+  markFinesPaid,
   removeFineType,
-  resetFines,
   saveFineType,
+  setFinePayment,
 } from "@/app/actions/fines";
 import { fineBoard, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
 import { formData, makeMatch, makeMember, makeSquad, signIn } from "../helpers/factories";
@@ -82,7 +83,7 @@ describe("giveFine", () => {
     // A later price change never rewrites what is owed.
     await prisma.team.update({ where: { id: team.id }, data: { finePriceKr: 50 } });
     const board = await fineBoard(team.id);
-    expect(board.balances.find((b) => b.userId === anna.id)).toMatchObject({ finedKr: 40, owesKr: 40 });
+    expect(board.balances.find((b) => b.userId === anna.id)).toMatchObject({ owesKr: 40, units: 2 });
   });
 
   it("takes a freely written fine, one unless told otherwise, and overrides a type's units", async () => {
@@ -127,7 +128,7 @@ describe("giveFine", () => {
 });
 
 describe("deleteFine", () => {
-  it("deletes a challenge's fines together, and withdraws the challenge", async () => {
+  it("deletes a challenge's fines together, and the challenge with them", async () => {
     const { team, treasurer, anna, bo } = await makeSquad();
     const challenge = await prisma.challenge.create({
       data: { teamId: team.id, reportedById: anna.id, winnerId: anna.id, loserId: bo.id, description: "Mål", units: 2, status: "SETTLED", settledAt: new Date() },
@@ -139,7 +140,7 @@ describe("deleteFine", () => {
     await signIn(treasurer);
     expect(await deleteFine(undefined, formData({ id: lost.id }))).toEqual({ ok: true });
     expect(await prisma.fine.count()).toBe(0);
-    expect((await prisma.challenge.findUniqueOrThrow({ where: { id: challenge.id } })).status).toBe("CANCELLED");
+    expect(await prisma.challenge.count()).toBe(0);
   });
 
   it("lets whoever gave a fine take it back, and nobody else but the fine managers", async () => {
@@ -169,7 +170,7 @@ describe("deleteFine", () => {
   });
 });
 
-describe("resetFines", () => {
+describe("paying the box", () => {
   async function fined() {
     const squad = await makeSquad();
     const fine = (playerId: string, units: number) =>
@@ -177,41 +178,104 @@ describe("resetFines", () => {
     await fine(squad.anna.id, 5);
     await fine(squad.anna.id, 2);
     await fine(squad.bo.id, 3);
-    const owes = async (id: string) => (await fineBoard(squad.team.id)).balances.find((b) => b.userId === id)!;
-    return { ...squad, owes };
+    const board = () => fineBoard(squad.team.id);
+    const open = async () => {
+      await signIn(squad.admin);
+      expect(await setFinePayment(undefined, formData({ open: "1" }))).toEqual({ ok: true, note: "Bødekassen er åben for betaling." });
+    };
+    return { ...squad, fine, board, open };
   }
 
-  it("clears one player's fines, keeping the history", async () => {
-    const { treasurer, anna, bo, owes } = await fined();
-    await signIn(treasurer);
-    expect(await resetFines(undefined, formData({ playerId: anna.id }))).toEqual({ ok: true, note: "Bøderne er nulstillet." });
-    expect(await owes(anna.id)).toMatchObject({ owesKr: 0, units: 0, finedKr: 70 });
-    expect(await owes(bo.id)).toMatchObject({ owesKr: 30 });
-    expect(await prisma.fine.count({ where: { playerId: anna.id, clearedAt: { not: null } } })).toBe(2);
-    expect(await resetFines(undefined, formData({ playerId: anna.id }))).toEqual({ ok: false, error: "Der er intet at nulstille." });
+  it("is opened by an admin, once, and closes again while nobody has paid", async () => {
+    const { team, board, open } = await fined();
+    expect((await board()).paymentOpenedAt).toBeNull();
+    await open();
+    expect((await board()).paymentOpenedAt).toBeInstanceOf(Date);
+    expect(await setFinePayment(undefined, formData({ open: "1" }))).toEqual({ ok: false, error: "Bødekassen er allerede åben for betaling." });
+    expect(await setFinePayment(undefined, formData({ open: "0" }))).toEqual({ ok: true, note: "Bødekassen er lukket for betaling igen." });
+    expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({ finePaymentOpenedAt: null });
   });
 
-  it("clears the whole team at once", async () => {
-    const { admin, anna, bo, owes } = await fined();
-    await signIn(admin);
-    expect(await resetFines(undefined, formData({ playerId: "alle" }))).toEqual({ ok: true, note: "Hele holdet er nulstillet." });
-    expect((await owes(anna.id)).owesKr + (await owes(bo.id)).owesKr).toBe(0);
-    expect(await resetFines(undefined, formData({ playerId: "alle" }))).toEqual({ ok: false, error: "Ingen har udestående bøder." });
-  });
-
-  it("is the treasurer's and the admin's, not a player's, and never another team's", async () => {
-    const { anna, bo, treasurer, owes } = await fined();
+  it("is opened by an admin only, and never another team's", async () => {
+    const { treasurer, anna, team } = await fined();
     const other = await makeSquad("Andre");
-    await prisma.fine.create({ data: { teamId: other.team.id, playerId: other.anna.id, reason: "x", units: 1, unitPriceKr: 10, issuedById: other.admin.id } });
+    await signIn(treasurer);
+    await expectDenied(() => setFinePayment(undefined, formData({ open: "1" })));
     await signIn(anna);
-    await expectDenied(() => resetFines(undefined, formData({ playerId: bo.id })));
-    expect((await owes(bo.id)).owesKr).toBe(30);
+    await expectDenied(() => setFinePayment(undefined, formData({ open: "1" })));
+    expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).finePaymentOpenedAt).toBeNull();
+    await signIn(other.admin);
+    await setFinePayment(undefined, formData({ open: "1" }));
+    expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).finePaymentOpenedAt).toBeNull();
+  });
+
+  it("stops new fines and challenges while it is open", async () => {
+    const { team, anna, bo, admin, open } = await fined();
+    await signIn(anna);
+    await createChallenge(undefined, formData({ opponentId: bo.id, outcome: "won", description: "Mål", units: "2" }));
+    const waiting = await prisma.challenge.findFirstOrThrow({ where: { teamId: team.id } });
+    await open();
+    const refused = { ok: false, error: "Bødekassen er åben for betaling. Nye bøder og udfordringer venter til næste sæson." };
+    expect(await giveFine(undefined, formData({ playerId: bo.id, reason: "For sent" }))).toEqual(refused);
+    await signIn(anna);
+    expect(await createChallenge(undefined, formData({ opponentId: bo.id, outcome: "won", description: "Mål", units: "1" }))).toEqual(refused);
+    await signIn(admin);
+    expect(await moveChallenge(undefined, formData({ id: waiting.id, move: "approve" }))).toEqual(refused);
+    expect(await prisma.fine.count({ where: { teamId: team.id } })).toBe(3);
+    expect((await prisma.challenge.findUniqueOrThrow({ where: { id: waiting.id } })).status).toBe("PENDING");
+  });
+
+  it("marks a player paid, all or nothing, without touching the fines", async () => {
+    const { treasurer, admin, anna, bo, board, open } = await fined();
+    await signIn(treasurer);
+    expect(await markFinesPaid(undefined, formData({ playerId: anna.id, paid: "1" }))).toEqual({
+      ok: false,
+      error: "Bødekassen er ikke åben for betaling endnu.",
+    });
+    await open();
+    expect((await board()).missingKr).toBe(100);
+    await signIn(treasurer);
+    expect(await markFinesPaid(undefined, formData({ playerId: anna.id, paid: "1" }))).toEqual({ ok: true, note: "Markeret som betalt." });
+    const after = await board();
+    expect(after.paid.has(anna.id)).toBe(true);
+    expect(after.paid.has(bo.id)).toBe(false);
+    // Her fines still say what they came to; the box is only missing Bo's.
+    expect(after.balances.find((b) => b.userId === anna.id)).toMatchObject({ owesKr: 70, units: 7 });
+    expect(after).toMatchObject({ totalKr: 100, missingKr: 30 });
+    expect(await prisma.fine.count()).toBe(3);
+
+    // Paid once, the box stays open until the new season.
+    await signIn(admin);
+    expect((await setFinePayment(undefined, formData({ open: "0" })))?.ok).toBe(false);
+    expect((await board()).paymentOpenedAt).toBeInstanceOf(Date);
+
+    expect(await markFinesPaid(undefined, formData({ playerId: anna.id, paid: "0" }))).toEqual({ ok: true, note: "Ikke længere markeret som betalt." });
+    expect((await board()).paid.size).toBe(0);
+  });
+
+  it("refuses to close once somebody is marked paid", async () => {
+    const { admin, anna, open } = await fined();
+    await open();
+    await markFinesPaid(undefined, formData({ playerId: anna.id, paid: "1" }));
+    await signIn(admin);
+    expect(await setFinePayment(undefined, formData({ open: "0" }))).toEqual({
+      ok: false,
+      error: "Nogen er allerede markeret som betalt. Bødekassen lukker, når den nye sæson starter.",
+    });
+  });
+
+  it("is the treasurer's and the admin's, not a player's, and never another team's player", async () => {
+    const { anna, bo, treasurer, board, open } = await fined();
+    const other = await makeSquad("Andre");
+    await open();
+    await signIn(anna);
+    await expectDenied(() => markFinesPaid(undefined, formData({ playerId: bo.id, paid: "1" })));
+    await expectDenied(() => markFinesPaid(undefined, formData({ playerId: anna.id, paid: "1" })));
+    expect((await board()).paid.size).toBe(0);
 
     await signIn(treasurer);
-    expect(await resetFines(undefined, formData({ playerId: other.anna.id }))).toEqual({ ok: false, error: "Der er intet at nulstille." });
-    await resetFines(undefined, formData({ playerId: "alle" }));
-    expect(await prisma.fine.count({ where: { teamId: other.team.id, clearedAt: null } })).toBe(1);
-    expect(await resetFines(undefined, formData({}))).toEqual({ ok: false, error: "Vælg hvem der skal nulstilles." });
+    expect(await markFinesPaid(undefined, formData({ playerId: other.anna.id, paid: "1" }))).toEqual({ ok: false, error: "Spilleren er ikke på holdet." });
+    expect(await prisma.teamMember.count({ where: { finesPaidAt: { not: null } } })).toBe(0);
   });
 
   it("keeps the account of somebody who has left", async () => {
@@ -267,12 +331,12 @@ describe("challenges", () => {
     expect(await owes(anna.id)).toBe(7);
   });
 
-  it("lets the reporter or a treasurer withdraw it, and nobody else", async () => {
-    const { anna, bo, move, state } = await challenge();
+  it("lets the reporter or a treasurer withdraw it, and nobody else; withdrawn, it is gone", async () => {
+    const { anna, bo, row, move } = await challenge();
     expect((await move(bo, "cancel"))?.ok).toBe(false);
     expect(await move(anna, "cancel")).toEqual({ ok: true });
-    expect((await state()).status).toBe("CANCELLED");
-    expect((await move(bo, "approve"))?.ok).toBe(false);
+    expect(await prisma.challenge.findUnique({ where: { id: row.id } })).toBeNull();
+    expect(await move(bo, "approve")).toEqual({ ok: false, error: "Udfordringen findes ikke." });
 
     const second = await challenge();
     expect(await second.move(second.treasurer, "cancel")).toEqual({ ok: true });
@@ -341,22 +405,21 @@ describe("fine data", () => {
     expect(board.finePriceKr).toBe(10);
   });
 
-  it("lists the team's newest fines first, cleared ones too, and never another team's", async () => {
+  it("lists the team's newest fines first, and never another team's", async () => {
     const { team, treasurer, anna, bo } = await makeSquad();
     const other = await makeSquad("Andre");
-    const fine = (teamId: string, playerId: string, issuedById: string, reason: string, minutesAgo: number, clearedAt?: Date) =>
+    const fine = (teamId: string, playerId: string, issuedById: string, reason: string, minutesAgo: number) =>
       prisma.fine.create({
-        data: { teamId, playerId, issuedById, reason, units: 1, unitPriceKr: 10, clearedAt, createdAt: new Date(Date.now() - minutesAgo * 60_000) },
+        data: { teamId, playerId, issuedById, reason, units: 1, unitPriceKr: 10, createdAt: new Date(Date.now() - minutesAgo * 60_000) },
       });
-    await fine(team.id, anna.id, treasurer.id, "Ældst", 30, new Date());
+    await fine(team.id, anna.id, treasurer.id, "Ældst", 30);
     await fine(team.id, bo.id, treasurer.id, "Midt", 20);
     await fine(team.id, anna.id, bo.id, "Nyest", 10);
     await fine(other.team.id, other.anna.id, other.treasurer.id, "De andres", 0);
 
     const all = await fineHistory(team.id, { take: 10 });
     expect(all.map((f) => f.reason)).toEqual(["Nyest", "Midt", "Ældst"]);
-    expect(all[0]).toMatchObject({ issuedById: bo.id, player: { id: anna.id, name: "Anna" }, clearedAt: null });
-    expect(all[2].clearedAt).toBeInstanceOf(Date);
+    expect(all[0]).toMatchObject({ issuedById: bo.id, player: { id: anna.id, name: "Anna" } });
     expect((await fineHistory(team.id, { take: 2 })).map((f) => f.reason)).toEqual(["Nyest", "Midt"]);
     expect(await fineHistory(other.team.id, { take: 10 })).toHaveLength(1);
   });

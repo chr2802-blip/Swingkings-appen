@@ -2,8 +2,9 @@
  * Paying through the team's MobilePay Box. The box's own pay-in link
  * (https://qr.mobilepay.dk/box/<id>/pay-in) opens MobilePay on the box, and takes the
  * amount (in øre) and the message along. MobilePay Box has no API, so nobody is marked
- * paid by it: an admin ticks kontingent off, and the treasurer resets (nulstiller) the
- * fines, once they have seen the money in the box.
+ * paid by it: an admin ticks kontingent off, and the treasurer marks the fines paid, once
+ * they have seen the money in the box. Fines are paid only while an admin has opened the
+ * box for payment, at the end of the season.
  */
 
 const BOX_ID = /^\/box\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/pay-in\/?$/i;
@@ -47,6 +48,6 @@ export function payLink(link: string, amountKr: number | null, message: string) 
 /** Who looks at the box afterwards, as the page says beside the button. */
 export function afterPaying(kind: PayKind) {
   return kind === "fines"
-    ? "Bødekassen nulstiller dine bøder, når betalingen er set i boxen."
+    ? "Bødekasseformanden markerer dig som betalt, når betalingen er set i boxen."
     : "En admin markerer dit kontingent som betalt, når betalingen er set i boxen.";
 }

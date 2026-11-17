@@ -53,7 +53,7 @@ describe("payLink", () => {
 
 describe("afterPaying", () => {
   it("says who marks it afterwards: the treasurer for fines, an admin for kontingent", () => {
-    expect(afterPaying("fines")).toMatch(/nulstiller/);
+    expect(afterPaying("fines")).toMatch(/Bødekasseformanden markerer dig som betalt/);
     expect(afterPaying("dues")).toMatch(/admin/);
   });
 });

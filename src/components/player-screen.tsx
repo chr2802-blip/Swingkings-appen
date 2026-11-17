@@ -27,7 +27,7 @@ import {
   type ChallengeView,
 } from "@/components/challenge-card";
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
-import { resetFines } from "@/app/actions/fines";
+import { markFinesPaid } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
 import { FineHistory, FineRow } from "@/components/fine-history";
 
@@ -54,7 +54,8 @@ export function playerTabHref(userId: string, tab: PlayerTab = "") {
  *   waiting above it.
  * - **Opgaver**: their jobs.
  *
- * What they owe (and "Betal" on your own) stands above the tabs.
+ * What their fines come to (and, once the box is open for payment, "Betal" on your own)
+ * stands above the tabs.
  * Every name in the app
  * links here. On your own page it is also your profile, with "Rediger" to change it.
  */
@@ -115,7 +116,6 @@ export async function PlayerScreen({
     ]);
   const challenges = [...openChallenges, ...pastChallenges];
   const tasks = [...openTasks, ...doneTasks];
-  const unclearedFines = fines.filter((fine) => !fine.clearedAt).length;
   // A settled challenge also left a fine on each side; the challenge stands for both.
   const latest = [
     ...fines
@@ -143,7 +143,16 @@ export async function PlayerScreen({
 
   return (
     <div className="space-y-6">
-      <PlayerHeader id={id} self={self} person={person} member={member} account={account} board={board} matches={matches} />
+      <PlayerHeader
+        id={id}
+        self={self}
+        person={person}
+        member={member}
+        account={account}
+        board={board}
+        matches={matches}
+        managesFines={managesFines}
+      />
 
       <SwipePages
         label="Spillerens sider"
@@ -197,17 +206,6 @@ export async function PlayerScreen({
           {
             href: playerTabHref(id, "/boder"),
             title: "Bøder og udfordringer",
-            action: managesFines && unclearedFines > 0 && (
-              <ActionButton
-                action={resetFines}
-                fields={{ playerId: id }}
-                label="Nulstil bøder"
-                variant="ghost"
-                className="py-0! text-xs"
-                confirm={`Nulstil ${person.name}s bøder? Historikken bliver, men der er intet udestående bagefter.`}
-                confirmLabel="Nulstil"
-              />
-            ),
             // One list as in the history: fines given (star) and those a challenge moved
             // (swords). A challenge still waiting has moved nothing yet, so it stands above.
             children: (
@@ -255,7 +253,10 @@ export async function PlayerScreen({
 
 type Board = Awaited<ReturnType<typeof fineBoard>>;
 
-/** Who they are, what they owe, and "Betal" on your own page — what stands above the tabs. */
+/**
+ * Who they are, what their fines come to, and — once the box is open for payment — "Betal"
+ * on your own page and "Markér som betalt" for the treasurer: what stands above the tabs.
+ */
 function PlayerHeader({
   id,
   self,
@@ -264,6 +265,7 @@ function PlayerHeader({
   account,
   board,
   matches,
+  managesFines,
 }: {
   id: string;
   self: boolean;
@@ -272,7 +274,10 @@ function PlayerHeader({
   account: Board["balances"][number];
   board: Board;
   matches: Awaited<ReturnType<typeof matchOptions>>;
+  managesFines: boolean;
 }) {
+  const paying = board.paymentOpenedAt !== null;
+  const paid = board.paid.has(id);
   const badges = [
     member?.shirtNumber != null && `#${member.shirtNumber}`,
     member?.superAdmin && SUPER_ADMIN_LABEL,
@@ -320,7 +325,7 @@ function PlayerHeader({
               Rediger
             </ButtonLink>
           )}
-          {person.onTeam && (
+          {person.onTeam && !paying && (
             <GiveFineDialog
               members={board.roster}
               fineTypes={board.fineTypes}
@@ -331,19 +336,21 @@ function PlayerHeader({
           )}
         </div>
       </div>
-      <dl className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
+      <dl className="mt-3 grid grid-cols-2 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
         <Stat
-          label="udestående"
+          label={paid ? "betalt" : paying ? "skal betales" : "bøder i alt"}
           value={kr(account.owesKr)}
-          tone={account.owesKr > 0 ? "text-red-600" : "text-emerald-700"}
+          tone={paid || account.owesKr === 0 ? "text-emerald-700" : "text-red-600"}
         />
         <Stat
           label={account.units === 1 ? "bøde" : "bøder"}
           value={String(account.units)}
         />
-        <Stat label="i alt" value={kr(account.finedKr)} />
       </dl>
-      {self && account.owesKr > 0 && board.payLink && (
+      {paying && paid && (
+        <p className="mt-3 text-center text-sm font-medium text-emerald-700">✅ Bøderne er betalt</p>
+      )}
+      {self && paying && !paid && account.owesKr > 0 && board.payLink && (
         <>
           <PayLink
             kind="fines"
@@ -358,6 +365,16 @@ function PlayerHeader({
             {afterPaying("fines")}
           </p>
         </>
+      )}
+      {managesFines && paying && member && (paid || account.owesKr > 0) && (
+        <div className="mt-3 flex justify-center">
+          <ActionButton
+            action={markFinesPaid}
+            fields={{ playerId: id, paid: paid ? "0" : "1" }}
+            label={paid ? "Fortryd betalt" : `Markér ${kr(account.owesKr)} som betalt`}
+            variant={paid ? "ghost" : "secondary"}
+          />
+        </div>
       )}
     </div>
   );
@@ -446,10 +463,8 @@ function Empty({ children }: { children: React.ReactNode }) {
 const CHALLENGE_SHORT: Record<ChallengeStatus, string> = {
   PENDING: "Venter",
   SETTLED: "Godkendt",
-  CANCELLED: "Trukket",
 };
-const CHALLENGE_TONE: Record<ChallengeStatus, "amber" | "green" | "neutral"> = {
+const CHALLENGE_TONE: Record<ChallengeStatus, "amber" | "green"> = {
   PENDING: "amber",
   SETTLED: "green",
-  CANCELLED: "neutral",
 };

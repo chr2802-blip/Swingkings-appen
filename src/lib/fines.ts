@@ -1,5 +1,8 @@
 import { prisma } from "./prisma";
 
+/** Why nothing moves in the box while it is open for payment: what each player owes stands still. */
+export const PAYMENT_OPEN = "Bødekassen er åben for betaling. Nye bøder og udfordringer venter til næste sæson.";
+
 /**
  * Approves a reported challenge: the stake moves from the winner's fines to the loser's.
  * The winner gets a fine with negative units ("Vundet udfordring"), the loser one with
@@ -29,18 +32,19 @@ export async function settleChallenge(
         description: true,
         matchId: true,
         status: true,
-        team: { select: { finePriceKr: true } },
+        team: { select: { finePriceKr: true, finePaymentOpenedAt: true } },
       },
     });
     if (!challenge || challenge.status !== "PENDING") return { ok: false, error: "Udfordringen er ikke åben længere." };
     if (challenge.reportedById === approvedById) return { ok: false, error: "En anden end dig skal godkende den." };
+    if (challenge.team.finePaymentOpenedAt) return { ok: false, error: PAYMENT_OPEN };
 
     // Two challenges for one winner approved at once would each see the same open fines and
     // each move them. The winner's row is the lock: the second waits for the first to
     // commit and then counts what is left.
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${challenge.winnerId} FOR UPDATE`;
     const open = await tx.fine.aggregate({
-      where: { teamId: challenge.teamId, playerId: challenge.winnerId, clearedAt: null },
+      where: { teamId: challenge.teamId, playerId: challenge.winnerId },
       _sum: { units: true },
     });
     const units = Math.min(challenge.units, Math.max(0, open._sum.units ?? 0));

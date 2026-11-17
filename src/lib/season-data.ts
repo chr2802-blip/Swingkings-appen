@@ -5,9 +5,10 @@ import { readSummary, summarizeSeason, type SeasonSummary } from "./season";
 
 /**
  * "Start ny sæson": the season's summary is kept, and what it was made from goes —
- * every fine and challenge (a reset means paid, so nothing is carried over), the
+ * every fine and challenge (the box has been paid, so nothing is carried over), the
  * activities that have taken place with their jobs and sign-ups, the jobs done that
- * belonged to no activity, the invitation links and everybody's kontingent mark. The
+ * belonged to no activity, the invitation links, and everybody's kontingent and paid
+ * marks; the box closes for payment again. The
  * KampKlar sync brings nothing back from before the new season (`applyCalendar`).
  *
  * Kept: upcoming activities and their jobs, open jobs, members, roles, the catalogue,
@@ -20,19 +21,20 @@ export async function seasonStart(teamId: string) {
   return team.seasonStartedAt ?? team.createdAt;
 }
 
-/** What the season page shows before anybody presses: what would go, and what is still owed. */
+/** What the season page shows before anybody presses: what would go, and what has not been paid. */
 export async function seasonPreview(teamId: string, now: Date = new Date()) {
   const db = teamDb(teamId);
   const [startedAt, members, fines, challenges, activities, links] = await Promise.all([
     seasonStart(teamId),
-    db.teamMember.findMany({ select: { userId: true, duesPaidAt: true } }),
-    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true, clearedAt: true } }),
+    db.teamMember.findMany({ select: { userId: true, duesPaidAt: true, finesPaidAt: true } }),
+    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true } }),
     db.challenge.count(),
     db.match.count({ where: { startsAt: { lt: now } } }),
     db.inviteLink.count(),
   ]);
-  // Everybody with something outstanding, members or not.
-  const owing = balances([], fines).filter((row) => row.owesKr > 0);
+  // Everybody with fines who has not been marked paid, members or not.
+  const paid = new Set(members.filter((m) => m.finesPaidAt).map((m) => m.userId));
+  const owing = balances([], fines).filter((row) => row.owesKr > 0 && !paid.has(row.userId));
   return {
     startedAt,
     fines: fines.length,
@@ -91,7 +93,7 @@ export async function startSeason(teamId: string, name: string, now: Date = new 
   return prisma.$transaction(async (tx) => {
     const moved = await tx.team.updateMany({
       where: { id: teamId, seasonStartedAt: team.seasonStartedAt },
-      data: { seasonStartedAt: now },
+      data: { seasonStartedAt: now, finePaymentOpenedAt: null },
     });
     if (moved.count === 0) return { ok: false as const, error: "Den nye sæson er allerede startet." };
 
@@ -107,7 +109,7 @@ export async function startSeason(teamId: string, name: string, now: Date = new 
     await tx.match.deleteMany({ where: { teamId, startsAt: { lt: now } } });
     await tx.task.deleteMany({ where: { teamId, matchId: null, doneAt: { not: null } } });
     await tx.inviteLink.deleteMany({ where: { teamId } });
-    await tx.teamMember.updateMany({ where: { teamId }, data: { duesPaidAt: null } });
+    await tx.teamMember.updateMany({ where: { teamId }, data: { duesPaidAt: null, finesPaidAt: null } });
     return { ok: true as const, seasonId: season.id };
   });
 }

@@ -21,11 +21,10 @@ describe("challenge moves", () => {
     expect(waitsOn(reported, "anna")).toBe(false);
   });
 
-  it("allows nothing on a finished challenge", () => {
-    for (const status of ["SETTLED", "CANCELLED"] as const) {
-      expect(movesFor({ ...reported, status }, "anna", true)).toEqual([]);
-      expect(movesFor({ ...reported, status }, "bo", true)).toEqual([]);
-      expect(waitsOn({ ...reported, status }, "bo")).toBe(false);
-    }
+  it("allows nothing on a settled challenge", () => {
+    const settled = { ...reported, status: "SETTLED" as const };
+    expect(movesFor(settled, "anna", true)).toEqual([]);
+    expect(movesFor(settled, "bo", true)).toEqual([]);
+    expect(waitsOn(settled, "bo")).toBe(false);
   });
 });

@@ -8,7 +8,7 @@ import type { ChallengeStatus } from "@prisma/client";
  * stake. Then it waits for one approval:
  *
  *   PENDING ──approve (anybody but the reporter)──▶ SETTLED   the stake moves
- *      └────cancel (the reporter, or the treasurer)──▶ CANCELLED
+ *      └────cancel (the reporter, or the treasurer)──▶ deleted, shown nowhere
  *
  * Approving moves `units` fines from the winner to the loser (`settleChallenge`), so a
  * player can challenge his or her way out of the fines.
@@ -44,5 +44,4 @@ export function waitsOn(c: ChallengeState, userId: string) {
 export const CHALLENGE_STATUS_LABEL: Record<ChallengeStatus, string> = {
   PENDING: "Venter på godkendelse",
   SETTLED: "Godkendt",
-  CANCELLED: "Trukket tilbage",
 };

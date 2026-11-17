@@ -47,7 +47,7 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
     .locator('a[href="/boder"]')
     .filter({ hasText: /^Bødekonto/i });
   await expect(account).toContainText("20 kr");
-  await expect(account).toContainText("udestående");
+  await expect(account).toContainText("i bøder");
 });
 
 test("a refused fine keeps the dialog open and says why", async ({
@@ -382,7 +382,7 @@ test("a fine in the history opens with what it was for, who gave it and when, an
   const fine = page.getByRole("dialog", { name: "Bøde" });
   await expect(fine.getByText("Ti minutter efter fløjt")).toBeVisible();
   await expect(fine.getByText("Kasserer Kim")).toBeVisible();
-  await expect(fine.getByText("Udestående")).toBeVisible();
+  await expect(fine.getByText("Pris pr. bøde")).toBeVisible();
   // Anna gave neither fine, and is no treasurer.
   await expect(fine.getByRole("button", { name: "Slet bøden" })).toHaveCount(0);
   await fine.getByRole("button", { name: "Luk" }).click();
@@ -395,17 +395,21 @@ test("a fine in the history opens with what it was for, who gave it and when, an
     sheet.getByText(/2 bøder flyttet fra Anna til Bo · godkendt af Træner/),
   ).toBeVisible();
   // One card tells it all: the fine's own facts sit under the challenge, not repeated beside it.
-  await expect(sheet.getByText("Udestående")).toBeVisible();
+  await expect(sheet.getByText("Hvornår")).toBeVisible();
   await expect(sheet.getByText("Pris pr. bøde")).toHaveCount(0);
   await expect(sheet.getByText("Givet af")).toHaveCount(0);
   await expect(sheet.getByText("Udfordringen", { exact: true })).toHaveCount(0);
 });
 
-test("a treasurer resets a player, and a player cannot", async ({
+test("an admin opens the box for payment: no new fines, Betal for the player, and the treasurer marks it paid", async ({
   page,
   loginAs,
 }) => {
-  const { team, treasurer, anna } = await squad();
+  const { team, admin, treasurer, anna } = await squad();
+  await db.team.update({
+    where: { id: team.id },
+    data: { mobilePayLink: "https://qr.mobilepay.dk/box/b865a6da-62a7-4360-a406-b39a192c757e/pay-in" },
+  });
   await db.fine.create({
     data: {
       teamId: team.id,
@@ -416,28 +420,50 @@ test("a treasurer resets a player, and a player cannot", async ({
       issuedById: treasurer.id,
     },
   });
+  // Before the box is open nobody pays and nobody is marked paid: the fines just stand.
   await loginAs(anna);
-  await page.goto(`/spiller/${anna.id}/boder`);
-  const fines = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
-  await expect(fines.getByText("For sent")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Nulstil bøder" })).toHaveCount(
-    0,
-  );
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByText("bøder i alt")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Betal 40 kr/ })).toHaveCount(0);
+  await loginAs(treasurer);
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByRole("button", { name: /som betalt/ })).toHaveCount(0);
+
+  await loginAs(admin);
+  await page.goto("/hold/betaling");
+  await page.getByRole("button", { name: "Åbn for betaling" }).click();
+  await page
+    .getByRole("dialog", { name: /Åbn bødekassen for betaling/ })
+    .getByRole("button", { name: "Åbn for betaling" })
+    .click();
+  await expect(page.getByText("Åben for betaling", { exact: true })).toBeVisible();
+
+  // Open, the box gives no new fines, and Anna is asked to pay all of hers.
+  await loginAs(anna);
+  await page.goto("/boder");
+  await expect(page.getByRole("status")).toContainText("Bødekassen er åben for betaling.");
+  await expect(page.getByRole("button", { name: "Opret" })).toHaveCount(0);
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByText("skal betales")).toBeVisible();
+  await expect(page.getByRole("link", { name: "💸 Betal 40 kr med MobilePay" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /som betalt/ })).toHaveCount(0);
 
   await loginAs(treasurer);
-  await page.goto(`/spiller/${anna.id}/boder`);
-  await page.getByRole("button", { name: "Nulstil bøder" }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Nulstil" })
-    .click();
-  await expect(fines.getByText(/· nulstillet/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Nulstil bøder" })).toHaveCount(
-    0,
-  );
+  await page.goto(`/spiller/${anna.id}`);
+  await page.getByRole("button", { name: "Markér 40 kr som betalt" }).click();
+  await expect(page.getByText("✅ Bøderne er betalt")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fortryd betalt" })).toBeVisible();
   expect(
-    await db.fine.count({ where: { playerId: anna.id, clearedAt: null } }),
-  ).toBe(0);
+    (await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).finesPaidAt,
+  ).toBeInstanceOf(Date);
+  // The fine itself is as it was.
+  expect(await db.fine.count({ where: { playerId: anna.id } })).toBe(1);
+
+  await loginAs(anna);
+  await page.goto("/boder");
+  await expect(page.getByRole("link", { name: /Anna .*Betalt/ })).toBeVisible();
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByRole("link", { name: /Betal 40 kr/ })).toHaveCount(0);
 });
 
 test("the overview stays on top: what you owe, what is in the box and the way to the challenges", async ({
@@ -445,7 +471,7 @@ test("the overview stays on top: what you owe, what is in the box and the way to
   loginAs,
 }) => {
   const { team, treasurer, anna, bo } = await squad();
-  const give = (playerId: string, reason: string, clearedAt?: Date) =>
+  const give = (playerId: string, reason: string) =>
     db.fine.create({
       data: {
         teamId: team.id,
@@ -454,22 +480,20 @@ test("the overview stays on top: what you owe, what is in the box and the way to
         reason,
         units: 1,
         unitPriceKr: 10,
-        clearedAt,
       },
     });
-  await give(anna.id, "Nulstillet bøde", new Date());
   await give(anna.id, "Glemte bolde");
   for (let n = 1; n <= 4; n++) await give(bo.id, `Bøde nummer ${n}`);
 
   await loginAs(anna);
   await page.goto("/boder");
-  // Six fines given, one of them reset: 60 kr in all, 50 kr still owed, 10 of them Anna's.
-  const mine = page.getByRole("link", { name: /Du skylder/ });
+  // Five fines given: 50 kr in the box, paid when the season is over, 10 of them Anna's.
+  const mine = page.getByRole("link", { name: /Dine bøder/ });
   await expect(mine).toContainText("10 kr");
   await expect(mine).toContainText("1 bøde");
   const box = page.getByText("I kassen").locator("..");
-  await expect(box).toContainText("60 kr");
-  await expect(box).toContainText("50 kr udestående");
+  await expect(box).toContainText("50 kr");
+  await expect(box).toContainText("betales ved sæsonslut");
   // A row on the board opens the player's page, and says so at its end as the history's rows do.
   await expect(page.getByRole("link", { name: /Bo .*40 kr/ })).toBeVisible();
   await expect(
@@ -523,7 +547,7 @@ test("the history lists the team's fines and lets whoever gave one take it back"
     "true",
   );
   await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Du skylder/ })).toContainText(
+  await expect(page.getByRole("link", { name: /Dine bøder/ })).toContainText(
     "Ren tavle",
   );
 
@@ -535,7 +559,6 @@ test("the history lists the team's fines and lets whoever gave one take it back"
       reason: "Kassererens bøde",
       units: 1,
       unitPriceKr: 10,
-      clearedAt: new Date(),
     },
   });
   await db.fine.create({
@@ -560,12 +583,11 @@ test("the history lists the team's fines and lets whoever gave one take it back"
   });
   await page.goto("/boder/historik");
   await expect(page.getByText("Kassererens bøde")).toBeVisible();
-  await expect(page.getByText(/· nulstillet/)).toBeVisible();
   await expect(page.getByText("De andres bøde")).toHaveCount(0);
   // Only the fine Anna gave is hers to delete: the treasurer's opens without the button.
   await page.getByRole("button", { name: /Anna · Kassererens bøde/ }).click();
   await expect(
-    page.getByRole("dialog", { name: "Bøde" }).getByText(/^Nulstillet /),
+    page.getByRole("dialog", { name: "Bøde" }).getByText("Kassererens bøde"),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Slet bøden" })).toHaveCount(0);
   await page
@@ -608,7 +630,7 @@ test("the board, the history and the catalogue are swiped between under the over
   await page.goto("/boder");
   const tab = (name: string) => page.getByRole("tab", { name });
   const shown = page.getByRole("tabpanel");
-  const overview = page.getByRole("link", { name: /Du skylder/ });
+  const overview = page.getByRole("link", { name: /Dine bøder/ });
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Bødekassen",
   );
@@ -617,9 +639,6 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(shown).toHaveCount(1);
   await expect(shown).toHaveAccessibleName("Bødetavlen");
   await expect(page.getByRole("button", { name: "Ny bøde" })).toBeHidden();
-  await expect(
-    page.getByRole("button", { name: "Nulstil alle" }),
-  ).toBeVisible();
 
   // A finger dragged across the screen: real touch input, so the browser does the scrolling.
   const cdp = await page.context().newCDPSession(page);
@@ -645,7 +664,7 @@ test("the board, the history and the catalogue are swiped between under the over
   await expect(tab("Bødetavlen")).toHaveAttribute("aria-selected", "true");
 
   // The names keep up with the finger: past half way, with the finger still down, the
-  // name and the button have changed and the underline is on its way.
+  // name has changed and the underline is on its way.
   const underline = page.getByRole("tablist").locator("span");
   const from = (await underline.boundingBox())!.x;
   const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number) =>
@@ -656,9 +675,6 @@ test("the board, the history and the catalogue are swiped between under the over
   await touch("touchStart", 380);
   for (let x = 360; x >= 100; x -= 20) await touch("touchMove", x);
   await expect(tab("Historik")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("button", { name: "Nulstil alle" })).toHaveCount(
-    0,
-  );
   expect((await underline.boundingBox())!.x).toBeGreaterThan(from);
   expect((await underline.boundingBox())!.x).toBeLessThan(
     (await tab("Historik").boundingBox())!.x,
@@ -673,9 +689,6 @@ test("the board, the history and the catalogue are swiped between under the over
   expect((await underline.boundingBox())!.width).toBeCloseTo(under.width, 0);
   await expect(shown).toHaveAccessibleName("Historik");
   await expect(page.getByText("Glemte bolde")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Nulstil alle" })).toHaveCount(
-    0,
-  );
   // The title, the button and the overview stay where they were.
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Bødekassen",

@@ -14,7 +14,7 @@ import { Avatar } from "@/components/photo";
 import { ActionButton } from "@/components/action-button";
 import { SyncButton } from "@/components/sync-button";
 import { StartSeasonForm } from "@/components/start-season-form";
-import { resetFines } from "@/app/actions/fines";
+import { markFinesPaid, setFinePayment } from "@/app/actions/fines";
 import { removeMember } from "@/app/actions/teams";
 
 /** The steps of "Start ny sæson", one page each; the last one starts it. */
@@ -29,7 +29,7 @@ const STEPS = [
 const stepHref = (slug: string) => `/hold/saeson?trin=${slug}`;
 
 /**
- * "Start ny sæson" as a flow, one thing at a time: settle the fines, check the KampKlar
+ * "Start ny sæson" as a flow, one thing at a time: get the fines paid, check the KampKlar
  * link, tidy the squad, look over roles, catalogue and standard jobs — then start it.
  * The steps are pages side by side (`SwipePages`): swiped between, or turned with
  * "Næste" and "Tilbage". `?trin=` says which one a reload opens.
@@ -89,22 +89,34 @@ export default async function NewSeasonPage({ searchParams }: { searchParams: Pr
 
 async function FinesStep({ teamId }: { teamId: string }) {
   const board = await fineBoard(teamId);
-  const owing = board.balances.filter((row) => row.owesKr > 0);
-  const total = owing.reduce((sum, row) => sum + row.owesKr, 0);
+  const owing = board.balances.filter((row) => row.owesKr > 0 && !board.paid.has(row.userId));
+  const onTeam = new Set(board.roster.map((m) => m.userId));
   return (
     <Card className="space-y-3 text-sm text-slate-700">
-      <h2 className="text-lg font-semibold text-slate-900">Er bødekassen gjort op?</h2>
-      <p>
-        Når den nye sæson starter, slettes alle bøder og udfordringer — også dem, der ikke er nulstillet. Nulstil dem, der
-        har betalt.
-      </p>
-      {owing.length === 0 ? (
-        <p className="font-medium text-emerald-700">Ingen skylder noget. ✅</p>
+      <h2 className="text-lg font-semibold text-slate-900">Er bødekassen betalt?</h2>
+      <p>Når den nye sæson starter, slettes alle bøder og udfordringer — også dem, der ikke er betalt.</p>
+      {!board.paymentOpenedAt ? (
+        <>
+          <p>
+            Bødekassen er ikke åben for betaling endnu. Åbn den, så alle kan se hvad de skal betale og betale med MobilePay.
+            Mens den er åben, kan der ikke gives nye bøder.
+          </p>
+          <ActionButton
+            action={setFinePayment}
+            fields={{ open: "1" }}
+            label="Åbn for betaling"
+            variant="primary"
+            confirm={`Åbn bødekassen for betaling? ${kr(board.totalKr)} skal betales, og der kan ikke gives nye bøder før næste sæson.`}
+            confirmLabel="Åbn for betaling"
+          />
+        </>
+      ) : owing.length === 0 ? (
+        <p className="font-medium text-emerald-700">Alle har betalt. ✅</p>
       ) : (
         <>
           <p>
-            <strong className="text-red-600">{kr(total)}</strong> står udestående hos{" "}
-            {owing.length === 1 ? "1 spiller" : `${owing.length} spillere`}.
+            <strong className="text-red-600">{kr(board.missingKr)}</strong> mangler fra{" "}
+            {owing.length === 1 ? "1 spiller" : `${owing.length} spillere`}. Markér dem, du har set betalingen fra.
           </p>
           <ul className="divide-y divide-slate-100">
             {owing.map((row) => {
@@ -115,14 +127,16 @@ async function FinesStep({ teamId }: { teamId: string }) {
                   <Avatar name={name} photoId={person?.photoId ?? null} size="sm" />
                   <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
                   <span className="text-red-600">{kr(row.owesKr)}</span>
-                  <ActionButton
-                    action={resetFines}
-                    fields={{ playerId: row.userId }}
-                    label="Nulstil"
-                    variant="ghost"
-                    confirm={`Nulstil ${name}s bøder?`}
-                    confirmLabel="Nulstil"
-                  />
+                  {onTeam.has(row.userId) && (
+                    <ActionButton
+                      action={markFinesPaid}
+                      fields={{ playerId: row.userId, paid: "1" }}
+                      label="Betalt"
+                      variant="ghost"
+                      confirm={`Har ${name} betalt ${kr(row.owesKr)}?`}
+                      confirmLabel="Markér som betalt"
+                    />
+                  )}
                 </li>
               );
             })}
@@ -230,7 +244,7 @@ async function StartStep({ teamId }: { teamId: string }) {
       <ul className="list-disc space-y-1 pl-5">
         <li>
           {plural(preview.fines, "bøde", "bøder")}
-          {preview.owingKr > 0 && <strong className="text-red-600"> — heraf {kr(preview.owingKr)} ikke nulstillet</strong>}
+          {preview.owingKr > 0 && <strong className="text-red-600"> — heraf {kr(preview.owingKr)} ikke betalt</strong>}
         </li>
         <li>{plural(preview.challenges, "udfordring", "udfordringer")}</li>
         <li>{plural(preview.activities, "afsluttet aktivitet", "afsluttede aktiviteter")} med opgaver</li>

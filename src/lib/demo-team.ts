@@ -10,7 +10,7 @@ import { demoPicture } from "./demo-pictures";
 /**
  * A team worth looking at: "Swingkings Demo" in the middle of its season. Eighteen made-up
  * people, a fine catalogue, four months of fines (everybody reset once, one player reset
- * again), challenges waiting, approved and withdrawn, a calendar of some forty activities
+ * again), challenges waiting and approved, a calendar of some forty activities
  * read through the real KampKlar import, standard jobs done and to do, sign-ups, a chat
  * that has been going for weeks, and a feed with pictures, likes, comments and polls open
  * and closed. Made (or remade) by `npm run db:demo` locally and by the super admin's
@@ -27,8 +27,6 @@ export const DEMO_TEAM_NAME = "Swingkings Demo";
 export const DEMO_EMAIL_DOMAIN = "@demo.swingkings.dk";
 
 const DAY_MS = 86_400_000;
-/** How long ago the treasurer reset everybody: fines older than this are history. */
-const RESET_DAYS = 40;
 const HOME_GROUND = "Kunstgræsbanen, Valby Idrætspark";
 
 /** Name, role, shirt number. The first is the admin, the last the coach who takes no jobs. */
@@ -129,8 +127,8 @@ const CHAT: readonly (readonly [number, number, number, string, string])[] = [
   [10, 19, 20, "Tobias", "Også mig"],
   [10, 19, 33, "Kasper", "Jeg tager chips med"],
   [9, 18, 5, "Henrik", "God træning i dag. Tempoet var højt – sådan skal det se ud på lørdag."],
-  [8, 14, 10, "Jonas", "Lucas er nulstillet i bødekassen. Resten af jer: se jer selv i spejlet."],
-  [8, 14, 12, "Lucas", "En fri mand 🕊️"],
+  [8, 14, 10, "Jonas", "Lucas har fået sin tredje bøde på en uge. Resten af jer: se jer selv i spejlet."],
+  [8, 14, 12, "Lucas", "Det er en hetz 🙈"],
   [7, 10, 45, "Anton", "Nogen der vil spille padel søndag formiddag? Vi mangler en fjerde."],
   [7, 10, 58, "Sebastian", "Jeg er med"],
   [6, 21, 15, "Mads", "Holdet til Hvidovre ligger under aktiviteten. Mødetid 12:15."],
@@ -166,7 +164,7 @@ const POSTS: readonly (readonly [number, string, string, number, readonly (reado
   [54, "Magnus", "5-2 over Herlev. Emil med hattrick ⚽⚽⚽", 3, [["Emil", "Bolden står på kontoret nu"], ["William", "Og et selvmål fra Magnus, lad os ikke glemme det"], ["Magnus", "Det var en aflevering…"]]],
   [47, "Henrik", "Træningen på tirsdag rykkes til bane 2 – bane 3 er lukket for vinteren.", 0, []],
   [40, "Kasper", "Tak for en god aften til fællesspisningen 🍕 Vi gør det igen efter sidste kamp.", 0, [["Nikolaj", "Bedste pizza i Valby"], ["Malthe", "Jeg er stadig mæt"]]],
-  [39, "Jonas", "Bødekassen er nulstillet efter fællesspisningen. Alle starter på en frisk – det holder nok en uge.", 0, [["Noah", "Tre dage, max"]]],
+  [39, "Jonas", "Halvvejs i sæsonen, og bødekassen er allerede godt fyldt. Afslutningsfesten bliver dyr – for nogen 🍻", 0, [["Noah", "Jeg kender en der betaler det meste"]]],
   [33, "Mads", "4-0 over Sundby! Sæsonens bedste kamp 🔥", 1, [["Henrik", "Sådan skal det gøres. Stolt af jer."], ["Anton", "Og ingen kort!"], ["Jonas", "Desværre ☹️"]]],
   [19, "Victor", "1-4 i Husum. Den taler vi ikke mere om. Undskyld for det røde 🙈", 0, [["Jonas", "15 bøder siger tak"], ["Anton", "Vi rejser os på lørdag"]]],
   [12, "Emil", "2-2 mod Brønshøj. To gange foran, to gange indhentet.", 0, [["Rasmus", "Et point er et point"]]],
@@ -336,16 +334,12 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   );
 
   // --- Fines ------------------------------------------------------------------------------
-  const resetAt = ago(RESET_DAYS);
-  const lucasResetAt = ago(1);
   const fines: Prisma.FineCreateManyInput[] = [];
   const give = (player: Person, typeName: string, at: Date, extra: { matchId?: string; issuer?: Person; note?: string } = {}) => {
     const type = typeByName.get(typeName)!;
     fines.push({
       teamId, playerId: player.id, fineTypeId: type.id, reason: type.name, units: type.units, unitPriceKr: 10,
       issuedById: (extra.issuer ?? jonas).id, matchId: extra.matchId, note: extra.note, createdAt: at,
-      // The treasurer reset everybody after the dinner, and Lucas again yesterday.
-      clearedAt: at < resetAt ? resetAt : player.id === lucas.id ? lucasResetAt : null,
     });
   };
   const sprinkle = (activity: { uid: string; startsAt: Date }, count: number, typeNames: readonly string[]) => {
@@ -395,8 +389,6 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   await report(oliver, oliver, mads, "Første til at ramme overliggeren", 3, 0.5);
   await report(victor, emil, victor, "Flest kropsfinter til træning", 2, 2);
   await report(who("Anton"), who("Anton"), who("Sebastian"), "Flest mål til træning", 2, 1.5);
-  const withdrawn = await report(who("Tobias"), who("Nikolaj"), who("Tobias"), "Armlægning i omklædningsrummet", 5, 6);
-  await prisma.challenge.update({ where: { id: withdrawn.id }, data: { status: "CANCELLED" } });
 
   // --- Activities made by hand, with sign-ups and jobs of their own ---------------------------
   const handMade = await prisma.match.createManyAndReturn({

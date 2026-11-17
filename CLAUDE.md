@@ -63,28 +63,35 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   `teamId: user.teamId` explicitly so the types are satisfied.
 - **Permissions are per team** (`src/lib/access.ts`). Roles: PLAYER (everything day to
   day: activities, tasks, giving fines, challenges, posts, polls), TREASURER =
-  bødekasseformand (`canManageFines`: the catalogue, deleting others' fines, resetting
-  fines, withdrawing others' challenges), ADMIN (`canAdministerTeam`: team settings, members, roles, invitation links, standard jobs,
+  bødekasseformand (`canManageFines`: the catalogue, deleting others' fines, marking
+  fines paid, withdrawing others' challenges), ADMIN (`canAdministerTeam`: team settings, members, roles, invitation links, standard jobs,
   moderation), and one SUPER_ADMIN on the installation (a partial unique index allows only
   one). A fine is deleted by its giver or `canManageFines` (`canDeleteFine`). Never ask
   "the team on screen" alone.
 - **Every action** that reads input takes `(prev, formData)` and returns `ActionResult`;
   records referenced by id are looked up through `teamDb`, so another team's id is "not found".
 - **Money**: a `Fine` copies `units` and `unitPriceKr` when given — never recompute from the
-  current catalogue or price. Nobody pays: there is no payment model. Outstanding = the
-  fines without `clearedAt` (`balances` in `src/lib/money.ts`), never below zero. The
-  treasurer resets (`resetFines`) by setting `clearedAt` — a reset means paid; nothing is
-  deleted until the season ends.
-- **Paying** is in MobilePay, to the team's box: its pay-in link `Team.mobilePayLink` (set
-  by an admin, with `duesKr`). "Betal" (`PayLink`) opens it with `amount` in øre and
-  `message` ("Bøder – Anna") filled in (`payLink`, `src/lib/pay.ts`). MobilePay Box has no
-  API: nothing is marked paid by it — the treasurer still resets fines and an admin still
-  ticks kontingent.
+  current catalogue or price. A fine stands all season and is never cleared one by one: a
+  player owes the sum of their fines (`balances` in `src/lib/money.ts`), never below zero.
+  There is no credit and no part payment — a player has paid all of it or none of it.
+- **Paying the fines** happens once, at the end of the season: an admin opens the box for
+  payment (`setFinePayment`, "Åbn for betaling" under Holdindstillinger → Betaling, or the
+  season guide), which sets `Team.finePaymentOpenedAt` and tells everybody what they owe.
+  While it is open, "Betal" shows on your own page, and `giveFine`, `createChallenge` and
+  `settleChallenge` refuse (`PAYMENT_OPEN`), so the sums stand still. The treasurer marks a
+  player paid (`markFinesPaid` → `TeamMember.finesPaidAt`); nothing about the fines changes.
+  It closes again only while nobody is marked paid, or with the new season.
+- **MobilePay**: the team's box, its pay-in link `Team.mobilePayLink` (set by an admin, with
+  `duesKr`). "Betal" (`PayLink`) opens it with `amount` in øre and `message` ("Bøder –
+  Anna") filled in (`payLink`, `src/lib/pay.ts`). MobilePay Box has no API: nothing is
+  marked paid by it — the treasurer still marks fines paid and an admin still ticks
+  kontingent.
 - **Seasons**: "Start ny sæson" (`startNewSeason`, admin, `/hold/saeson`) saves a `Season`
   summary (`summarizeSeason`, `src/lib/season.ts`), then deletes every fine and challenge,
   the activities that have taken place (their jobs and sign-ups go with them), done jobs
-  with no activity and the invitation links, and clears `TeamMember.duesPaidAt`
-  (kontingent, marked by an admin in `updateMember`, seen by everybody). All in one
+  with no activity and the invitation links, clears `TeamMember.duesPaidAt` (kontingent,
+  marked by an admin in `updateMember`, seen by everybody) and `finesPaidAt`, and closes the
+  box for payment. The summary keeps only totals, never who paid. All in one
   transaction guarded on `Team.seasonStartedAt`, so a double press ends it once. The
   KampKlar sync brings nothing back from before `seasonStartedAt`.
 - **Challenges** are reported after they are played (winner, loser, stake) and go through
@@ -92,7 +99,9 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   `src/lib/challenges.ts`). Approving is `settleChallenge` (`src/lib/fines.ts`): the
   winner gets a fine with negative units, the loser one with positive, so the stake
   moves; capped at what the winner owes, guarded on status so a double press moves it
-  once. Deleting either fine deletes both and withdraws the challenge.
+  once. A withdrawn challenge is deleted and shown nowhere: withdrawing one that waits
+  (`moveChallenge` "cancel") deletes it, and deleting either fine of a settled one deletes
+  both fines and the challenge. There is no CANCELLED status.
 - **Activities** (aktiviteter, `/aktiviteter`) are `Match` rows — the model kept its name;
   `kind` says match, training or other. Every task belongs to one (new tasks always do;
   old rows may have `matchId` null). There is no tasks menu; `/kampe` and `/opgaver` redirect.

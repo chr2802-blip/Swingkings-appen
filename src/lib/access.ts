@@ -28,7 +28,7 @@ export function canAdministerTeam(user: SessionUser, teamId: string) {
 
 /**
  * Bødekasseformand, and every admin: the fine catalogue, deleting a fine somebody else
- * gave, resetting (nulstille) somebody's fines and withdrawing a challenge somebody else
+ * gave, marking somebody's fines paid once the box is open for payment, and withdrawing a challenge somebody else
  * reported. Giving fines is for everybody on the team.
  */
 export function canManageFines(user: SessionUser, teamId: string) {

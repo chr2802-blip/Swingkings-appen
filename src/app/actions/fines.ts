@@ -5,18 +5,25 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
-import { assertFineManager, canDeleteFine, canManageFines } from "@/lib/access";
+import { assertFineManager, assertTeamAdmin, canDeleteFine, canManageFines } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { field, optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { canMove } from "@/lib/challenges";
-import { settleChallenge } from "@/lib/fines";
-import { fineUnits, kr } from "@/lib/money";
+import { PAYMENT_OPEN, settleChallenge } from "@/lib/fines";
+import { balances, fineUnits, kr } from "@/lib/money";
 import { notifyLater } from "@/lib/notify";
 
 function refresh() {
   revalidatePath("/boder", "layout");
   revalidatePath("/oversigt");
-  revalidatePath("/hold/saeson");
+  revalidatePath("/hold", "layout");
+  revalidatePath("/spiller", "layout");
+}
+
+/** Whether an admin has opened the box for payment: then what each player owes stands still. */
+async function paymentOpen(teamId: string) {
+  const team = await prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { finePaymentOpenedAt: true } });
+  return team.finePaymentOpenedAt !== null;
 }
 
 /* ── The catalogue ─────────────────────────────────────────────────────────────── */
@@ -77,6 +84,7 @@ const fineSchema = z.object({
 export async function giveFine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   // Anybody on the team may give a fine; taking one back is `deleteFine`'s question.
   const user = await requireTeamUser();
+  if (await paymentOpen(user.teamId)) return fail(PAYMENT_OPEN);
   const playerIds = [...new Set(formData.getAll("playerId").map(String).filter(Boolean))];
   if (playerIds.length === 0) return fail("Vælg mindst én spiller.");
   const form = readForm(fineSchema, formData);
@@ -130,8 +138,8 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
 
 /**
  * Takes a fine back. A fine from a challenge takes the whole challenge with it — the
- * loser's fine and the winner's, so no fines appear or vanish — and the challenge is
- * marked withdrawn.
+ * loser's fine, the winner's and the challenge itself, so no fines appear or vanish and
+ * the withdrawn challenge is shown nowhere.
  */
 export async function deleteFine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -143,7 +151,7 @@ export async function deleteFine(_prev: ActionResult, formData: FormData): Promi
   if (fine.challengeId) {
     await prisma.$transaction([
       db.fine.deleteMany({ where: { challengeId: fine.challengeId } }),
-      db.challenge.updateMany({ where: { id: fine.challengeId }, data: { status: "CANCELLED" } }),
+      db.challenge.deleteMany({ where: { id: fine.challengeId } }),
     ]);
   } else {
     await db.fine.deleteMany({ where: { id } });
@@ -152,30 +160,74 @@ export async function deleteFine(_prev: ActionResult, formData: FormData): Promi
   return ok();
 }
 
-/* ── Nulstilling ────────────────────────────────────────────────────────────────── */
+/* ── Paying ─────────────────────────────────────────────────────────────────────── */
 
 /**
- * The bødekasseformand resets (nulstiller) somebody — or, with `playerId` "alle", the
- * whole team: every outstanding fine is marked cleared. Nothing is deleted, so the
- * history still shows what was given.
+ * "Åbn for betaling" (admin, team settings): the season is over and the box is paid. While
+ * it is open, "Betal" shows and nobody can give fines or report or approve challenges, so
+ * what each player owes stands still. Everybody who owes something is told how much.
+ *
+ * Closing it again ("open" anything but "1") is for a mistake, and only while nobody has
+ * been marked paid: after that a new fine could leave somebody between paid and owing.
+ * A new season closes it (`startSeason`).
  */
-export async function resetFines(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+export async function setFinePayment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  assertTeamAdmin(user, user.teamId);
+  const open = field(formData, "open") === "1";
+  const db = teamDb(user.teamId);
+  if (open) {
+    // Guarded on its being closed, so a double press tells the team once.
+    const opened = await prisma.team.updateMany({
+      where: { id: user.teamId, finePaymentOpenedAt: null },
+      data: { finePaymentOpenedAt: new Date() },
+    });
+    if (opened.count === 0) return fail("Bødekassen er allerede åben for betaling.");
+    const [fines, members] = await Promise.all([
+      db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true } }),
+      db.teamMember.findMany({ select: { userId: true } }),
+    ]);
+    for (const row of balances(members.map((m) => m.userId), fines)) {
+      if (row.owesKr === 0 || !members.some((m) => m.userId === row.userId)) continue;
+      notifyLater([row.userId], user.id, {
+        title: "Betal dine bøder 💸",
+        body: `Bødekassen er åben for betaling. Du skal betale ${kr(row.owesKr)}.`,
+        url: `/spiller/${row.userId}`,
+        tag: "fine-payment",
+      });
+    }
+    refresh();
+    return ok("Bødekassen er åben for betaling.");
+  }
+  if (await db.teamMember.count({ where: { finesPaidAt: { not: null } } })) {
+    return fail("Nogen er allerede markeret som betalt. Bødekassen lukker, når den nye sæson starter.");
+  }
+  await prisma.team.updateMany({ where: { id: user.teamId }, data: { finePaymentOpenedAt: null } });
+  refresh();
+  return ok("Bødekassen er lukket for betaling igen.");
+}
+
+/**
+ * The bødekasseformand marks somebody's fines paid ("paid" = "1"), once the money is seen
+ * in the box — or takes the mark off again. All or nothing: nothing about the fines
+ * themselves changes. Only while the box is open for payment.
+ */
+export async function markFinesPaid(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   assertFineManager(user, user.teamId);
   const playerId = field(formData, "playerId");
-  if (!playerId) return fail("Vælg hvem der skal nulstilles.");
-  const db = teamDb(user.teamId);
-  const everybody = playerId === "alle";
-  const cleared = await db.fine.updateMany({
-    where: { clearedAt: null, ...(everybody ? {} : { playerId }) },
-    data: { clearedAt: new Date() },
+  const paid = field(formData, "paid") === "1";
+  if (!(await paymentOpen(user.teamId))) return fail("Bødekassen er ikke åben for betaling endnu.");
+  const updated = await teamDb(user.teamId).teamMember.updateMany({
+    where: { userId: playerId },
+    data: { finesPaidAt: paid ? new Date() : null },
   });
-  if (cleared.count === 0) return fail(everybody ? "Ingen har udestående bøder." : "Der er intet at nulstille.");
-  if (!everybody) {
-    notifyLater([playerId], user.id, { title: "Din bødekonto er nulstillet 🧽", body: `${user.name} har nulstillet dine bøder.`, url: "/boder", tag: "fine" });
+  if (updated.count === 0) return fail("Spilleren er ikke på holdet.");
+  if (paid) {
+    notifyLater([playerId], user.id, { title: "Tak for betalingen 🙌", body: `${user.name} har markeret dine bøder som betalt.`, url: "/boder", tag: "fine" });
   }
   refresh();
-  return ok(everybody ? "Hele holdet er nulstillet." : "Bøderne er nulstillet.");
+  return ok(paid ? "Markeret som betalt." : "Ikke længere markeret som betalt.");
 }
 
 /* ── Challenges ─────────────────────────────────────────────────────────────────── */
@@ -195,6 +247,7 @@ const challengeSchema = z.object({
  */
 export async function createChallenge(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
+  if (await paymentOpen(user.teamId)) return fail(PAYMENT_OPEN);
   const form = readForm(challengeSchema, formData);
   if (!form.ok) return fail(form.error);
   const { opponentId, outcome, description, units, matchId } = form.fields;
@@ -206,7 +259,7 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
 
   const winnerId = outcome === "won" ? user.id : opponentId;
   const loserId = outcome === "won" ? opponentId : user.id;
-  const open = await db.fine.aggregate({ where: { playerId: winnerId, clearedAt: null }, _sum: { units: true } });
+  const open = await db.fine.aggregate({ where: { playerId: winnerId }, _sum: { units: true } });
   const owed = Math.max(0, open._sum.units ?? 0);
   const winnerName = outcome === "won" ? "Du" : opponent.user.name;
   if (owed === 0) return fail(`${winnerName} har ingen bøder at udfordre sig ud af.`);
@@ -228,7 +281,7 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
 /**
  * Approving or withdrawing a challenge goes through here and through `canMove`, so the
  * rules in `src/lib/challenges.ts` are the only rules. Each write is guarded on the
- * status, so two presses at once cannot both win.
+ * status, so two presses at once cannot both win. A withdrawn challenge is deleted.
  */
 export async function moveChallenge(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -248,7 +301,7 @@ export async function moveChallenge(_prev: ActionResult, formData: FormData): Pr
   }
 
   if (move === "cancel") {
-    await db.challenge.updateMany({ where: { id, status: "PENDING" }, data: { status: "CANCELLED" } });
+    await db.challenge.deleteMany({ where: { id, status: "PENDING" } });
   } else {
     const result = await settleChallenge(id, user.id);
     if (!result.ok) return fail(result.error);
