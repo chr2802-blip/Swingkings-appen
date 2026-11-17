@@ -38,27 +38,49 @@ describe("react", () => {
     }
   });
 
-  it("gives each kind once per person, so a double press changes nothing; several kinds and people may stand together", async () => {
+  it("gives each person one reaction on a thing: a new choice takes the place of the old", async () => {
     const { team, anna, bo } = await makeSquad();
     const { post } = await things(team, anna);
+    const mine = () => prisma.reaction.findMany({ where: { postId: post.id }, select: { userId: true, kind: true }, orderBy: { userId: "asc" } });
+    await signIn(bo);
+    expect(await react(undefined, formData({ target: "post", id: post.id, kind: "CROWN", on: "on" }))).toEqual({ ok: true });
+    expect(await react(undefined, formData({ target: "post", id: post.id, kind: "LAUGH", on: "on" }))).toEqual({ ok: true });
+    await signIn(anna);
+    await react(undefined, formData({ target: "post", id: post.id, kind: "CROWN", on: "on" }));
+    expect(await mine()).toEqual(
+      [
+        { userId: bo.id, kind: "LAUGH" },
+        { userId: anna.id, kind: "CROWN" },
+      ].sort((a, b) => a.userId.localeCompare(b.userId)),
+    );
+
+    // A late "off" for the reaction Bo had before leaves the one he has now.
+    await signIn(bo);
+    await react(undefined, formData({ target: "post", id: post.id, kind: "CROWN", on: "off" }));
+    expect((await mine()).find((r) => r.userId === bo.id)?.kind).toBe("LAUGH");
+    await react(undefined, formData({ target: "post", id: post.id, kind: "LAUGH", on: "off" }));
+    expect(await mine()).toEqual([{ userId: anna.id, kind: "CROWN" }]);
+  });
+
+  it("leaves one reaction when a person presses twice at once, the same one or two different ones", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const { post, message } = await things(team, anna);
     await signIn(bo);
     await Promise.all([
-      react(undefined, formData({ target: "post", id: post.id, kind: "HEART", on: "on" })),
-      react(undefined, formData({ target: "post", id: post.id, kind: "HEART", on: "on" })),
+      react(undefined, formData({ target: "post", id: post.id, kind: "CROWN", on: "on" })),
+      react(undefined, formData({ target: "post", id: post.id, kind: "CROWN", on: "on" })),
+      react(undefined, formData({ target: "chat", id: message.id, kind: "HEART", on: "on" })),
+      react(undefined, formData({ target: "chat", id: message.id, kind: "FIRE", on: "on" })),
     ]);
-    await react(undefined, formData({ target: "post", id: post.id, kind: "LAUGH", on: "on" }));
-    await signIn(anna);
-    await react(undefined, formData({ target: "post", id: post.id, kind: "HEART", on: "on" }));
-    expect(await prisma.reaction.count({ where: { postId: post.id } })).toBe(3);
+    expect(await prisma.reaction.count({ where: { postId: post.id } })).toBe(1);
+    expect(await prisma.reaction.count({ where: { chatMessageId: message.id } })).toBe(1);
+  });
 
-    // Taking back what is not there changes nothing, and only takes back your own.
-    await react(undefined, formData({ target: "post", id: post.id, kind: "LAUGH", on: "off" }));
-    await react(undefined, formData({ target: "post", id: post.id, kind: "HEART", on: "off" }));
-    await react(undefined, formData({ target: "post", id: post.id, kind: "HEART", on: "off" }));
-    expect(await prisma.reaction.findMany({ where: { postId: post.id }, select: { userId: true, kind: true }, orderBy: { kind: "asc" } })).toEqual([
-      { userId: bo.id, kind: "HEART" },
-      { userId: bo.id, kind: "LAUGH" },
-    ]);
+  it("refuses, in the database, a second reaction by the same person on a thing", async () => {
+    const { team, anna } = await makeSquad();
+    const { post } = await things(team, anna);
+    await prisma.reaction.create({ data: { teamId: team.id, userId: anna.id, kind: "CROWN", postId: post.id } });
+    await expect(prisma.reaction.create({ data: { teamId: team.id, userId: anna.id, kind: "HEART", postId: post.id } })).rejects.toThrow();
   });
 
   it("lets every role react", async () => {

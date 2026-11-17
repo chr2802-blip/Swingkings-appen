@@ -4,13 +4,16 @@ import { useState } from "react";
 import { Modal, ModalBody } from "@/components/modal";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
+import { ReactionGlyph } from "@/components/reactions";
+import type { ReactionKind } from "@prisma/client";
+import { REACTIONS } from "@/lib/reactions";
 
-export type ReactorView = { id: string; name: string; photoId: string | null; emojis: string[] };
+export type ReactorView = { id: string; name: string; photoId: string | null; kind: ReactionKind };
 
 /**
  * Who reacted to a post: on the card the first few as overlapping faces and the rest as a
  * number, and pressing them opens everybody in a drawer, first to react first, each with
- * what they gave.
+ * the reaction they gave.
  */
 export function ReactorsDrawer({ reactors, shown, label }: { reactors: ReactorView[]; shown: number; label: string }) {
   const [open, setOpen] = useState(false);
@@ -40,7 +43,10 @@ export function ReactorsDrawer({ reactors, shown, label }: { reactors: ReactorVi
                   <Avatar name={person.name} photoId={person.photoId} size="sm" />
                   <span className="truncate">{person.name}</span>
                 </PlayerLink>
-                <span className="shrink-0 text-lg tracking-wider">{person.emojis.join("")}</span>
+                <span className="shrink-0">
+                  <ReactionGlyph kind={person.kind} size="md" />
+                  <span className="sr-only">{REACTIONS.find((r) => r.kind === person.kind)!.label}</span>
+                </span>
               </li>
             ))}
           </ul>

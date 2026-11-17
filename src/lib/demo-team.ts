@@ -450,11 +450,12 @@ export async function createDemoTeam(options: { password?: string; now?: Date } 
   const postPhotos: Prisma.PostPhotoCreateManyInput[] = [];
   const comments: Prisma.PostCommentCreateManyInput[] = [];
   const reactions: Prisma.ReactionCreateManyInput[] = [];
-  /** Mostly ❤️ and 👍, now and then a laugh or a flame — as a team reacts. */
+  /** Mostly the crown — what a press gives — then ❤️ and 👍, now and then a laugh or a flame. */
   const someKind = (): ReactionKind => {
     const roll = random();
-    return roll < 0.45 ? "HEART" : roll < 0.75 ? "THUMBS" : roll < 0.87 ? "LAUGH" : roll < 0.95 ? "FIRE" : "WOW";
+    return roll < 0.5 ? "CROWN" : roll < 0.68 ? "HEART" : roll < 0.8 ? "THUMBS" : roll < 0.9 ? "LAUGH" : roll < 0.97 ? "FIRE" : "WOW";
   };
+
   const liked = (postId: string, at: Date) => {
     for (const user of sample(everybody, 3 + Math.floor(random() * 10))) {
       reactions.push({ teamId, postId, userId: user.id, kind: someKind(), createdAt: new Date(at.getTime() + Math.floor(random() * 20) * 3_600_000) });
