@@ -70,38 +70,46 @@ test("a player's page from another team is not found", async ({
   expect(response?.status()).toBe(404);
 });
 
-test("a super admin creates a team and becomes its coach; nobody else reaches the admin page", async ({
+test("a super admin creates a team without joining it, looks into it, goes home again; nobody else reaches the admin page", async ({
   page,
   loginAs,
 }) => {
+  const { team: home, admin } = await squad();
   const root = await db.user.create({
     data: {
       email: "root@e2e.dk",
       name: "Root",
       passwordHash: "x",
       role: "SUPER_ADMIN",
+      activeTeamId: home.id,
     },
   });
+  await db.teamMember.create({ data: { teamId: home.id, userId: root.id, role: "PLAYER" } });
   await loginAs(root);
   await page.goto("/admin");
   await page.getByLabel("Holdets navn").fill("Nyt hold");
   await page.getByRole("button", { name: "Opret hold" }).click();
-  await expect(
-    page.getByText("Nyt hold er oprettet, og du er træner på det."),
-  ).toBeVisible();
-  expect(
-    await db.teamMember.findFirst({
-      where: { userId: root.id, team: { name: "Nyt hold" } },
-    }),
-  ).toMatchObject({ role: "ADMIN" });
+  await expect(page.getByText(/Når personen har oprettet sig/)).toBeVisible();
+  expect(await db.teamMember.count({ where: { userId: root.id } })).toBe(1);
 
-  const { admin } = await squad();
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "Nyt hold" })
+    .getByRole("button", { name: "Åbn" })
+    .click();
+  await expect(page).toHaveURL(/\/oversigt$/);
+  const banner = page.getByRole("status").filter({ hasText: "som super admin" });
+  await expect(banner).toContainText("Du kigger på Nyt hold som super admin. Du er ikke på holdet.");
+  await banner.getByRole("button", { name: "Tilbage til Swingkings" }).click();
+  await expect(banner).toBeHidden();
+  expect((await db.user.findUniqueOrThrow({ where: { id: root.id } })).activeTeamId).toBe(home.id);
+
   await loginAs(admin);
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/oversigt$/);
 });
 
-test("a super admin makes the test team, lands on it, and takes it away again", async ({
+test("a super admin makes the test team, looks into it without joining, and takes it away again", async ({
   page,
   loginAs,
 }) => {
@@ -124,13 +132,12 @@ test("a super admin makes the test team, lands on it, and takes it away again", 
   await expect(
     page.getByRole("listitem").filter({ hasText: "Swingkings Demo" }),
   ).toBeVisible();
-  expect(
-    await db.teamMember.findFirst({
-      where: { userId: root.id, team: { name: "Swingkings Demo" } },
-    }),
-  ).toMatchObject({ role: "ADMIN" });
+  expect(await db.teamMember.count({ where: { userId: root.id } })).toBe(0);
 
   await page.goto("/chat");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Du kigger på Swingkings Demo som super admin." }),
+  ).toBeVisible();
   await expect(
     page.getByText("Husk mødetid 13:45 på lørdag! 💪"),
   ).toBeVisible();

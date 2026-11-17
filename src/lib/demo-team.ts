@@ -195,10 +195,9 @@ export async function removeDemoTeam() {
 
 /**
  * `password` is what the demo players log in with; without one they get a random one that
- * nobody knows, so nobody can log in as them (what production wants). `joinUserId` is made
- * admin of the team and moved onto it, so whoever pressed the button lands in it.
+ * nobody knows, so nobody can log in as them (what production wants).
  */
-export async function createDemoTeam(options: { password?: string; joinUserId?: string; now?: Date } = {}) {
+export async function createDemoTeam(options: { password?: string; now?: Date } = {}) {
   const now = options.now ?? new Date();
   await removeDemoTeam();
 
@@ -245,10 +244,6 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
       teamId, userId: who(firstName(name)).id, role, shirtNumber, takesTasks: shirtNumber !== null, createdAt: ago(120),
     })),
   });
-  if (options.joinUserId) {
-    await prisma.teamMember.create({ data: { teamId, userId: options.joinUserId, role: "ADMIN" } });
-    await prisma.user.update({ where: { id: options.joinUserId }, data: { activeTeamId: teamId } });
-  }
 
   // --- Catalogue and standard jobs --------------------------------------------------------
   const types = await prisma.fineType.createManyAndReturn({

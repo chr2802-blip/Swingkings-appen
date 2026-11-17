@@ -209,12 +209,12 @@ describe("createDemoTeam", () => {
 });
 
 describe("the test team on /admin", () => {
-  it("lets the super admin make it, as its admin, and take it away again", async () => {
+  it("lets the super admin make it, look into it without joining, and take it away again", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
     await signIn(root);
-    expect(await createDemoTeamAction()).toEqual({ ok: true, note: "Testholdet er oprettet, og du er admin på det." });
+    expect(await createDemoTeamAction()).toEqual({ ok: true, note: "Testholdet er oprettet, og du kigger på det." });
     const team = await prisma.team.findFirstOrThrow({ where: { name: DEMO_TEAM_NAME } });
-    expect(await prisma.teamMember.findFirst({ where: { teamId: team.id, userId: root.id } })).toMatchObject({ role: "ADMIN" });
+    expect(await prisma.teamMember.count({ where: { userId: root.id } })).toBe(0);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: root.id } })).activeTeamId).toBe(team.id);
 
     expect(await removeDemoTeamAction()).toEqual({ ok: true, note: "Testholdet og dets spillere er slettet." });

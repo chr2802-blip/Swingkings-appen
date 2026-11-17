@@ -12,12 +12,15 @@ import { ScrollBars } from "@/components/scroll-bars";
 import { PageTransition } from "@/components/page-transition";
 import { ChatButton } from "@/components/chat-button";
 import { unreadChatCount } from "@/lib/chat";
+import { VisitingBanner } from "@/components/visiting-banner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const showAdmin = user.role === "SUPER_ADMIN";
-  // Your own page is your profile; somebody on no team has only the settings.
-  const profileHref = user.teamId ? playerHref(user.id) : "/profil";
+  // The super admin looking into a team they are not on: on screen, but not one of them.
+  const visiting = user.teamId !== null && user.teamRole === null;
+  // Your own page is your profile; somebody on no team (or only visiting one) has only the settings.
+  const profileHref = user.teamId && !visiting ? playerHref(user.id) : "/profil";
   const unread = user.teamId ? await unreadChatCount(user.teamId, user.id) : 0;
 
   return (
@@ -54,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main className="mx-auto max-w-5xl pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:pb-10">
+        {visiting && <VisitingBanner teamName={user.teamName ?? ""} home={user.teams[0] ?? null} />}
         <PageTransition>{children}</PageTransition>
       </main>
 

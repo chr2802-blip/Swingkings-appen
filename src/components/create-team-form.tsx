@@ -12,10 +12,9 @@ export function CreateTeamForm() {
       <Field label="Holdets navn" htmlFor="team-name">
         <Input id="team-name" name="name" required maxLength={200} />
       </Field>
-      <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
-        <input type="checkbox" name="adminLink" value="on" className="h-4 w-4 accent-[var(--accent)]" />
-        Lav et link til holdets første person (ellers bliver du selv admin)
-      </label>
+      <p className="self-end pb-2 text-sm text-slate-600">
+        Du får et link til holdets første person. Du bliver ikke selv medlem af holdet.
+      </p>
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
         <Button type="submit" disabled={pending} aria-busy={pending}>
           {pending ? "Gemmer…" : "Opret hold"}
