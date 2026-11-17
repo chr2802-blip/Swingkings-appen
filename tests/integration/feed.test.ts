@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { decodeFeedCursor, feedPosts, nextFeedCursor } from "@/lib/feed";
+import { decodeFeedCursor, feedPosts, nextFeedCursor, teamFeed } from "@/lib/feed";
 import { markFeedSeen } from "@/app/actions/social";
 import { makeSquad, signIn } from "../helpers/factories";
 import { expectRedirectToLogin } from "../helpers/expect";
@@ -57,6 +57,23 @@ describe("feedPosts", () => {
     const { team, anna } = await makeSquad();
     await prisma.post.createMany({ data: Array.from({ length: 15 }, (_, i) => ({ teamId: team.id, authorId: anna.id, body: `${i}` })) });
     expect(await feedPosts(team.id, { id: anna.id, canAdminister: false })).toHaveLength(10);
+  });
+});
+
+describe("teamFeed", () => {
+  it("gives the front page's first page of posts and the roster, of the team asked for and no other", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const day = (n: number) => new Date(Date.UTC(2026, 10, n, 12));
+    await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "gammel", createdAt: day(1) } });
+    await prisma.post.create({ data: { teamId: team.id, authorId: bo.id, body: "fastgjort", createdAt: day(2), pinnedAt: day(3) } });
+    await prisma.post.create({ data: { teamId: team.id, authorId: bo.id, body: "ny", createdAt: day(4) } });
+    await prisma.post.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "fremmed", pinnedAt: day(5) } });
+
+    const [posts, roster] = await teamFeed(team.id, anna.id, false);
+    expect(posts.map((p) => p.body)).toEqual(["fastgjort", "ny", "gammel"]);
+    expect(roster.map((m) => m.userId).sort()).toEqual((await prisma.teamMember.findMany({ where: { teamId: team.id } })).map((m) => m.userId).sort());
+    expect(roster.map((m) => m.userId)).not.toContain(other.anna.id);
   });
 });
 
