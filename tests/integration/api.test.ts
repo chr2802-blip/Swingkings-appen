@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { GET as chat } from "@/app/api/chat/route";
+import { CHAT_PAGE } from "@/lib/chat";
 import { GET as realtimeToken } from "@/app/api/realtime/token/route";
 import { GET as calendarFeed } from "@/app/api/calendar/[token]/route";
 import { calendarPathFor, calendarToken } from "@/lib/calendar-feed";
@@ -21,19 +22,40 @@ afterEach(() => {
 });
 
 describe("GET /api/chat", () => {
+  const ask = (query = "") => chat(new Request(`https://app.example/api/chat${query}`));
+
   it("answers the team's latest messages, uncached", async () => {
     const { team, anna } = await makeSquad();
     await prisma.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "Hej" } });
     await signIn(anna);
-    const response = await chat();
+    const response = await ask();
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect((await response.json()).messages.map((m: { body: string }) => m.body)).toEqual(["Hej"]);
+    const body = await response.json();
+    expect(body.messages.map((m: { body: string }) => m.body)).toEqual(["Hej"]);
+    expect(body.more).toBe(false);
+  });
+
+  it("answers the page before a message with ?before=, and not before another team's", async () => {
+    const { team, anna } = await makeSquad();
+    const other = await makeSquad("Andre");
+    await prisma.chatMessage.createMany({
+      data: Array.from({ length: CHAT_PAGE + 2 }, (_, i) => ({ teamId: team.id, authorId: anna.id, body: `${i}`, createdAt: new Date(1_900_000_000_000 + i * 1000) })),
+    });
+    const theirs = await prisma.chatMessage.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "fremmed" } });
+    await signIn(anna);
+    const latest = await (await ask()).json();
+    expect(latest.more).toBe(true);
+    const response = await ask(`?before=${latest.messages[0].id}`);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ messages: [{ body: "0" }, { body: "1" }], more: false });
+    expect((await ask(`?before=${theirs.id}`)).status).toBe(404);
   });
 
   it("refuses the signed-out and the teamless", async () => {
-    expect((await chat()).status).toBe(401);
+    expect((await ask()).status).toBe(401);
+    expect((await ask("?before=x")).status).toBe(401);
     await signIn(await makeUser());
-    expect((await chat()).status).toBe(401);
+    expect((await ask()).status).toBe(401);
   });
 });
 
