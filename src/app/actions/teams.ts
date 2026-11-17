@@ -242,12 +242,11 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
 
 const createTeamSchema = z.object({
   name: requiredText("Giv holdet et navn."),
-  adminLink: z.enum(["on"]).optional(),
 });
 
 /**
- * The super admin creates a team and, optionally, a one-use link for its first coach.
- * They join it themselves only if no link is asked for — somebody has to be able to run it.
+ * The super admin creates a team and a one-use link for its first coach. They never join
+ * it themselves: they are on their own team only, and look into any other from /admin.
  */
 export async function createTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireSuperAdmin();
@@ -255,17 +254,11 @@ export async function createTeam(_prev: ActionResult, formData: FormData): Promi
   if (!form.ok) return fail(form.error);
 
   const team = await prisma.team.create({ data: { name: form.fields.name } });
-  if (form.fields.adminLink) {
-    // One place: the coach joins as a player, and is made admin under Holdindstillinger
-    // (the super admin can open any team's).
-    const path = await makeInviteLink(team.id, user.id, INVITE_DAYS, 1);
-    revalidatePath("/", "layout");
-    return ok(path);
-  }
-  await prisma.teamMember.create({ data: { teamId: team.id, userId: user.id, role: "ADMIN" } });
-  await prisma.user.update({ where: { id: user.id }, data: { activeTeamId: team.id } });
+  // One place: the coach joins as a player, and is made admin under Holdindstillinger
+  // (the super admin can open any team's).
+  const path = await makeInviteLink(team.id, user.id, INVITE_DAYS, 1);
   revalidatePath("/", "layout");
-  return ok(`${team.name} er oprettet, og du er træner på det.`);
+  return ok(path);
 }
 
 export async function deleteTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -280,15 +273,16 @@ export async function deleteTeam(_prev: ActionResult, formData: FormData): Promi
 }
 
 /**
- * Test data in production: the made-up team "Swingkings Demo" (`src/lib/demo-team.ts`),
- * with the super admin as its admin. Pressed again, it is made afresh. Its players are
- * made up and cannot log in.
+ * Test data in production: the made-up team "Swingkings Demo" (`src/lib/demo-team.ts`).
+ * The super admin does not join it; they are put on screen there as a visitor. Pressed
+ * again, it is made afresh. Its players are made up and cannot log in.
  */
 export async function createDemoTeamAction(): Promise<ActionResult> {
   const user = await requireSuperAdmin();
-  await createDemoTeam({ joinUserId: user.id });
+  const team = await createDemoTeam();
+  await prisma.user.update({ where: { id: user.id }, data: { activeTeamId: team.id } });
   revalidatePath("/", "layout");
-  return ok("Testholdet er oprettet, og du er admin på det.");
+  return ok("Testholdet er oprettet, og du kigger på det.");
 }
 
 /** Takes the test team and its made-up players away again; nothing else is touched. */
