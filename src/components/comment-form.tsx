@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useFormAction } from "@/components/use-form-action";
 import { Avatar } from "@/components/photo";
 import type { ActionResult } from "@/lib/action-result";
-import { EMOJI_ROW, activeMention, insertAt, insertMention, suggestMembers, withReplyTag } from "@/lib/mentions";
+import { activeMention, insertMention, suggestMembers, withReplyTag } from "@/lib/mentions";
 
 /** Who is being answered, when the comment is an answer: the comment and its writer. */
 export type ReplyTarget = { id: string; name: string };
@@ -39,7 +39,7 @@ export function CommentForm({
   const [caret, setCaret] = useState(0);
   const [highlight, setHighlight] = useState(0);
   const [dismissed, setDismissed] = useState<number | null>(null);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const { state, pending, handleSubmit } = useFormAction(action, {
     onSuccess: () => {
       tagged.current = null;
@@ -70,19 +70,13 @@ export function CommentForm({
     });
   }, [replyTo]);
 
-  /** An emoji from the row, put in where the cursor is. */
-  function addEmoji(emoji: string) {
-    const element = input.current;
-    const start = element?.selectionStart ?? value.length;
-    const end = element?.selectionEnd ?? value.length;
-    const next = insertAt(value, start, end, emoji);
-    setValue(next.value);
-    setCaret(next.caret);
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(next.caret, next.caret);
-    });
-  }
+  // The box is as tall as its lines (up to max-h-40, then it scrolls), and shrinks back when sent.
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
 
   const mention = activeMention(value, caret);
   const suggestions = mention && mention.start !== dismissed ? suggestMembers(mention.query, members, viewerId) : [];
@@ -90,7 +84,7 @@ export function CommentForm({
   const active = Math.min(highlight, suggestions.length - 1);
   const listId = `mentions-${Object.values(fields).join("-")}`;
 
-  function track(element: HTMLInputElement) {
+  function track(element: HTMLTextAreaElement) {
     setValue(element.value);
     setCaret(element.selectionStart ?? element.value.length);
     setHighlight(0);
@@ -107,7 +101,7 @@ export function CommentForm({
     });
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (!open) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
@@ -151,21 +145,6 @@ export function CommentForm({
           ))}
         </ul>
       )}
-      <div role="group" aria-label="Indsæt emoji" className="scrollbar-hidden -mx-1 flex justify-between gap-1 overflow-x-auto pb-1">
-        {EMOJI_ROW.map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            // Pressing must not take the focus from the box, or the caret is lost.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => addEmoji(emoji)}
-            aria-label={`Indsæt ${emoji}`}
-            className="press-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[22px] leading-none hover:bg-slate-100"
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
       {replyTo && (
         <p className="flex items-center gap-2 px-1 text-xs text-slate-500">
           <span>
@@ -176,14 +155,16 @@ export function CommentForm({
           </button>
         </p>
       )}
-      <div className="flex gap-2">
+      <div className="flex items-end gap-2">
         {Object.entries(fields).map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
         ))}
         {replyTo && <input type="hidden" name="parentId" value={replyTo.id} />}
-        <input
+        {/* Enter makes a new line; "Send" sends. Several lines are welcome. */}
+        <textarea
           ref={input}
           name="body"
+          rows={1}
           maxLength={1000}
           placeholder={replyTo ? `Svar ${replyTo.name}…` : "Skriv en kommentar… (@ for at tagge)"}
           aria-label={replyTo ? "Svar" : "Kommentar"}
@@ -194,10 +175,10 @@ export function CommentForm({
           onChange={(event) => track(event.currentTarget)}
           onSelect={(event) => setCaret(event.currentTarget.selectionStart ?? 0)}
           onKeyDown={onKeyDown}
-          className="min-w-0 flex-1 rounded-full bg-slate-50 px-3.5 py-1.5 text-sm outline-none focus:bg-white focus:ring-1 focus:ring-[var(--accent)]"
+          className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-2xl bg-slate-50 px-3.5 py-2.5 text-[15px] leading-snug outline-none focus:bg-white focus:ring-1 focus:ring-[var(--accent)]"
           required
         />
-        <button disabled={pending} className="press-button rounded-full px-3 text-sm font-medium text-[var(--accent-text)] disabled:opacity-50">
+        <button disabled={pending} className="press-button h-11 rounded-full px-3 text-sm font-medium text-[var(--accent-text)] disabled:opacity-50">
           Send
         </button>
       </div>

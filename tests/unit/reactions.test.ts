@@ -27,10 +27,10 @@ describe("reactorsOf", () => {
 
 describe("tallyReactions", () => {
   it("counts nothing when nobody has reacted", () => {
-    expect(tallyReactions([], "anna")).toEqual({ total: 0, kinds: [], top: [], mine: null });
+    expect(tallyReactions([], "anna")).toEqual({ total: 0, kinds: [], top: null, mine: null });
   });
 
-  it("puts the most given first, ties in the order offered, stacks the top three, and knows the viewer's", () => {
+  it("puts the most given first, ties in the order offered, shows the most given, and knows the viewer's", () => {
     const tally = tallyReactions(
       [who("FIRE", "Bo"), who("HEART", "Carl"), who("FIRE", "anna"), who("CROWN", "Dan"), who("HEART", "Eva"), who("SAD", "Finn")],
       "anna",
@@ -42,7 +42,7 @@ describe("tallyReactions", () => {
       { kind: "CROWN", count: 1 },
       { kind: "SAD", count: 1 },
     ]);
-    expect(tally.top).toEqual(["HEART", "FIRE", "CROWN"]);
+    expect(tally.top).toBe("HEART");
     expect(tally.mine).toBe("FIRE");
   });
 });

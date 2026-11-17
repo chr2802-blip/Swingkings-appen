@@ -3,6 +3,9 @@ import { teamDb } from "./team-db";
 import { latest } from "./push-summary";
 import { UNREAD_UP_TO } from "./chat-count";
 import { reactionRows, reactorsOf, type Reactor } from "./reactions";
+import { quoteOf, type ChatQuote } from "./chat-quote";
+
+export type { ChatQuote };
 
 /** How many messages the chat fetches at a time: on opening, and each time it is scrolled to the top. */
 export const CHAT_PAGE = 25;
@@ -18,7 +21,10 @@ export type ChatItem = {
   author: { id: string; name: string; photoId: string | null };
   /** Who reacted to it, and with what (`reactorsOf`). */
   reactors: Reactor[];
+  /** The message it answers, quoted above it: whose, the start of its words, and whether it had pictures. */
+  replyTo: ChatQuote | null;
 };
+
 
 /** A page of messages, oldest first, and whether there are older ones still to fetch. */
 export type ChatPage = { messages: ChatItem[]; more: boolean };
@@ -54,16 +60,18 @@ async function messagesPage(teamId: string, viewerId: string, where: Prisma.Chat
       task: { select: { id: true, title: true } },
       photos: { orderBy: { position: "asc" }, select: { photoId: true } },
       reactions: reactionRows,
+      replyTo: { select: { id: true, body: true, author: { select: { name: true } }, photos: { take: 1, select: { photoId: true } } } },
     },
   });
   const more = rows.length > CHAT_PAGE;
   const messages = rows
     .slice(0, CHAT_PAGE)
     .reverse()
-    .map(({ photos, reactions, ...row }) => ({
+    .map(({ photos, reactions, replyTo, ...row }) => ({
       ...row,
       photoIds: photos.map((photo) => photo.photoId),
       reactors: reactorsOf(reactions),
+      replyTo: replyTo ? quoteOf(replyTo) : null,
       createdAt: row.createdAt.toISOString(),
     }));
   return { messages, more };

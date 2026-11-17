@@ -32,6 +32,11 @@ export async function sendChatMessage(_prev: ActionResult, formData: FormData): 
   const photos = await readPhotoChoices(formData, user.teamId, MAX_CHAT_PHOTOS, [], "besked");
   if (!photos.ok) return fail(photos.error);
   if (!text.data && photos.photoIds.length === 0) return fail("Skriv en besked eller vælg et billede.");
+  // An answer to a message: only one of this team's, found through `teamDb`.
+  const answering = field(formData, "replyToId");
+  if (answering && !(await teamDb(user.teamId).chatMessage.count({ where: { id: answering } }))) {
+    return fail("Beskeden, du svarer på, findes ikke længere.");
+  }
 
   const limit = await checkRateLimit("chat", user.id);
   if (!limit.allowed) return fail("Du sender meget hurtigt. Vent lidt.");
@@ -42,6 +47,7 @@ export async function sendChatMessage(_prev: ActionResult, formData: FormData): 
       teamId: user.teamId,
       authorId: user.id,
       body: text.data ?? "",
+      replyToId: answering || null,
       photos: { create: photos.photoIds.map((photoId, position) => ({ photoId, position })) },
     },
   });

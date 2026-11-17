@@ -7,7 +7,6 @@ import { PhotoViewer } from "@/components/photo-viewer";
 import Link from "next/link";
 import { PlayerLink } from "@/components/player-link";
 import { Holdable, type HoldAction } from "@/components/reactions";
-import { withReplyTag } from "@/lib/mentions";
 import { possessive } from "@/lib/names";
 import { uploadPhoto } from "@/components/photo-field";
 import { PhotoError } from "@/lib/downscale";
@@ -15,7 +14,8 @@ import { MAX_CHAT_PHOTOS, PHOTO_FIELD } from "@/lib/photo-file";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
 import { followTeamSignal } from "@/components/team-signal";
 import { stampLabel } from "@/lib/time";
-import type { ChatItem, ChatPage } from "@/lib/chat";
+import type { ChatItem, ChatPage, ChatQuote } from "@/lib/chat";
+import { quoteOf } from "@/lib/chat-quote";
 import { withLatest, withOlder, without } from "@/lib/chat-pages";
 
 /** Poll fast while the socket is not live, slowly while it is (the poll is then only a safety net). */
@@ -28,6 +28,8 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [live, setLive] = useState(false);
   const [text, setText] = useState("");
+  /** The message being answered, quoted above the box until it is sent or cancelled. */
+  const [replyingTo, setReplyingTo] = useState<ChatQuote | null>(null);
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<{ done: number; of: number } | null>(null);
@@ -42,7 +44,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
   const fromBottom = useRef<number | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
-  // The box is as tall as its text (up to max-h-32, then it scrolls), and shrinks back when sent.
+  // The box is as tall as its text (up to max-h-48, then it scrolls), and shrinks back when sent.
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -159,11 +161,13 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
     if (uploading || (!text.trim() && photoIds.length === 0)) return;
     const data = new FormData();
     data.set("body", text);
+    if (replyingTo) data.set("replyToId", replyingTo.id);
     for (const id of photoIds) data.append(PHOTO_FIELD, id);
     startTransition(async () => {
       const result = await sendChatMessage(undefined, data);
       if (result?.ok) {
         setText("");
+        setReplyingTo(null);
         setPhotoIds([]);
         setError(null);
         await refresh();
@@ -173,15 +177,24 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
     });
   }
 
-  /** "Svar" on a held message: the box starts with its writer tagged, ready to write. */
-  function answer(name: string) {
-    setText((current) => withReplyTag(current, null, name));
+  /** "Svar" on a held message: it is quoted above the box, as in Messenger, ready to write. */
+  function answer(message: ChatItem) {
+    setReplyingTo(quoteOf({ id: message.id, body: message.body, author: message.author, photos: message.photoIds }));
     requestAnimationFrame(() => {
       const el = box.current;
       if (!el) return;
       el.focus();
       el.setSelectionRange(el.value.length, el.value.length);
     });
+  }
+
+  /** Pressing a quote goes to the message it quotes, when it is among those shown, and marks it a moment. */
+  function showQuoted(id: string) {
+    const el = document.getElementById(`chat-message-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("chat-flash");
+    setTimeout(() => el.classList.remove("chat-flash"), 1200);
   }
 
   function remove(id: string) {
@@ -196,7 +209,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
 
   /** What can be done with a held message, besides reacting: answer it, copy it, and — your own, or as an admin — delete it. */
   function chatActions(message: ChatItem): HoldAction[] {
-    const actions: HoldAction[] = [{ label: "Svar", onSelect: () => answer(message.author.name) }];
+    const actions: HoldAction[] = [{ label: "Svar", onSelect: () => answer(message) }];
     if (message.body) actions.push({ label: "Kopiér tekst", onSelect: () => void navigator.clipboard?.writeText(message.body).catch(() => {}) });
     if (message.author.id === viewerId || canModerate) actions.push({ label: "Slet", danger: true, onSelect: () => remove(message.id) });
     return actions;
@@ -225,7 +238,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
           const previous = messages[index - 1];
           const grouped = previous?.author.id === message.author.id;
           return (
-            <li key={message.id} className={`group flex items-end gap-2 ${own ? "flex-row-reverse" : ""}`}>
+            <li key={message.id} id={`chat-message-${message.id}`} className={`group flex items-end gap-2 rounded-2xl transition-colors ${own ? "flex-row-reverse" : ""}`}>
               <span className={`w-8 ${grouped ? "invisible" : ""}`}>
                 {!own && (
                   <PlayerLink userId={message.author.id} aria-label={message.author.name} tabIndex={grouped ? -1 : undefined}>
@@ -255,8 +268,19 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
                     </div>
                   )}
                 >
+                  {message.replyTo && (
+                    <button
+                      type="button"
+                      onClick={() => showQuoted(message.replyTo!.id)}
+                      aria-label={`Svar på ${possessive(message.replyTo.authorName)} besked: ${message.replyTo.body || "billede"}`}
+                      className={`-mb-2 max-w-full rounded-2xl bg-slate-200/70 px-3 pt-1.5 pb-3.5 text-left text-xs text-slate-600 ${own ? "self-end" : "self-start"}`}
+                    >
+                      <span className="block font-semibold">↩ {message.replyTo.authorName}</span>
+                      <span className="line-clamp-2 break-words">{message.replyTo.body || (message.replyTo.photo ? "📷 Billede" : "")}</span>
+                    </button>
+                  )}
                   <div
-                    className={`overflow-hidden rounded-2xl ${
+                    className={`relative overflow-hidden rounded-2xl ${
                       own ? "bg-[var(--accent)] text-white" : "border border-slate-200 bg-white"
                     }`}
                   >
@@ -312,6 +336,24 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
             )}
           </ul>
         )}
+        {replyingTo && (
+          <div className="mb-2 flex items-start gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-slate-700">Svarer {replyingTo.authorName}</p>
+              <p className="truncate">{replyingTo.body || (replyingTo.photo ? "📷 Billede" : "")}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              aria-label="Annuller svar"
+              className="press-icon -mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200"
+            >
+              <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        )}
         {error && (
           <p role="alert" className="mb-2 px-1 text-xs text-red-600">
             {error}
@@ -349,17 +391,12 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
             ref={box}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                send();
-              }
-            }}
+            // Enter makes a new line; the arrow sends.
             rows={1}
             maxLength={4000}
             placeholder="Skriv til holdet…"
             aria-label="Besked"
-            className="max-h-32 min-h-10 flex-1 resize-none rounded-xl bg-slate-50 px-3 py-2 text-sm outline-none focus:bg-white focus:ring-1 focus:ring-[var(--accent)]"
+            className="max-h-48 min-h-11 flex-1 resize-none rounded-xl bg-slate-50 px-3 py-2.5 text-[15px] leading-snug outline-none focus:bg-white focus:ring-1 focus:ring-[var(--accent)]"
           />
           <button
             type="submit"

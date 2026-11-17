@@ -548,7 +548,7 @@ test("the team comments on an activity under its details, answers and reacts, an
   await expect(details.getByRole("heading", { name: "Kommentarer (0)" })).toBeVisible();
   await expect(details.getByText("Ingen kommentarer endnu")).toBeVisible();
   await details.getByRole("textbox", { name: "Kommentar" }).fill("Skal vi have DJ?");
-  await details.getByRole("textbox", { name: "Kommentar" }).press("Enter");
+  await details.getByRole("button", { name: "Send" }).click();
   await expect(details.getByRole("heading", { name: "Kommentarer (1)" })).toBeVisible();
   await expect(details.getByText("Skal vi have DJ?")).toBeVisible();
   await expect(details.getByRole("textbox", { name: "Kommentar" })).toHaveValue("");
@@ -559,7 +559,7 @@ test("the team comments on an activity under its details, answers and reacts, an
   const answer = details.getByRole("textbox", { name: "Svar" });
   await expect(answer).toHaveValue("@Anna ");
   await answer.pressSequentially("Jeg har en højttaler");
-  await answer.press("Enter");
+  await details.getByRole("button", { name: "Send" }).click();
   await expect(details.getByRole("list", { name: "Svar til Anna" }).getByText("Jeg har en højttaler")).toBeVisible();
   // Bo may delete his own answer, not Anna's comment.
   await hold(page, details.getByText("Skal vi have DJ?"));
