@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
-import { kickoffLabel } from "./time";
+import { kickoffLabel, startOfDayInZone } from "./time";
 import { activityName, readExternalSignups } from "./activity";
 
 /**
@@ -26,6 +26,23 @@ export async function copyableActivities(teamId: string, exceptId?: string) {
     id: row.id,
     label: `${activityName(row)} · ${kickoffLabel(row.startsAt)} (${row._count.tasks} ${row._count.tasks === 1 ? "opgave" : "opgaver"})`,
   }));
+}
+
+/** How many coming activities "Opret opgave" outside an activity offers. */
+const UPCOMING_FOR_TASKS = 30;
+
+/**
+ * The activities a new job can be put on when it is made outside an activity (the "+" on a
+ * person's page): from today on, soonest first. Every job belongs to one.
+ */
+export async function upcomingActivities(teamId: string, now: Date = new Date()) {
+  const rows = await teamDb(teamId).match.findMany({
+    where: { startsAt: { gte: startOfDayInZone(now) } },
+    orderBy: { startsAt: "asc" },
+    take: UPCOMING_FOR_TASKS,
+    select: { id: true, kind: true, title: true, opponent: true, startsAt: true },
+  });
+  return rows.map((row) => ({ id: row.id, label: `${activityName(row)} · ${kickoffLabel(row.startsAt)}` }));
 }
 
 /** The team's standard jobs, as options to tick. */

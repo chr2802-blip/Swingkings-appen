@@ -447,6 +447,8 @@ test("an admin opens the box for payment: no new fines, Betal for the player, an
   await page.goto(`/spiller/${anna.id}`);
   await expect(page.getByText("skal betales")).toBeVisible();
   await expect(page.getByRole("link", { name: "💸 Betal 40 kr med MobilePay" })).toBeVisible();
+  // Nor does a person's page: with no activity coming either, it has no "+" at all.
+  await expect(page.getByRole("button", { name: "Opret" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /som betalt/ })).toHaveCount(0);
 
   await loginAs(treasurer);

@@ -25,16 +25,25 @@ const WAYS: Record<Way, { label: string; action: FormAction; submitLabel: string
  * The one way to put jobs on an activity: a new job, some of the team's standard jobs,
  * or every job from an earlier activity. The last two are offered only when there is
  * something to pick from. Switching way starts that form afresh.
+ *
+ * Outside an activity (a person's page) there is no `activityId`: the new job's activity is
+ * picked from `activities`, and only a new job is offered.
  */
 export function TaskDialog({
   members,
   activityId,
+  activities = [],
+  defaultAssigneeId,
   templates = [],
   copyable = [],
   triggerLabel = "Ny opgave",
 }: {
   members: Member[];
-  activityId: string;
+  activityId?: string;
+  /** Without an `activityId`: the activities to choose between. */
+  activities?: ActivityOption[];
+  /** Somebody to tick from the start, with "Jeg vælger selv". */
+  defaultAssigneeId?: string;
   templates?: TemplateOption[];
   copyable?: ActivityOption[];
   triggerLabel?: string;
@@ -42,14 +51,15 @@ export function TaskDialog({
   const [open, setOpen] = useState(false);
   const [way, setWay] = useState<Way>("new");
   const ways: Way[] = ["new"];
-  if (templates.length > 0) ways.push("standard");
-  if (copyable.length > 0) ways.push("copy");
+  if (activityId && templates.length > 0) ways.push("standard");
+  if (activityId && copyable.length > 0) ways.push("copy");
   const current = WAYS[way];
   const close = () => setOpen(false);
 
   return (
     <>
       <MenuTrigger
+        icon="📋"
         onClick={() => {
           setWay("new");
           setOpen(true);
@@ -75,9 +85,16 @@ export function TaskDialog({
                 ))}
               </div>
             )}
-            {way === "new" && <NewTaskFields members={members} activityId={activityId} />}
-            {way === "standard" && <StandardTaskFields activityId={activityId} templates={templates} />}
-            {way === "copy" && <CopyTaskFields activityId={activityId} copyable={copyable} />}
+            {way === "new" && (
+              <NewTaskFields
+                members={members}
+                activityId={activityId}
+                activities={activities}
+                defaultAssigneeId={defaultAssigneeId}
+              />
+            )}
+            {way === "standard" && activityId && <StandardTaskFields activityId={activityId} templates={templates} />}
+            {way === "copy" && activityId && <CopyTaskFields activityId={activityId} copyable={copyable} />}
           </DialogForm>
         )}
       </Modal>
@@ -86,11 +103,36 @@ export function TaskDialog({
 }
 
 /** A new job (deadline defaults to the activity's start), handed out fairly, to those ticked, or left open. */
-function NewTaskFields({ members, activityId }: { members: Member[]; activityId: string }) {
-  const [assign, setAssign] = useState<"auto" | "pick" | "none">("auto");
+function NewTaskFields({
+  members,
+  activityId,
+  activities,
+  defaultAssigneeId,
+}: {
+  members: Member[];
+  activityId?: string;
+  activities: ActivityOption[];
+  defaultAssigneeId?: string;
+}) {
+  const [assign, setAssign] = useState<"auto" | "pick" | "none">(defaultAssigneeId ? "pick" : "auto");
   return (
     <>
-      <input type="hidden" name="matchId" value={activityId} />
+      {activityId ? (
+        <input type="hidden" name="matchId" value={activityId} />
+      ) : (
+        <Field label="Aktivitet" htmlFor="matchId">
+          <Select id="matchId" name="matchId" required defaultValue="">
+            <option value="" disabled>
+              Vælg aktivitet
+            </option>
+            {activities.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
       <Field label="Opgave" htmlFor="title">
         <Input id="title" name="title" placeholder="Fx trøjevask" maxLength={200} required />
       </Field>
@@ -109,7 +151,9 @@ function NewTaskFields({ members, activityId }: { members: Member[]; activityId:
           <Input id="people" name="people" type="number" inputMode="numeric" min={1} max={20} defaultValue={1} />
         </Field>
       )}
-      {assign === "pick" && <PlayerChecklist members={members} name="assigneeId" />}
+      {assign === "pick" && (
+        <PlayerChecklist members={members} name="assigneeId" defaultChecked={defaultAssigneeId ? [defaultAssigneeId] : []} />
+      )}
       <Field label="Beskrivelse (valgfri)" htmlFor="description">
         <Textarea id="description" name="description" rows={3} maxLength={2000} />
       </Field>

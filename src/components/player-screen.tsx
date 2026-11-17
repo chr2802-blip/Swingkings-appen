@@ -6,9 +6,9 @@ import { fineBoard, fineHistory, matchOptions } from "@/lib/fine-data";
 import { fineUnits, kr } from "@/lib/money";
 import type { ChallengeStatus } from "@prisma/client";
 import { relativeDay } from "@/lib/time";
+import Link from "next/link";
 import {
   Badge,
-  ButtonLink,
   buttonClass,
   Card,
   SectionTitle,
@@ -20,6 +20,10 @@ import { Avatar } from "@/components/photo";
 import { playerHref } from "@/components/player-link";
 import { SwipePages } from "@/components/swipe-pages";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
+import { ChallengeDialog } from "@/components/challenge-dialog";
+import { TaskDialog } from "@/components/task-dialog";
+import { CreateMenu } from "@/components/create-button";
+import { upcomingActivities } from "@/lib/activity-data";
 import { ActionButton } from "@/components/action-button";
 import {
   ChallengeCard,
@@ -57,7 +61,10 @@ export function playerTabHref(userId: string, tab: PlayerTab = "") {
  * What their fines come to, how many fines and open jobs they have (and, once the box is
  * open for payment, "Betal" on your own) stands above the tabs.
  * Every name in the app
- * links here. On your own page it is also your profile, with "Rediger" to change it.
+ * links here. On your own page it is also your profile, with a pencil ("Rediger") to change it.
+ *
+ * The "+" gives a fine, reports a challenge or makes a job on one of the coming activities —
+ * on somebody else's page with them chosen from the start.
  */
 export async function PlayerScreen({
   user,
@@ -78,10 +85,11 @@ export async function PlayerScreen({
   const self = id === user.id;
   const managesFines = canManageFines(user, user.teamId);
 
-  const [fines, matches, openChallenges, pastChallenges, openTasks, doneTasks] =
+  const [fines, matches, activities, openChallenges, pastChallenges, openTasks, doneTasks] =
     await Promise.all([
       fineHistory(user.teamId, { playerId: id }),
       matchOptions(user.teamId),
+      upcomingActivities(user.teamId),
       db.challenge.findMany({
         where: { status: "PENDING", OR: [{ winnerId: id }, { loserId: id }] },
         orderBy: { createdAt: "desc" },
@@ -147,9 +155,17 @@ export async function PlayerScreen({
         member={member}
         account={account}
         board={board}
-        matches={matches}
         managesFines={managesFines}
         openTasks={openTasks.length}
+      />
+
+      <PlayerCreateMenu
+        viewerId={user.id}
+        id={id}
+        onTeam={person.onTeam}
+        board={board}
+        matches={matches}
+        activities={activities}
       />
 
       <SwipePages
@@ -252,6 +268,60 @@ export async function PlayerScreen({
 type Board = Awaited<ReturnType<typeof fineBoard>>;
 
 /**
+ * The page's "+": a fine and a challenge (not while the box is open for payment, when the
+ * sums stand still) and a job on a coming activity. On somebody else's page — while they
+ * are on the team — they are the one fined, played against or given the job.
+ */
+function PlayerCreateMenu({
+  viewerId,
+  id,
+  onTeam,
+  board,
+  matches,
+  activities,
+}: {
+  viewerId: string;
+  id: string;
+  onTeam: boolean;
+  board: Board;
+  matches: Awaited<ReturnType<typeof matchOptions>>;
+  activities: Awaited<ReturnType<typeof upcomingActivities>>;
+}) {
+  const paying = board.paymentOpenedAt !== null;
+  const other = onTeam && id !== viewerId ? id : undefined;
+  if (paying && activities.length === 0) return null;
+  return (
+    <CreateMenu>
+      {!paying && (
+        <GiveFineDialog
+          members={board.roster}
+          fineTypes={board.fineTypes}
+          finePriceKr={board.finePriceKr}
+          matches={matches}
+          defaultPlayerId={onTeam ? id : undefined}
+        />
+      )}
+      {!paying && (
+        <ChallengeDialog
+          opponents={board.roster.filter((m) => m.userId !== viewerId)}
+          finePriceKr={board.finePriceKr}
+          matches={matches}
+          defaultOpponentId={other}
+        />
+      )}
+      {activities.length > 0 && (
+        <TaskDialog
+          members={board.roster}
+          activities={activities}
+          defaultAssigneeId={other}
+          triggerLabel="Opret opgave"
+        />
+      )}
+    </CreateMenu>
+  );
+}
+
+/**
  * Who they are, what their fines come to, and — once the box is open for payment — "Betal"
  * on your own page and "Markér som betalt" for the treasurer: what stands above the tabs.
  */
@@ -262,7 +332,6 @@ function PlayerHeader({
   member,
   account,
   board,
-  matches,
   managesFines,
   openTasks,
 }: {
@@ -272,7 +341,6 @@ function PlayerHeader({
   member: Board["roster"][number] | undefined;
   account: Board["balances"][number];
   board: Board;
-  matches: Awaited<ReturnType<typeof matchOptions>>;
   managesFines: boolean;
   /** Their jobs not yet done, counted beside their fines. */
   openTasks: number;
@@ -290,7 +358,8 @@ function PlayerHeader({
       <div className="flex items-center gap-3">
         <Avatar name={person.name} photoId={person.photoId} size="md" />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-semibold tracking-tight">
+          {/* The whole name, over two lines if need be: never cut short. */}
+          <h1 className="text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">
             {person.name}
           </h1>
           {badges.length > 0 && (
@@ -320,22 +389,19 @@ function PlayerHeader({
             </p>
           )}
         </div>
-        <div className="flex shrink-0 gap-2">
-          {self && (
-            <ButtonLink href="/profil" variant="secondary">
-              Rediger
-            </ButtonLink>
-          )}
-          {person.onTeam && !paying && (
-            <GiveFineDialog
-              members={board.roster}
-              fineTypes={board.fineTypes}
-              finePriceKr={board.finePriceKr}
-              matches={matches}
-              defaultPlayerId={id}
-            />
-          )}
-        </div>
+        {self && (
+          <Link
+            href="/profil"
+            aria-label="Rediger"
+            title="Rediger"
+            className="flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50"
+          >
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </Link>
+        )}
       </div>
       <dl className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
         <Stat
