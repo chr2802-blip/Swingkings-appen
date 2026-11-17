@@ -166,7 +166,7 @@ describe("createDemoTeam", () => {
     expect(await prisma.team.findUnique({ where: { id: lookalike.id } })).not.toBeNull();
   });
 
-  it("has accounts that add up: everybody reset once, Lucas again, and nobody below zero", async () => {
+  it("has accounts that add up, and nobody below zero", async () => {
     const now = new Date();
     const team = await createDemoTeam({ now });
     const players = await prisma.user.findMany({ where: { isDemo: true } });
@@ -174,29 +174,22 @@ describe("createDemoTeam", () => {
     const owed = balances(players.map((p) => p.id), fines);
     const owes = (first: string) => owed.find((b) => b.userId === players.find((p) => p.name.startsWith(first))!.id)!.owesKr;
 
-    // Everything from before the reset forty days ago is history, and there is plenty of it.
-    const resetAt = new Date(now.getTime() - 40 * 86_400_000);
-    const old = fines.filter((fine) => fine.createdAt < resetAt);
-    expect(old.length).toBeGreaterThan(25);
-    expect(old.every((fine) => fine.clearedAt?.getTime() === resetAt.getTime())).toBe(true);
-    expect(fines.every((fine) => !fine.clearedAt || fine.clearedAt > fine.createdAt)).toBe(true);
-
-    expect(owes("Lucas")).toBe(0);
-    expect(fines.some((fine) => fine.playerId === players.find((p) => p.name.startsWith("Lucas"))!.id && fine.createdAt > resetAt)).toBe(true);
+    // A season's worth: nothing is paid along the way, so every fine still counts.
+    expect(fines.length).toBeGreaterThan(40);
     expect(owed.every((b) => b.owesKr >= 0)).toBe(true);
     expect(owed.filter((b) => b.owesKr > 0).length).toBeGreaterThan(10);
-    // The red card alone is 150 kr., and the team is owed what its open fines come to.
+    // The red card alone is 150 kr., and the box holds what all the fines come to.
     expect(owes("Victor")).toBeGreaterThanOrEqual(150);
-    const open = fines.filter((fine) => !fine.clearedAt);
-    expect(owed.reduce((sum, b) => sum + b.owesKr, 0)).toBe(open.reduce((sum, fine) => sum + fine.units * fine.unitPriceKr, 0));
+    expect(owed.reduce((sum, b) => sum + b.owesKr, 0)).toBe(fines.reduce((sum, fine) => sum + fine.units * fine.unitPriceKr, 0));
+    // The box is not open for payment yet, so nobody has paid.
+    expect(team.finePaymentOpenedAt).toBeNull();
   });
 
-  it("has challenges waiting, withdrawn and approved — and every approved one moved its whole stake", async () => {
+  it("has challenges waiting and approved — and every approved one moved its whole stake", async () => {
     const team = await createDemoTeam();
     const challenges = await prisma.challenge.findMany({ where: { teamId: team.id }, include: { fines: true } });
     const withStatus = (status: string) => challenges.filter((challenge) => challenge.status === status);
     expect(withStatus("PENDING")).toHaveLength(3);
-    expect(withStatus("CANCELLED")).toHaveLength(1);
     expect(withStatus("SETTLED")).toHaveLength(5);
     expect(withStatus("SETTLED").map((challenge) => challenge.units).sort()).toEqual([1, 2, 2, 3, 3]);
     for (const challenge of withStatus("SETTLED")) {

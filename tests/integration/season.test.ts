@@ -13,10 +13,10 @@ const seasonForm = (fields: Record<string, string> = {}) => formData({ name: "S�
 async function playedSeason(name = "Swingkings") {
   const squad = await makeSquad(name);
   const { team, admin, treasurer, anna, bo } = squad;
-  const fine = (playerId: string, units: number, reason: string, extra: { clearedAt?: Date; challengeId?: string } = {}) =>
+  const fine = (playerId: string, units: number, reason: string, extra: { challengeId?: string } = {}) =>
     prisma.fine.create({ data: { teamId: team.id, playerId, reason, units, unitPriceKr: 10, issuedById: treasurer.id, ...extra } });
 
-  await fine(anna.id, 2, "For sent", { clearedAt: new Date() });
+  await fine(anna.id, 2, "For sent");
   await fine(anna.id, 3, "For sent");
   await fine(bo.id, 1, "Rødt kort");
   const won = await prisma.challenge.create({
@@ -43,6 +43,9 @@ async function playedSeason(name = "Swingkings") {
   const openLoose = await prisma.task.create({ data: { teamId: team.id, title: "Net", assignees: { create: { userId: bo.id } } } });
   await makeInviteLink({ teamId: team.id, createdById: admin.id });
   await prisma.teamMember.updateMany({ where: { teamId: team.id, userId: { in: [anna.id, bo.id] } }, data: { duesPaidAt: new Date() } });
+  // The box is open for payment, and Bo has paid.
+  await prisma.team.update({ where: { id: team.id }, data: { finePaymentOpenedAt: new Date() } });
+  await prisma.teamMember.updateMany({ where: { teamId: team.id, userId: bo.id }, data: { finesPaidAt: new Date() } });
   await prisma.fineType.create({ data: { teamId: team.id, name: "For sent", units: 1 } });
   await prisma.taskTemplate.create({ data: { teamId: team.id, title: "Tøjvask" } });
 
@@ -51,7 +54,7 @@ async function playedSeason(name = "Swingkings") {
 
 /** Everything `playedSeason` makes, counted for one team. */
 async function counts(teamId: string) {
-  const [fines, challenges, matches, tasks, signups, links, paid, members, fineTypes, templates] = await Promise.all([
+  const [fines, challenges, matches, tasks, signups, links, paid, finesPaid, members, fineTypes, templates] = await Promise.all([
     prisma.fine.count({ where: { teamId } }),
     prisma.challenge.count({ where: { teamId } }),
     prisma.match.count({ where: { teamId } }),
@@ -59,11 +62,12 @@ async function counts(teamId: string) {
     prisma.activitySignup.count({ where: { teamId } }),
     prisma.inviteLink.count({ where: { teamId } }),
     prisma.teamMember.count({ where: { teamId, duesPaidAt: { not: null } } }),
+    prisma.teamMember.count({ where: { teamId, finesPaidAt: { not: null } } }),
     prisma.teamMember.count({ where: { teamId } }),
     prisma.fineType.count({ where: { teamId } }),
     prisma.taskTemplate.count({ where: { teamId } }),
   ]);
-  return { fines, challenges, matches, tasks, signups, links, paid, members, fineTypes, templates };
+  return { fines, challenges, matches, tasks, signups, links, paid, finesPaid, members, fineTypes, templates };
 }
 
 describe("startNewSeason", () => {
@@ -100,13 +104,18 @@ describe("startNewSeason", () => {
       signups: 0,
       links: 0,
       paid: 0,
+      finesPaid: 0,
       members: 4,
       fineTypes: 1,
       templates: 1,
     });
     const left = await prisma.task.findMany({ where: { teamId: team.id }, select: { id: true } });
     expect(left.map((t) => t.id).sort()).toEqual([season.upcomingTask.id, season.openLoose.id].sort());
-    expect((await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).seasonStartedAt).toEqual(saved.endedAt);
+    expect(await prisma.team.findUniqueOrThrow({ where: { id: team.id } })).toMatchObject({
+      seasonStartedAt: saved.endedAt,
+      // The box closes for payment: fines can be given again.
+      finePaymentOpenedAt: null,
+    });
     expect(await seasonStart(team.id)).toEqual(saved.endedAt);
   });
 
@@ -177,7 +186,7 @@ describe("startSeason", () => {
 });
 
 describe("seasonPreview", () => {
-  it("says what is still owed, by whom, and what would go", async () => {
+  it("says what has not been paid, by whom, and what would go", async () => {
     const { team } = await playedSeason();
     await playedSeason("Andre");
     expect(await seasonPreview(team.id)).toMatchObject({
@@ -188,8 +197,8 @@ describe("seasonPreview", () => {
       links: 1,
       members: 4,
       duesPaid: 2,
-      // Anna: 3 − 1 challenged away; Bo: 1 + 1 taken on.
-      owingPlayers: 2,
+      // Anna: 2 + 3 − 1 challenged away. Bo (1 + 1 taken on) has paid.
+      owingPlayers: 1,
       owingKr: 40,
     });
   });

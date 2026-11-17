@@ -103,7 +103,7 @@ test("a player's page shows their latest fines and challenges and their next job
       .getByText("Glemt trøje"),
   ).toBeVisible();
   // What Bo owes stands above the tabs, whichever is shown.
-  await expect(page.getByText("udestående")).toBeVisible();
+  await expect(page.getByText("bøder i alt")).toBeVisible();
   await page.getByRole("tab", { name: "Opgaver (1)" }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/opgaver$`));
   await expect(
@@ -111,7 +111,7 @@ test("a player's page shows their latest fines and challenges and their next job
       .getByRole("tabpanel", { name: "Opgaver (1)" })
       .getByText("Vaske trøjer"),
   ).toBeVisible();
-  await expect(page.getByText("udestående")).toBeVisible();
+  await expect(page.getByText("bøder i alt")).toBeVisible();
   await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
 
   // A challenge still waiting stands above the list on the same tab: a short row that

@@ -20,6 +20,7 @@ import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
 import { MemberTable } from "@/components/member-table";
 import { revokeInviteLink } from "@/app/actions/teams";
+import { setFinePayment } from "@/app/actions/fines";
 import { deleteTaskTemplate } from "@/app/actions/activities";
 
 /**
@@ -46,6 +47,7 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
         photoId: true,
         mobilePayLink: true,
         duesKr: true,
+        finePaymentOpenedAt: true,
       },
     }),
     db.inviteLink.findMany({
@@ -103,9 +105,12 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
             href: "/hold/betaling",
             title: "Betaling",
             children: (
-              <Card>
-                <TeamSettingsForm part="payment" team={team} />
-              </Card>
+              <div className="space-y-8">
+                <Card>
+                  <TeamSettingsForm part="payment" team={team} />
+                </Card>
+                <FinePaymentCard openedAt={team.finePaymentOpenedAt} paid={roster.filter((m) => m.finesPaid).length} />
+              </div>
             ),
           },
           {
@@ -265,5 +270,57 @@ export async function TeamSettingsScreen({ user }: { user: TeamUser }) {
         ]}
       />
     </div>
+  );
+}
+
+/**
+ * "Åbn for betaling": the fines are paid in one go when the season is over. Open, everybody
+ * sees "Betal" and what they owe, and no new fines can be given. Closing again is for a
+ * mistake, while nobody has been marked paid; a new season closes it.
+ */
+function FinePaymentCard({ openedAt, paid }: { openedAt: Date | null; paid: number }) {
+  return (
+    <section>
+      <SectionTitle>Betal bøder</SectionTitle>
+      <Card className="space-y-3">
+        {openedAt ? (
+          <>
+            <p className="text-sm">
+              <Badge tone="amber">Åben for betaling</Badge>{" "}
+              <span className="text-slate-500">siden {readInZone(openedAt, "d. MMM 'kl.' HH:mm")}</span>
+            </p>
+            <p className="text-sm text-slate-500">
+              Alle kan se, hvad de skal betale, og betale med MobilePay. Bødekasseformanden markerer dem, der har betalt. Der
+              kan ikke gives nye bøder, før den nye sæson starter.
+            </p>
+            {paid === 0 && (
+              <ActionButton
+                action={setFinePayment}
+                fields={{ open: "0" }}
+                label="Luk for betaling igen"
+                variant="ghost"
+                confirm="Luk for betaling igen? Så kan der gives bøder igen."
+                confirmLabel="Luk for betaling"
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-slate-500">
+              Bøderne betales samlet, når sæsonen er slut. Åbn for betaling, så får alle besked om, hvad de skal betale, og
+              “Betal” kommer frem på deres side. Mens der er åbent, kan der ikke gives nye bøder.
+            </p>
+            <ActionButton
+              action={setFinePayment}
+              fields={{ open: "1" }}
+              label="Åbn for betaling"
+              variant="primary"
+              confirm="Åbn bødekassen for betaling? Der kan ikke gives nye bøder før næste sæson."
+              confirmLabel="Åbn for betaling"
+            />
+          </>
+        )}
+      </Card>
+    </section>
   );
 }

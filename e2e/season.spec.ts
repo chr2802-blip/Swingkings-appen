@@ -51,11 +51,13 @@ test("a coach goes through the season one step at a time, by swipe and by button
   await expect(shown).toHaveCount(1);
   await expect(shown).toHaveAccessibleName("Bøder");
 
-  // Step 1: Bo pays, and is reset right here.
-  await expect(shown.getByText(/40 kr\.? står udestående hos 2 spillere/)).toBeVisible();
-  await shown.getByRole("listitem").filter({ hasText: "Bo" }).getByRole("button", { name: "Nulstil" }).click();
-  await page.getByRole("dialog", { name: "Nulstil Bos bøder?" }).getByRole("button", { name: "Nulstil" }).click();
-  await expect(shown.getByText(/30 kr\.? står udestående hos 1 spiller/)).toBeVisible();
+  // Step 1: the box opens for payment, and Bo is marked paid right here.
+  await shown.getByRole("button", { name: "Åbn for betaling" }).click();
+  await page.getByRole("dialog", { name: /Åbn bødekassen for betaling\? 40 kr skal betales/ }).getByRole("button", { name: "Åbn for betaling" }).click();
+  await expect(shown.getByText(/40 kr\.? mangler fra 2 spillere/)).toBeVisible();
+  await shown.getByRole("listitem").filter({ hasText: "Bo" }).getByRole("button", { name: "Betalt" }).click();
+  await page.getByRole("dialog", { name: /Har Bo betalt 10 kr/ }).getByRole("button", { name: "Markér som betalt" }).click();
+  await expect(shown.getByText(/30 kr\.? mangler fra 1 spiller/)).toBeVisible();
 
   // A finger across the screen turns the page, either way.
   const cdp = await page.context().newCDPSession(page);
@@ -86,7 +88,7 @@ test("a coach goes through the season one step at a time, by swipe and by button
   await at("kampklar", "KampKlar");
   await tab("Start").click();
   await at("start", "Start");
-  await expect(shown.getByText("heraf 30 kr ikke nulstillet", { exact: false })).toBeVisible();
+  await expect(shown.getByText("heraf 30 kr ikke betalt", { exact: false })).toBeVisible();
 
   // A reload stays on the step it was on.
   await page.reload();
@@ -105,6 +107,8 @@ test("a coach goes through the season one step at a time, by swipe and by button
   expect(await db.match.findMany({ where: { teamId: team.id }, select: { id: true } })).toEqual([{ id: next.id }]);
   expect(await db.match.count({ where: { id: past.id } })).toBe(0);
   expect(await db.teamMember.count({ where: { teamId: team.id, duesPaidAt: { not: null } } })).toBe(0);
+  expect(await db.teamMember.count({ where: { teamId: team.id, finesPaidAt: { not: null } } })).toBe(0);
+  expect((await db.team.findUniqueOrThrow({ where: { id: team.id } })).finePaymentOpenedAt).toBeNull();
 });
 
 test("a player reads the past seasons but is kept out of the guide", async ({ page, loginAs }) => {
@@ -153,18 +157,23 @@ test("an admin pastes the box's link, and a player's Betal opens MobilePay with 
   const fines = `${BOX_LINK}?amount=3000&message=B%C3%B8der%20%E2%80%93%20Anna`;
   const dues = `${BOX_LINK}?amount=60000&message=Kontingent%20%E2%80%93%20Anna`;
 
+  // Fines are paid only once the box is open for payment; kontingent can be paid any time.
   await loginAs(anna);
-  // The fine box only says what you owe; paying is on your own page, where "Du skylder" leads.
+  await page.goto(`/spiller/${anna.id}`);
+  await expect(page.getByRole("link", { name: "Betal kontingent (600 kr) ›" })).toHaveAttribute("href", dues);
+  await expect(page.getByRole("link", { name: /Betal 30 kr/ })).toHaveCount(0);
+  await db.team.update({ where: { id: team.id }, data: { finePaymentOpenedAt: new Date() } });
+
+  // The fine box only says what you owe; paying is on your own page, where "Dine bøder" leads.
   await page.goto("/boder");
-  await expect(page.getByText("Du skylder")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Betal/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Dine bøder/ })).toContainText("Betal nu");
+  await expect(page.locator('a[href^="https://qr.mobilepay.dk"]')).toHaveCount(0);
 
   await page.goto(`/spiller/${anna.id}`);
   await expect(page.getByRole("link", { name: "💸 Betal 30 kr med MobilePay" })).toHaveAttribute("href", fines);
-  await expect(page.getByText(/nulstiller dine bøder/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Betal kontingent (600 kr) ›" })).toHaveAttribute("href", dues);
-  // Paying marks nothing: the fine is outstanding until the treasurer resets it.
-  expect(await db.fine.count({ where: { playerId: anna.id, clearedAt: null } })).toBe(1);
+  await expect(page.getByText(/markerer dig som betalt/)).toBeVisible();
+  // Paying marks nothing: the fines stand until the treasurer marks them paid.
+  expect((await db.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } })).finesPaidAt).toBeNull();
 
   // Once marked paid, kontingent asks no more; and nobody is asked to pay for somebody else.
   await db.teamMember.updateMany({ where: { teamId: team.id, userId: anna.id }, data: { duesPaidAt: new Date() } });

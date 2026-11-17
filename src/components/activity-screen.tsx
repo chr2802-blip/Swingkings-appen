@@ -102,13 +102,16 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
       />
       <CreateMenu>
         <TaskDialog members={roster} activityId={match.id} templates={templates} copyable={copyable} />
-        <GiveFineDialog
-          members={board.roster}
-          fineTypes={board.fineTypes}
-          finePriceKr={board.finePriceKr}
-          matches={option}
-          defaultMatchId={match.id}
-        />
+        {/* While the box is open for payment no fines are given. */}
+        {!board.paymentOpenedAt && (
+          <GiveFineDialog
+            members={board.roster}
+            fineTypes={board.fineTypes}
+            finePriceKr={board.finePriceKr}
+            matches={option}
+            defaultMatchId={match.id}
+          />
+        )}
       </CreateMenu>
 
       <SwipePages

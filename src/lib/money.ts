@@ -20,37 +20,27 @@ export function fineAmount(fine: { units: number; unitPriceKr: number }) {
 
 export type Balance = {
   userId: string;
-  /** What is outstanding: fines not yet reset, less what has been challenged away. */
+  /** What the season's fines come to, less what has been challenged away. Never below zero. */
   owesKr: number;
   /** The same, in fines. */
   units: number;
-  /** Every fine ever given, reset or not — the "i alt" on the board. */
-  finedKr: number;
 };
 
-type FineRow = { playerId: string; units: number; unitPriceKr: number; clearedAt: Date | null };
+type FineRow = { playerId: string; units: number; unitPriceKr: number };
 
 /**
- * Each player's account. Nobody pays: a fine is outstanding until the treasurer resets
- * it (`clearedAt`), or until it is challenged away — a won challenge is a fine with
- * negative units. Everybody in `userIds` gets a row, so a clean sheet is on the board
- * too. Never below zero. Sorted by who owes most.
+ * Each player's account for the season: every fine they have been given, less what they
+ * have challenged away — a won challenge is a fine with negative units. Nothing is paid
+ * along the way: the box is paid in one go at the end of the season (`Team.finePaymentOpenedAt`),
+ * so whether somebody has paid is their `finesPaidAt`, not a change to the sum. Everybody
+ * in `userIds` gets a row, so a clean sheet is on the board too. Sorted by who owes most.
  */
 export function balances(userIds: string[], fines: FineRow[]): Balance[] {
-  const rows = new Map<string, Balance>(userIds.map((userId) => [userId, { userId, owesKr: 0, units: 0, finedKr: 0 }]));
-  const row = (userId: string) => {
-    let found = rows.get(userId);
-    if (!found) {
-      // Somebody fined while on the team who has since left still owes it.
-      found = { userId, owesKr: 0, units: 0, finedKr: 0 };
-      rows.set(userId, found);
-    }
-    return found;
-  };
+  const rows = new Map<string, Balance>(userIds.map((userId) => [userId, { userId, owesKr: 0, units: 0 }]));
   for (const fine of fines) {
-    const r = row(fine.playerId);
-    if (fine.units > 0) r.finedKr += fineAmount(fine);
-    if (fine.clearedAt) continue;
+    // Somebody fined while on the team who has since left still owes it.
+    const r = rows.get(fine.playerId) ?? { userId: fine.playerId, owesKr: 0, units: 0 };
+    rows.set(fine.playerId, r);
     r.owesKr += fineAmount(fine);
     r.units += fine.units;
   }
@@ -58,7 +48,7 @@ export function balances(userIds: string[], fines: FineRow[]): Balance[] {
     r.owesKr = Math.max(0, r.owesKr);
     r.units = Math.max(0, r.units);
   }
-  return [...rows.values()].sort((a, b) => b.owesKr - a.owesKr || b.finedKr - a.finedKr);
+  return [...rows.values()].sort((a, b) => b.owesKr - a.owesKr);
 }
 
 /**

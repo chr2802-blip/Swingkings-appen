@@ -30,7 +30,7 @@ export function MemberTable({
         <p>
           Alle er <strong className="font-medium text-slate-800">{ROLE_LABEL.PLAYER}</strong>, og rettighederne bygger
           oven på hinanden. <strong className="font-medium text-slate-800">Bøder</strong> ({ROLE_LABEL.TREASURER.toLowerCase()}):
-          bødekataloget og nulstilling. <strong className="font-medium text-slate-800">{ROLE_LABEL.ADMIN}</strong>: alt,
+          bødekataloget og hvem der har betalt bøder. <strong className="font-medium text-slate-800">{ROLE_LABEL.ADMIN}</strong>: alt,
           også medlemmer, invitationer og ny sæson — og altid Bøder.
         </p>
         <p>

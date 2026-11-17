@@ -24,10 +24,9 @@ export type ChallengeView = {
   match: { opponent: string | null; title: string } | null;
 };
 
-const TONE: Record<ChallengeStatus, "amber" | "neutral" | "green"> = {
+const TONE: Record<ChallengeStatus, "amber" | "green"> = {
   PENDING: "amber",
   SETTLED: "green",
-  CANCELLED: "neutral",
 };
 
 /** The `include` a page needs to draw a `ChallengeCard`. */

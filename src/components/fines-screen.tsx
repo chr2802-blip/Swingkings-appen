@@ -15,8 +15,6 @@ import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card
 import { ChallengeDialog } from "@/components/challenge-dialog";
 import { DetailSheet } from "@/components/detail-sheet";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
-import { ActionButton } from "@/components/action-button";
-import { resetFines } from "@/app/actions/fines";
 import { Crown } from "@/components/crest";
 
 /** How far back the history page goes. A team gives a few fines a week, so this is a year or two. */
@@ -57,10 +55,7 @@ export async function FinesScreen({
     db.challenge.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude }),
   ]);
   const manages = canManageFines(user, user.teamId);
-  const totals = board.balances.reduce(
-    (sum, row) => ({ fined: sum.fined + row.finedKr, owed: sum.owed + row.owesKr }),
-    { fined: 0, owed: 0 },
-  );
+  const paying = board.paymentOpenedAt !== null;
   const mine = board.balances.find((row) => row.userId === user.id);
   // What is waiting on the viewer goes first: it is the reason they opened the sheet.
   const waiting = pending.filter((c) => waitsOn(c, user.id));
@@ -72,27 +67,49 @@ export async function FinesScreen({
   return (
     <div>
       <PageHeader title="Bødekassen" />
-      <FineCreateMenu
-        viewerId={user.id}
-        members={board.roster}
-        fineTypes={board.fineTypes}
-        finePriceKr={board.finePriceKr}
-        matches={matches}
-      />
+      {/* While the box is open for payment what each player owes stands still: nothing to give. */}
+      {!paying && (
+        <FineCreateMenu
+          viewerId={user.id}
+          members={board.roster}
+          fineTypes={board.fineTypes}
+          finePriceKr={board.finePriceKr}
+          matches={matches}
+        />
+      )}
+      {paying && (
+        <p role="status" className="mb-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          💸 <strong>Bødekassen er åben for betaling.</strong> Betal dine bøder på din egen side. Nye bøder og udfordringer
+          venter til næste sæson.
+        </p>
+      )}
 
       <Card padded={false} className="mb-5 overflow-hidden">
         <div className={`grid divide-x divide-slate-100 ${mine ? "grid-cols-2" : ""}`}>
           {mine && (
             <Link href={playerHref(user.id)} className="press-card px-4 py-3">
-              <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Du skylder</p>
-              <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
-              <p className="text-xs text-slate-500">{mine.units > 0 ? `${fineUnits(mine.units)} · se dem ›` : "Ren tavle 🙌"}</p>
+              <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Dine bøder</p>
+              {board.paid.has(user.id) ? (
+                <>
+                  <p className="text-3xl font-semibold text-emerald-700">Betalt</p>
+                  <p className="text-xs text-slate-500">{kr(mine.owesKr)} · tak! 🙌</p>
+                </>
+              ) : (
+                <>
+                  <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
+                  <p className="text-xs text-slate-500">
+                    {mine.owesKr === 0 ? "Ren tavle 🙌" : paying ? "Betal nu ›" : `${fineUnits(mine.units)} · se dem ›`}
+                  </p>
+                </>
+              )}
             </Link>
           )}
           <div className="px-4 py-3">
             <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">I kassen</p>
-            <p className="text-3xl font-semibold">{kr(totals.fined)}</p>
-            <p className="text-xs text-slate-500">{kr(totals.owed)} udestående</p>
+            <p className="text-3xl font-semibold">{kr(board.totalKr)}</p>
+            <p className="text-xs text-slate-500">
+              {!paying ? "betales ved sæsonslut" : board.missingKr > 0 ? `${kr(board.missingKr)} mangler` : "alle har betalt"}
+            </p>
           </div>
         </div>
         <DetailSheet
@@ -118,14 +135,16 @@ export async function FinesScreen({
             Meld resultatet her eller under +, en anden godkender, og taberen overtager indsatsen. Afgjorte udfordringer står i historikken.
           </p>
           {/* Reporting one from here too, so the sheet is not a dead end; it lands in the sheet once sent. */}
-          <div className="mb-6">
-            <ChallengeDialog
-              opponents={board.roster.filter((m) => m.userId !== user.id)}
-              finePriceKr={board.finePriceKr}
-              matches={matches}
-              triggerClassName="w-full"
-            />
-          </div>
+          {!paying && (
+            <div className="mb-6">
+              <ChallengeDialog
+                opponents={board.roster.filter((m) => m.userId !== user.id)}
+                finePriceKr={board.finePriceKr}
+                matches={matches}
+                triggerClassName="w-full"
+              />
+            </div>
+          )}
           {waiting.length > 0 && (
             <section className="mb-8">
               <SectionTitle>Venter på din godkendelse</SectionTitle>
@@ -148,16 +167,6 @@ export async function FinesScreen({
           {
             href: "/boder",
             title: "Bødetavlen",
-            action: manages && totals.owed > 0 && (
-              <ActionButton
-                action={resetFines}
-                fields={{ playerId: "alle" }}
-                label="Nulstil alle"
-                variant="ghost"
-                confirm="Nulstil hele holdets bøder? Historikken bliver, men ingen har udestående bagefter."
-                confirmLabel="Nulstil alle"
-              />
-            ),
             children: <BoardPage userId={user.id} board={board} kings={kings.userIds} />,
           },
           {
@@ -211,7 +220,13 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
                   {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
                   {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
                 </span>
-                {row.owesKr > 0 ? <Badge tone="red">{kr(row.owesKr)}</Badge> : <Badge tone="green">ren tavle</Badge>}
+                {board.paid.has(row.userId) ? (
+                  <Badge tone="green">Betalt</Badge>
+                ) : row.owesKr > 0 ? (
+                  <Badge tone="red">{kr(row.owesKr)}</Badge>
+                ) : (
+                  <Badge tone="green">ren tavle</Badge>
+                )}
                 <span aria-hidden className="text-slate-300">
                   ›
                 </span>

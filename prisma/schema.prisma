@@ -69,7 +69,8 @@ enum ActivityKind {
  * the stake moves from the winner's fines to the loser's.
  * PENDING   reported, waiting for anybody but the reporter to approve it
  * SETTLED   approved; the fines have moved
- * CANCELLED withdrawn by the reporter or the treasurer, or undone afterwards
+ * A challenge withdrawn — by the reporter, the treasurer, or by deleting one of its fines —
+ * is deleted, fines and all, and shown nowhere.
  */
 /// A request to take over somebody's task: waiting for an answer, or how it ended.
 enum HandoverStatus {
@@ -82,7 +83,6 @@ enum HandoverStatus {
 enum ChallengeStatus {
   PENDING
   SETTLED
-  CANCELLED
 }
 
 model Team {
@@ -120,6 +120,12 @@ model Team {
    * from before it.
    */
   seasonStartedAt  DateTime?
+  /**
+   * When an admin opened the fine box for payment ("Åbn for betaling") at the end of the
+   * season; null while it is not open. While it is open, "Betal" shows and nobody can give
+   * fines or report challenges, so what each player owes stands still. A new season closes it.
+   */
+  finePaymentOpenedAt DateTime?
   createdAt        DateTime  @default(now())
 
   members         TeamMember[]
@@ -213,6 +219,11 @@ model TeamMember {
   chatSeenAt  DateTime?
   /// When an admin marked this season's kontingent (membership fee) paid; null while it is not. A new season clears it.
   duesPaidAt  DateTime?
+  /**
+   * When the treasurer marked this person's fines paid, once the box is open for payment.
+   * All or nothing: a player has paid the season's fines, or owes all of them. A new season clears it.
+   */
+  finesPaidAt DateTime?
   /// The name KampKlar's feed gives this person, set by an admin when it is not their name here.
   /// Their sign-ups in KampKlar are matched by it first.
   kampklarName String?
@@ -275,10 +286,10 @@ model FineType {
  * A fine somebody has been given. It copies the type's name, the number of fines and
  * the price of one at the moment it was given: the catalogue and the price can change
  * afterwards without changing what this person owes.
- * Nobody pays. A fine is outstanding until it is cleared (`clearedAt`), which the
- * treasurer does when he or she nulstiller somebody, or until the player has challenged
- * it away: winning a challenge writes the winner a fine with negative `units` and the
- * loser one with positive, so the stake moves from one to the other.
+ * A fine stands all season: the fines are paid in one go when the box opens for payment
+ * (`Team.finePaymentOpenedAt`, `TeamMember.finesPaidAt`), and a new season deletes them.
+ * Winning a challenge writes the winner a fine with negative `units` and the loser one
+ * with positive, so the stake moves from one to the other.
  */
 model Fine {
   id          String    @id @default(cuid())
@@ -294,8 +305,6 @@ model Fine {
   matchId     String?
   /// The challenge this fine came from: the loser's (positive) and the winner's (negative).
   challengeId String?
-  /// When the treasurer reset (nulstillede) it. A cleared fine is history, not owed.
-  clearedAt   DateTime?
   createdAt   DateTime  @default(now())
 
   team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -311,7 +320,6 @@ model Fine {
   @@index([issuedById])
   @@index([matchId])
   @@index([challengeId])
-  @@index([playerId, clearedAt])
 }
 
 /**

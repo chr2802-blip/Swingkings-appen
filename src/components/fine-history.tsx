@@ -3,7 +3,7 @@ import { canDeleteFine, canManageFines } from "@/lib/access";
 import type { fineHistory } from "@/lib/fine-data";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
 import { readInZone, relativeDay } from "@/lib/time";
-import { Badge, Card } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
@@ -46,7 +46,6 @@ export function FineRow({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
               </span>
               <span className="block text-xs text-slate-500">
                 {fineUnits(fine.units)} · {kr(fineAmount(fine))} · {relativeDay(fine.createdAt)}
-                {fine.clearedAt && " · nulstillet"}
               </span>
             </span>
             <span aria-hidden className="text-slate-300">
@@ -77,15 +76,11 @@ export function FineHistory({ fines, user }: { fines: HistoryFine[]; user: TeamU
 /** Everything known about one fine, and "Slet" for whoever may — the sheet behind every fine row. */
 export function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser }) {
   const amount = fineAmount(fine);
-  const status = fine.clearedAt ? `Nulstillet ${readInZone(fine.clearedAt, "d. MMM yyyy")}` : amount < 0 ? "Trækkes fra" : "Udestående";
   const when = readInZone(fine.createdAt, "EEEE d. MMMM yyyy 'kl.' HH:mm");
   // A challenge's fine is told by the challenge: what it was, the stake, who approved it.
   // Only what the card does not say is added to it, so it all stands in one place.
   const rows: [string, React.ReactNode][] = fine.challenge
-    ? [
-        ["Hvornår", when],
-        ["Status", status],
-      ]
+    ? [["Hvornår", when]]
     : [
         ["For", fine.reason],
         ["Antal", fineUnits(fine.units)],
@@ -95,7 +90,6 @@ export function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser 
       ];
   if (!fine.challenge && fine.match) rows.push(["Aktivitet", `${fine.match.opponent ?? fine.match.title} · ${readInZone(fine.match.startsAt, "d. MMM yyyy")}`]);
   if (fine.note) rows.push(["Note", fine.note]);
-  if (!fine.challenge) rows.push(["Status", status]);
 
   return (
     <div className="space-y-6">
@@ -107,11 +101,8 @@ export function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser 
           <p className="truncate text-lg font-semibold">
             <PlayerLink userId={fine.player.id}>{fine.player.name}</PlayerLink>
           </p>
-          <p className={`text-2xl font-semibold ${fine.clearedAt ? "text-slate-400 line-through" : amount < 0 ? "text-emerald-700" : "text-red-600"}`}>
-            {kr(amount)}
-          </p>
+          <p className={`text-2xl font-semibold ${amount < 0 ? "text-emerald-700" : "text-red-600"}`}>{kr(amount)}</p>
         </div>
-        {fine.clearedAt && <Badge>nulstillet</Badge>}
       </div>
 
       {fine.challenge ? (
@@ -149,7 +140,7 @@ export function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser 
           variant="danger"
           confirm={
             fine.challengeId
-              ? "Slet bøden? Hele udfordringen bliver trukket tilbage, også vinderens del."
+              ? "Slet bøden? Hele udfordringen bliver slettet, også vinderens del."
               : `Slet bøden til ${fine.player.name}?`
           }
           confirmLabel="Slet bøden"

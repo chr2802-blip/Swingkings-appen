@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { settleChallenge } from "@/lib/fines";
+import { PAYMENT_OPEN, settleChallenge } from "@/lib/fines";
 import { makeMember, makeTeam } from "../helpers/factories";
 
 describe("settleChallenge", () => {
@@ -51,16 +51,18 @@ describe("settleChallenge", () => {
     expect((await prisma.challenge.findUniqueOrThrow({ where: { id: second.challenge.id } })).status).toBe("PENDING");
   });
 
-  it("does not count fines the treasurer has reset", async () => {
-    const { anna, carl, challenge } = await reported(3, 5);
-    await prisma.fine.updateMany({ where: { playerId: anna.id }, data: { clearedAt: new Date() } });
-    expect(await settleChallenge(challenge.id, carl.id)).toMatchObject({ ok: false });
+  it("moves nothing while the box is open for payment", async () => {
+    const { team, carl, challenge } = await reported(3, 5);
+    await prisma.team.update({ where: { id: team.id }, data: { finePaymentOpenedAt: new Date() } });
+    expect(await settleChallenge(challenge.id, carl.id)).toEqual({ ok: false, error: PAYMENT_OPEN });
+    expect((await prisma.challenge.findUniqueOrThrow({ where: { id: challenge.id } })).status).toBe("PENDING");
+    expect(await prisma.fine.count({ where: { challengeId: challenge.id } })).toBe(0);
   });
 
   it("refuses the reporter, and a challenge no longer pending", async () => {
     const { anna, carl, challenge } = await reported();
     expect(await settleChallenge(challenge.id, anna.id)).toEqual({ ok: false, error: "En anden end dig skal godkende den." });
-    await prisma.challenge.update({ where: { id: challenge.id }, data: { status: "CANCELLED" } });
+    await prisma.challenge.delete({ where: { id: challenge.id } });
     expect(await settleChallenge(challenge.id, carl.id)).toEqual({ ok: false, error: "Udfordringen er ikke åben længere." });
     expect(await prisma.fine.count({ where: { challengeId: challenge.id } })).toBe(0);
   });
@@ -73,7 +75,7 @@ describe("settleChallenge", () => {
     const results = await Promise.all([settleChallenge(challenge.id, carl.id), settleChallenge(second.id, bo.id)]);
     // Anna owes three fines in all: one challenge moves them, the other finds nothing left.
     expect(results.filter((r) => r.ok)).toHaveLength(1);
-    const open = await prisma.fine.aggregate({ where: { playerId: anna.id, clearedAt: null }, _sum: { units: true } });
+    const open = await prisma.fine.aggregate({ where: { playerId: anna.id }, _sum: { units: true } });
     expect(open._sum.units).toBe(0);
   });
 });

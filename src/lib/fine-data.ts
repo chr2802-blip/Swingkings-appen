@@ -4,14 +4,18 @@ import { balances, fineKings } from "./money";
 import { teamRoster } from "./roster";
 import { kickoffLabel, startOfMonthInZone } from "./time";
 
-/** What the fine pages all need: the price, the catalogue, the roster and what everyone owes. */
+/**
+ * What the fine pages all need: the price, the catalogue, the roster, what everyone owes and
+ * whether the box is open for payment. `paid` is who the treasurer has marked paid: all or
+ * nothing, so their fines still stand at what they came to.
+ */
 export async function fineBoard(teamId: string) {
   const db = teamDb(teamId);
   const [team, roster, fineTypes, fines] = await Promise.all([
-    prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { finePriceKr: true, mobilePayLink: true, duesKr: true } }),
+    prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { finePriceKr: true, mobilePayLink: true, duesKr: true, finePaymentOpenedAt: true } }),
     teamRoster(teamId),
     db.fineType.findMany({ where: { archivedAt: null }, orderBy: [{ units: "asc" }, { name: "asc" }] }),
-    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true, clearedAt: true } }),
+    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true } }),
   ]);
   const board = balances(
     roster.map((m) => m.userId),
@@ -24,7 +28,23 @@ export async function fineBoard(teamId: string) {
     const users = await prisma.user.findMany({ where: { id: { in: gone } }, select: { id: true, name: true, photoId: true } });
     for (const u of users) people.set(u.id, { name: u.name, photoId: u.photoId, onTeam: false });
   }
-  return { finePriceKr: team.finePriceKr, payLink: team.mobilePayLink, duesKr: team.duesKr, roster, fineTypes, balances: board, people };
+  const paid = new Set(roster.filter((m) => m.finesPaid).map((m) => m.userId));
+  // What is still to come into the box: everybody's fines, less those who have paid.
+  const totalKr = board.reduce((sum, row) => sum + row.owesKr, 0);
+  const missingKr = board.filter((row) => !paid.has(row.userId)).reduce((sum, row) => sum + row.owesKr, 0);
+  return {
+    finePriceKr: team.finePriceKr,
+    payLink: team.mobilePayLink,
+    duesKr: team.duesKr,
+    paymentOpenedAt: team.finePaymentOpenedAt,
+    roster,
+    fineTypes,
+    balances: board,
+    paid,
+    totalKr,
+    missingKr,
+    people,
+  };
 }
 
 /** Recent and upcoming matches, as a select's options. */
@@ -51,7 +71,7 @@ export async function monthKings(teamId: string) {
 }
 
 /**
- * The team's newest fines, cleared ones included — the history under the board and on its
+ * The team's newest fines — the history under the board and on its
  * own page, and (narrowed to one player or one activity) the fines on those pages, so a tap
  * opens the same sheet everywhere. Without `take`, all of them.
  */
@@ -67,7 +87,6 @@ export function fineHistory(teamId: string, { take, playerId, matchId }: { take?
       unitPriceKr: true,
       createdAt: true,
       challengeId: true,
-      clearedAt: true,
       issuedById: true,
       note: true,
       player: { select: { id: true, name: true, photoId: true } },
