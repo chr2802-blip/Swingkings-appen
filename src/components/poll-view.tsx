@@ -39,6 +39,10 @@ export type PollViewData = {
   /** What the viewer chose, in an open (non-anonymous) poll. */
   myChoices: string[];
   canClose: boolean;
+  /** The result is kept from everybody until the maker or an admin shows it. */
+  resultsHidden: boolean;
+  /** The viewer may show the hidden result ("Offentliggør resultat"). */
+  canShowResults: boolean;
   options: PollOptionView[];
 };
 
@@ -50,7 +54,8 @@ export type PollViewData = {
  * Pressing "x har stemt" — on the right of "Vis alle", or in its place when there is none —
  * lists who voted for what; before the viewer has voted in an open poll it lists who has
  * voted and not what they chose. Never in an anonymous poll. Voting again and closing
- * the poll are in the post's ⋯ menu (`PostMenu`).
+ * the poll are in the post's ⋯ menu (`PostMenu`). A poll made with its result hidden
+ * shows no counts and nobody's choices to anybody until it is shown from that menu.
  */
 export function PollView({ poll }: { poll: PollViewData }) {
   const { changing, setChanging } = useChangingVote();
@@ -78,8 +83,11 @@ export function PollView({ poll }: { poll: PollViewData }) {
     send(new FormData(event.currentTarget).getAll("optionId").map(String));
   }
 
-  const showResults = (poll.hasVoted || !poll.open) && !changing;
-  const revealed = poll.hasVoted || !poll.open;
+  const done = (poll.hasVoted || !poll.open) && !changing;
+  // A hidden result: the voter (or anybody, once closed) sees the answers without counts.
+  const showResults = done && !poll.resultsHidden;
+  const showHidden = done && poll.resultsHidden;
+  const revealed = (poll.hasVoted || !poll.open) && !poll.resultsHidden;
   const canSeeVoters = !poll.anonymous && poll.voters.length > 0;
   const voted = poll.ballots === 1 ? "1 har stemt" : `${poll.ballots} har stemt`;
   const twoColumns = poll.options.length > 4;
@@ -95,6 +103,7 @@ export function PollView({ poll }: { poll: PollViewData }) {
         <div className="flex flex-wrap gap-1.5">
           {poll.anonymous && <Badge tone="accent">🔒 Anonym</Badge>}
           {poll.multipleChoice && <Badge>Flere svar</Badge>}
+          {poll.resultsHidden && <Badge tone="accent">🙈 Skjult resultat</Badge>}
           {poll.open ? poll.closesLabel && <Badge>{poll.closesLabel}</Badge> : <Badge tone="neutral">Lukket</Badge>}
           {poll.matchLabel && <Badge>⚽ {poll.matchLabel}</Badge>}
         </div>
@@ -125,6 +134,25 @@ export function PollView({ poll }: { poll: PollViewData }) {
             </li>
           ))}
         </ul>
+      ) : showHidden ? (
+        <div className="space-y-2">
+          <ul aria-label="Svar" className="space-y-1.5">
+            {poll.options.map((option) => (
+              <li key={option.id} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                {option.isPlayer && <Avatar name={option.text} photoId={option.playerPhotoId} size="xs" />}
+                <span className="min-w-0 flex-1 truncate">
+                  {option.text}
+                  {poll.myChoices.includes(option.id) && <span className="ml-1 text-xs text-slate-500">(din stemme)</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-slate-600">
+            {poll.canShowResults
+              ? "Resultatet er skjult, også for dig. Offentliggør det fra ⋯-menuen, når du er klar."
+              : "Resultatet er skjult, til det bliver offentliggjort."}
+          </p>
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-2">
           <input type="hidden" name="pollId" value={poll.id} />
@@ -247,7 +275,11 @@ function Voters({ poll }: { poll: PollViewData }) {
           </li>
         ))}
       </ul>
-      <p className="mt-4 text-xs text-slate-500">Hvad de har stemt, kan du se, når du selv har stemt.</p>
+      <p className="mt-4 text-xs text-slate-500">
+        {poll.resultsHidden
+          ? "Hvad de har stemt, bliver vist, når resultatet er offentliggjort."
+          : "Hvad de har stemt, kan du se, når du selv har stemt."}
+      </p>
     </ModalBody>
   );
 }

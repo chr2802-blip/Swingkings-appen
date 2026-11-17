@@ -625,7 +625,8 @@ model PostPhoto {
  * it to its voter to change). An open poll keeps the voter on each vote, shows names,
  * and lets somebody change their mind until it closes.
  * Open while `closedAt` is null and `closesAt` (if any) is in the future — see
- * `src/lib/polls.ts`.
+ * `src/lib/polls.ts`. With `hideResults` nobody sees the result, open or closed, until
+ * the maker or an admin shows it (`resultsShownAt`).
  */
 model Poll {
   id             String    @id @default(cuid())
@@ -638,6 +639,10 @@ model Poll {
   matchId        String?
   closesAt       DateTime?
   closedAt       DateTime?
+  /// The result is kept from everybody, the maker included, until it is shown by hand.
+  hideResults    Boolean   @default(false)
+  /// When a hidden result was shown ("Offentliggør resultat"); null while it is hidden.
+  resultsShownAt DateTime?
   createdAt      DateTime  @default(now())
 
   team    Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)

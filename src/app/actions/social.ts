@@ -83,6 +83,7 @@ const pollSchema = z.object({
   /** "on" when the players were picked from the roster; otherwise every player is an answer. */
   pollPickPlayers: z.enum(["on", "off"]).default("off"),
   pollAnonymous: z.enum(["on", "off"]).default("off"),
+  pollHideResults: z.enum(["on", "off"]).default("off"),
   pollMultiple: z.enum(["on", "off"]).default("off"),
   pollClosesAt: z.string().trim().optional(),
   pollMatchId: optionalId,
@@ -91,7 +92,7 @@ const pollSchema = z.object({
 /**
  * A post: pictures (up to ten, already shrunk in the browser), some words, a poll — at
  * least one of them. A poll's answers are either typed, or players on the team — the
- * ones ticked on the roster (`pollPlayerId`), or all of them. Whether it is anonymous is fixed here and never changed later.
+ * ones ticked on the roster (`pollPlayerId`), or all of them. Whether it is anonymous, and whether its result is hidden until shown by hand, is fixed here.
  */
 export async function createPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -105,6 +106,7 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
     question: string;
     anonymous: boolean;
     multipleChoice: boolean;
+    hideResults: boolean;
     closesAt: Date | null;
     matchId: string | null;
     options: { text: string; playerId: string | null }[];
@@ -140,6 +142,7 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
       question: form.fields.pollQuestion,
       anonymous: form.fields.pollAnonymous === "on",
       multipleChoice: form.fields.pollMultiple === "on",
+      hideResults: form.fields.pollHideResults === "on",
       closesAt,
       matchId: form.fields.pollMatchId,
       options,
@@ -161,6 +164,7 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
                 question: poll.question,
                 anonymous: poll.anonymous,
                 multipleChoice: poll.multipleChoice,
+                hideResults: poll.hideResults,
                 closesAt: poll.closesAt,
                 matchId: poll.matchId,
                 options: { create: poll.options.map((o, position) => ({ ...o, position })) },
@@ -289,6 +293,37 @@ export async function closePoll(_prev: ActionResult, formData: FormData): Promis
   if (!poll) return fail("Afstemningen findes ikke.");
   if (poll.post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din afstemning.");
   if (!poll.closedAt) await db.poll.updateMany({ where: { id: poll.id }, data: { closedAt: new Date() } });
+  revalidatePath("/oversigt");
+  return ok();
+}
+
+/**
+ * Showing a hidden result: whoever made the poll, or the team's admins — open or closed.
+ * Once shown it stays shown. Guarded on `resultsShownAt`, so a double press tells the team
+ * once.
+ */
+export async function showPollResults(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  const db = teamDb(user.teamId);
+  const poll = await db.poll.findFirst({
+    where: { id: field(formData, "pollId") },
+    select: { id: true, postId: true, question: true, hideResults: true, post: { select: { authorId: true } } },
+  });
+  if (!poll) return fail("Afstemningen findes ikke.");
+  if (poll.post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din afstemning.");
+  if (!poll.hideResults) return fail("Resultatet er ikke skjult.");
+  const shown = await db.poll.updateMany({ where: { id: poll.id, resultsShownAt: null }, data: { resultsShownAt: new Date() } });
+  if (shown.count > 0) {
+    const members = await db.teamMember.findMany({ select: { userId: true } });
+    await notify(user.teamId, members.map((m) => m.userId), user.id, {
+      category: "FEED",
+      postId: poll.postId,
+      title: "Resultatet er offentliggjort 🗳️",
+      body: poll.question,
+      url: "/oversigt#feed",
+      tag: "feed",
+    });
+  }
   revalidatePath("/oversigt");
   return ok();
 }

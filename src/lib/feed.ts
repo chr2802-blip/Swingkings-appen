@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
 import { teamRoster } from "./roster";
 import { FEED_PAGE } from "./feed-page";
-import { isOpen, tally } from "./polls";
+import { isOpen, resultsHidden, tally } from "./polls";
 import { kickoffLabel, readInZone } from "./time";
 import type { PollViewData } from "@/components/poll-view";
 import { reactionRows } from "./reactions";
@@ -78,6 +78,8 @@ export async function feedPosts(
         multipleChoice: true,
         closesAt: true,
         closedAt: true,
+        hideResults: true,
+        resultsShownAt: true,
         match: { select: { opponent: true, title: true, startsAt: true } },
         options: {
           orderBy: { position: "asc" },
@@ -127,6 +129,8 @@ type PollRow = {
   multipleChoice: boolean;
   closesAt: Date | null;
   closedAt: Date | null;
+  hideResults: boolean;
+  resultsShownAt: Date | null;
   match: { opponent: string | null; title: string; startsAt: Date } | null;
   options: { id: string; text: string; playerId: string | null; player: { photoId: string | null } | null }[];
   votes: { optionId: string; voterId: string | null; voter: { id: string; name: string; photoId: string | null } | null }[];
@@ -141,7 +145,10 @@ export function pollView(
 ): PollViewData {
   const open = isOpen(poll, now);
   const hasVoted = poll.ballots.some((b) => b.userId === viewer.id);
-  const reveal = hasVoted || !open;
+  // A hidden result reaches nobody — the maker and the admins included — until it is shown.
+  const hidden = resultsHidden(poll);
+  const reveal = !hidden && (hasVoted || !open);
+  const canClose = authorId === viewer.id || viewer.canAdminister;
   const counts = tally(
     poll.options.map((o) => o.id),
     poll.votes,
@@ -159,7 +166,9 @@ export function pollView(
     hasVoted,
     voters: poll.anonymous ? [] : whoVoted(poll.votes),
     myChoices: poll.anonymous ? [] : poll.votes.filter((v) => v.voterId === viewer.id).map((v) => v.optionId),
-    canClose: authorId === viewer.id || viewer.canAdminister,
+    canClose,
+    resultsHidden: hidden,
+    canShowResults: hidden && canClose,
     options: sortByVotes(
       poll.options.map((option, index) => {
         const count = counts[index]!;

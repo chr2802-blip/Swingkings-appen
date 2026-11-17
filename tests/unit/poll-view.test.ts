@@ -13,6 +13,8 @@ function poll(overrides: Partial<Parameters<typeof pollView>[0]> = {}): Paramete
     multipleChoice: false,
     closesAt: null,
     closedAt: null,
+    hideResults: false,
+    resultsShownAt: null,
     match: null,
     options: [
       { id: "o1", text: "Anna", playerId: "anna", player: { photoId: null } },
@@ -93,6 +95,56 @@ describe("pollView", () => {
     // Before voting nothing is counted, so nothing gives the leader away.
     expect(pollView(three, "anna", { id: "carl", canAdminister: false }, now).options.map((o) => o.id)).toEqual(["o1", "o2", "o3"]);
     expect(sortByVotes([{ votes: 1, n: "a" }, { votes: 3, n: "b" }, { votes: 1, n: "c" }]).map((o) => o.n)).toEqual(["b", "a", "c"]);
+  });
+
+  it("keeps a hidden result from everybody — voter, maker and admin, open or closed — until it is shown", () => {
+    const hidden = poll({ hideResults: true });
+    for (const viewer of [
+      { id: "bo", canAdminister: false }, // has voted
+      { id: "anna", canAdminister: false }, // made it, and voted
+      { id: "carl", canAdminister: true }, // admin
+    ]) {
+      const view = pollView(hidden, "anna", viewer, now);
+      expect(view.resultsHidden).toBe(true);
+      expect(view.options.map((o) => [o.votes, o.share, o.leading, o.voters])).toEqual([
+        [0, 0, false, []],
+        [0, 0, false, []],
+      ]);
+    }
+    // Only the maker and the admins may show it.
+    expect(pollView(hidden, "anna", { id: "anna", canAdminister: false }, now).canShowResults).toBe(true);
+    expect(pollView(hidden, "anna", { id: "carl", canAdminister: true }, now).canShowResults).toBe(true);
+    expect(pollView(hidden, "anna", { id: "bo", canAdminister: false }, now).canShowResults).toBe(false);
+    // The voter still sees what they chose themselves, and who has voted.
+    const mine = pollView(hidden, "anna", { id: "bo", canAdminister: false }, now);
+    expect(mine.myChoices).toEqual(["o1"]);
+    expect(mine.voters).toEqual([anna, bo]);
+
+    // Closing does not show it.
+    const closed = pollView(poll({ hideResults: true, closedAt: new Date("2026-11-10T00:00:00Z") }), "anna", { id: "carl", canAdminister: false }, now);
+    expect(closed.options[0]).toMatchObject({ votes: 0, leading: false });
+
+    // Shown: the usual rule again — the result to voters, and to everybody once closed.
+    const shown = poll({ hideResults: true, resultsShownAt: new Date("2026-11-11T11:00:00Z") });
+    const voter = pollView(shown, "anna", { id: "bo", canAdminister: false }, now);
+    expect(voter).toMatchObject({ resultsHidden: false, canShowResults: false });
+    expect(voter.options[0]).toMatchObject({ votes: 2, voters: [anna, bo] });
+    expect(pollView(shown, "anna", { id: "carl", canAdminister: false }, now).options[0]).toMatchObject({ votes: 0 });
+  });
+
+  it("hides an anonymous poll's result too, until it is shown", () => {
+    const anonymous = poll({
+      anonymous: true,
+      hideResults: true,
+      closedAt: new Date("2026-11-10T00:00:00Z"),
+      votes: [
+        { optionId: "o1", voterId: null, voter: null },
+        { optionId: "o1", voterId: null, voter: null },
+      ],
+    });
+    expect(pollView(anonymous, "anna", { id: "anna", canAdminister: true }, now).options[0]).toMatchObject({ votes: 0, share: 0 });
+    const shown = pollView({ ...anonymous, resultsShownAt: new Date("2026-11-11T00:00:00Z") }, "anna", { id: "carl", canAdminister: false }, now);
+    expect(shown.options[0]).toMatchObject({ votes: 2, voters: [] });
   });
 
   it("labels the closing time and the match", () => {

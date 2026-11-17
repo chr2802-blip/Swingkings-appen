@@ -156,7 +156,7 @@ export function makePhoto(teamId: string, options: { createdAt?: Date } = {}) {
 export async function makePoll(
   teamId: string,
   authorId: string,
-  options: { anonymous?: boolean; multipleChoice?: boolean; closesAt?: Date | null; closedAt?: Date | null; texts?: string[] } = {},
+  options: { anonymous?: boolean; multipleChoice?: boolean; closesAt?: Date | null; closedAt?: Date | null; hideResults?: boolean; texts?: string[] } = {},
 ) {
   const post = await prisma.post.create({
     data: {
@@ -170,6 +170,7 @@ export async function makePoll(
           multipleChoice: options.multipleChoice ?? false,
           closesAt: options.closesAt ?? null,
           closedAt: options.closedAt ?? null,
+          hideResults: options.hideResults ?? false,
           options: { create: (options.texts ?? ["Fredag", "Lørdag"]).map((text, position) => ({ text, position })) },
         },
       },

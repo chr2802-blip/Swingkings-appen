@@ -6,7 +6,7 @@ import { Button, Field, Textarea } from "@/components/ui";
 import { DialogForm } from "@/components/form-dialog";
 import { MultiPhotoField } from "@/components/multi-photo-field";
 import { useFormAction } from "@/components/use-form-action";
-import { closePoll, deletePost, editPost, pinPost } from "@/app/actions/social";
+import { closePoll, deletePost, editPost, pinPost, showPollResults } from "@/app/actions/social";
 import { MAX_POST_PHOTOS } from "@/lib/polls";
 import type { PollViewData } from "@/components/poll-view";
 import type { FormAction } from "@/lib/action-result";
@@ -26,11 +26,11 @@ export function useChangingVote() {
   return useContext(ChangingVote);
 }
 
-type Step = "menu" | "delete" | "close";
+type Step = "menu" | "delete" | "close" | "show";
 
 /**
  * The ⋯ in a post's corner, with everything one can do to it: pin it to the top, edit it,
- * vote again, close the poll and delete the post. Only what this viewer may do is listed;
+ * vote again, close the poll, show its hidden result and delete the post. Only what this viewer may do is listed;
  * pinning is for everybody, so there is always a button. Who voted for what is not here:
  * that opens from the poll's "x har stemt" (`PollView`).
  */
@@ -58,6 +58,7 @@ export function PostMenu({
 
   const canChangeVote = poll !== null && poll.open && poll.hasVoted && !poll.anonymous;
   const canClose = poll !== null && poll.open && poll.canClose;
+  const canShowResults = poll !== null && poll.canShowResults;
 
   const close = () => setOpen(false);
   const show = (next: Step) => {
@@ -68,6 +69,7 @@ export function PostMenu({
     menu: "Opslag",
     delete: "Slet opslaget?",
     close: "Luk afstemningen?",
+    show: "Offentliggør resultatet?",
   };
   const item = "press-card flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm hover:bg-slate-100";
 
@@ -138,6 +140,13 @@ export function PostMenu({
                   </button>
                 </li>
               )}
+              {canShowResults && (
+                <li>
+                  <button type="button" className={item} onClick={() => setStep("show")}>
+                    <span aria-hidden>📣</span> Offentliggør resultat
+                  </button>
+                </li>
+              )}
               {canChange && (
                 <li>
                   <button type="button" className={`${item} text-red-600`} onClick={() => setStep("delete")}>
@@ -157,6 +166,21 @@ export function PostMenu({
             fields={{ pollId: poll.id }}
             label="Luk den"
             note="Resultatet bliver vist for alle, og der kan ikke stemmes mere."
+            onBack={() => setStep("menu")}
+            onDone={close}
+          />
+        )}
+        {step === "show" && poll && (
+          <Confirm
+            action={showPollResults}
+            fields={{ pollId: poll.id }}
+            label="Offentliggør"
+            variant="primary"
+            note={
+              poll.open
+                ? "Alle der har stemt, ser resultatet med det samme, og alle får besked. Afstemningen er stadig åben. Det kan ikke skjules igen."
+                : "Alle ser resultatet, og alle får besked. Det kan ikke skjules igen."
+            }
             onBack={() => setStep("menu")}
             onDone={close}
           />
@@ -185,6 +209,7 @@ function Confirm({
   fields,
   label,
   note = "Det kan ikke fortrydes.",
+  variant = "danger",
   onBack,
   onDone,
 }: {
@@ -192,6 +217,7 @@ function Confirm({
   fields: Record<string, string>;
   label: string;
   note?: string;
+  variant?: "danger" | "primary";
   onBack: () => void;
   onDone: () => void;
 }) {
@@ -214,7 +240,7 @@ function Confirm({
           <Button type="button" variant="secondary" onClick={onBack} className="flex-1 sm:flex-none">
             Tilbage
           </Button>
-          <Button type="submit" variant="danger" disabled={pending} className="flex-1 sm:flex-none">
+          <Button type="submit" variant={variant} disabled={pending} className="flex-1 sm:flex-none">
             {label}
           </Button>
         </div>
