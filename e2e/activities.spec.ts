@@ -426,7 +426,8 @@ test("a player gives a job away in the chat, and a teammate follows the link and
   await expect(sheet.getByText("Søger en afløser i chatten")).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Træk tilbage" })).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Giv videre" })).toHaveCount(0);
-  await sheet.getByRole("button", { name: "Luk" }).click();
+  // The row under the sheet says so too. (Closing the sheet steps back in the history a
+  // moment later, which would abort the navigation below.)
   await expect(jobsTab(page).getByText("Søger afløser")).toBeVisible();
 
   await loginAs(bo);
