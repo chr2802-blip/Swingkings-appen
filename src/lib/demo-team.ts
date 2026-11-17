@@ -466,7 +466,7 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
     }
   };
   /** A few reactions on one comment or chat message, from up to `most` people. */
-  const reactTo = (target: { postCommentId: string } | { chatMessageId: string }, at: Date, most: number) => {
+  const reactTo = (target: { postCommentId: string } | { chatMessageId: string } | { activityCommentId: string }, at: Date, most: number) => {
     for (const user of sample(everybody, 1 + Math.floor(random() * most))) {
       reactions.push({ teamId, ...target, userId: user.id, kind: someKind(), createdAt: new Date(at.getTime() + Math.floor(random() * 6) * 600_000) });
     }
@@ -535,6 +535,21 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   // About every third comment and every fourth chat message has a reaction or a few.
   for (const comment of said) if (random() < 0.35) reactTo({ postCommentId: comment.id }, comment.createdAt, 3);
   for (const message of sent) if (random() < 0.25) reactTo({ chatMessageId: message.id }, message.createdAt, 4);
+  // --- Comments on activities: the party being planned, and the last match ----------------
+  const party1 = await prisma.activityComment.create({
+    data: { teamId, matchId: party, authorId: who("Mads").id, body: "Skal vi have en DJ, eller klarer vi musikken selv?", createdAt: ago(2) },
+  });
+  await prisma.activityComment.createMany({
+    data: [
+      { teamId, matchId: party, authorId: who("Noah").id, body: "Jeg har en højttaler, den klarer det 🔊", parentId: party1.id, createdAt: ago(1.9) },
+      { teamId, matchId: party, authorId: who("Frederik").id, body: "Må man tage kæresten med?", createdAt: ago(1.5) },
+      { teamId, matchId: party, authorId: who("Jonas").id, body: "Bødekassen betaler maden – drikkevarer for egen regning 🍻", createdAt: ago(0.8) },
+      { teamId, matchId: lastMatch, authorId: who("Victor").id, body: "Hvad tid mødes vi i Hvidovre?", createdAt: ago(6) },
+      { teamId, matchId: lastMatch, authorId: who("Mads").id, body: "12:15 ved klubhuset, vi kører samlet", createdAt: ago(5.9) },
+    ],
+  });
+  reactTo({ activityCommentId: party1.id }, party1.createdAt, 4);
+
   await prisma.reaction.createMany({ data: reactions });
   await prisma.pollBallot.createMany({ data: ballots });
   await prisma.pollVote.createMany({ data: votes });

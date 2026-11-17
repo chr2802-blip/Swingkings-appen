@@ -44,6 +44,8 @@ describe("createDemoTeam", () => {
     expect(await prisma.reaction.count({ where: { teamId, postCommentId: { not: null } } })).toBeGreaterThan(0);
     expect(await prisma.reaction.count({ where: { teamId, chatMessageId: { not: null } } })).toBeGreaterThan(0);
     expect(await prisma.reaction.groupBy({ by: ["kind"], where: { teamId } })).not.toHaveLength(1);
+    expect(await prisma.activityComment.count({ where: { teamId } })).toBe(6);
+    expect(await prisma.reaction.count({ where: { teamId, activityCommentId: { not: null } } })).toBeGreaterThan(0);
     expect(await prisma.poll.count({ where: { teamId } })).toBe(6);
     expect(await prisma.poll.count({ where: { teamId, closedAt: { not: null } } })).toBe(3);
 

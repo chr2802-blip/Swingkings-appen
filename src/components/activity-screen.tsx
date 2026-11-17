@@ -1,11 +1,12 @@
 import type { TeamUser } from "@/lib/auth";
-import { canManageFines } from "@/lib/access";
+import { canAdministerTeam, canManageFines } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
 import { fineBoard, fineHistory } from "@/lib/fine-data";
-import { kickoffLabel, readInZone, relativeDay, toLocalDateTimeInput } from "@/lib/time";
+import { kickoffLabel, readInZone, relativeDay, stampLabel, toLocalDateTimeInput } from "@/lib/time";
+import { reactionRows, reactionSummary } from "@/lib/reactions";
 import { Badge, buttonClass, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { TaskDialog } from "@/components/task-dialog";
@@ -19,6 +20,7 @@ import { CreateMenu } from "@/components/create-button";
 import { ActionButton } from "@/components/action-button";
 import { SwipePages, TurnButton } from "@/components/swipe-pages";
 import { AutoSync } from "@/components/auto-sync";
+import { ActivityComments } from "@/components/activity-comments";
 import { deleteActivity, setSignup } from "@/app/actions/activities";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
 import {
@@ -43,8 +45,8 @@ export function activityHref(id: string, tab: ActivityTab = "") {
  * One activity, on three tabs swiped between — each with its own address, all read at
  * once so a swipe never waits on the server:
  *
- * - **Detaljer**: when and where, the note, and who has signed up — nobody else: KampKlar's
- *   feed says little more. A hand-made activity is signed up for here; one from KampKlar
+ * - **Detaljer**: when and where, the note, who has signed up, and the team's comments on
+ *   it (`ActivityComments`) — KampKlar's feed says little more. A hand-made activity is signed up for here; one from KampKlar
  *   in KampKlar, behind its link.
  * - **Opgaver**: the activity's jobs.
  * - **Bøder**: the fines given at it, and its challenges.
@@ -74,6 +76,17 @@ export async function ActivityScreen({
         tasks: { orderBy: { createdAt: "asc" }, select: TASK_SELECT },
         challenges: { orderBy: { createdAt: "desc" }, include: challengeCardInclude },
         signups: { select: { userId: true, going: true } },
+        comments: {
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            parentId: true,
+            body: true,
+            createdAt: true,
+            author: { select: { id: true, name: true, photoId: true } },
+            reactions: reactionRows,
+          },
+        },
       },
     }),
   );
@@ -101,6 +114,17 @@ export async function ActivityScreen({
     : people(signupSummary(roster, match.signups).going);
   const mine = match.signups.find((s) => s.userId === user.id)?.going;
   const past = (match.endsAt ?? match.startsAt) < new Date();
+
+  const admin = canAdministerTeam(user, user.teamId);
+  const comments = match.comments.map((comment) => ({
+    id: comment.id,
+    parentId: comment.parentId,
+    body: comment.body,
+    stamp: stampLabel(comment.createdAt),
+    author: comment.author,
+    canDelete: comment.author.id === user.id || admin,
+    reactions: reactionSummary(comment.reactions, user.id),
+  }));
 
   const time = `${kickoffLabel(match.startsAt)}${match.endsAt ? `–${readInZone(match.endsAt, "HH:mm")}` : ""}`;
 
@@ -221,6 +245,13 @@ export async function ActivityScreen({
                     {going.length > 0 ? <SignupFaces people={going} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu.</p>}
                   </Card>
                 </section>
+
+                <ActivityComments
+                  matchId={match.id}
+                  comments={comments}
+                  members={roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId }))}
+                  viewerId={user.id}
+                />
 
                 {!fromKampKlar && (
                   <div className="mt-6 flex flex-wrap gap-2">
