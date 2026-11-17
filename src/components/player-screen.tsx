@@ -172,7 +172,7 @@ export async function PlayerScreen({
                       <ul className="divide-y divide-slate-100">
                         {latest.map((item) =>
                           item.kind === "fine" ? (
-                            <FineRow key={item.fine.id} fine={item.fine} user={user} />
+                            <FineRow key={item.fine.id} fine={item.fine} />
                           ) : (
                             challengeRow(item.challenge)
                           ),
@@ -221,7 +221,7 @@ export async function PlayerScreen({
                     Ingen bøder eller udfordringer. Mønsterspiller! 😇
                   </Empty>
                 ) : (
-                  <FineHistory fines={fines} user={user} />
+                  <FineHistory fines={fines} />
                 )}
               </div>
             ),
