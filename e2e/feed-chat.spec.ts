@@ -1,7 +1,7 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 
-test("a post with words shows in the feed, and a teammate likes and comments", async ({ page, loginAs }) => {
+test("a post with words shows in the feed, and a teammate reacts and comments", async ({ page, loginAs }) => {
   const { anna, bo } = await squad();
   await loginAs(anna);
   await page.goto("/oversigt");
@@ -15,18 +15,27 @@ test("a post with words shows in the feed, and a teammate likes and comments", a
   await loginAs(bo);
   await page.goto("/oversigt");
   await expect(page.getByText("Sikke en sejr i dag!")).toBeVisible();
-  await page.getByRole("button", { name: /Synes godt om|Like|👍|❤/ }).first().click();
-  await expect.poll(() => db.postLike.count()).toBe(1);
-  // Who liked it is shown as a face, not written out as a name; pressing the face names them.
-  const likers = page.getByRole("button", { name: "Bo synes godt om opslaget" });
-  await expect(likers).toBeVisible();
-  await expect(likers).toHaveText("B");
-  await likers.click();
-  const liked = page.getByRole("dialog", { name: "Synes godt om" });
-  await expect(liked.getByRole("listitem")).toHaveText([/Bo$/]);
-  await expect(liked.getByRole("link", { name: /Bo$/ })).toHaveAttribute("href", `/spiller/${bo.id}`);
+  // Reacting: the smiley opens the six, and the chosen one shows as a pill with its count.
+  await page.getByRole("button", { name: "Reager" }).click();
+  await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Elsker ❤️" }).click();
+  await expect(page.getByRole("group", { name: "Vælg en reaktion" })).toBeHidden();
+  const heart = page.getByRole("button", { name: "❤️ 1: Bo" });
+  await expect(heart).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => db.reaction.count({ where: { kind: "HEART", userId: bo.id } })).toBe(1);
+  // Who reacted is shown as a face, not written out as a name; pressing the face names them and what they gave.
+  await page.reload();
+  const reactors = page.getByRole("button", { name: "Bo har reageret" });
+  await expect(reactors).toHaveText("B");
+  await reactors.click();
+  const reacted = page.getByRole("dialog", { name: "Reaktioner" });
+  await expect(reacted.getByRole("listitem")).toHaveText([/Bo\s*❤️$/]);
+  await expect(reacted.getByRole("link", { name: /Bo$/ })).toHaveAttribute("href", `/spiller/${bo.id}`);
   await page.keyboard.press("Escape");
-  await expect(liked).toBeHidden();
+  await expect(reacted).toBeHidden();
+  // Pressing the pill takes it back.
+  await page.getByRole("button", { name: "❤️ 1: Bo" }).click();
+  await expect(page.getByRole("button", { name: /^❤️/ })).toHaveCount(0);
+  await expect.poll(() => db.reaction.count()).toBe(0);
   await page.getByRole("button", { name: "0 kommentarer" }).click();
   const comments = page.getByRole("dialog", { name: "Kommentarer" });
   await expect(comments.getByText("Ingen kommentarer endnu")).toBeVisible();
@@ -572,4 +581,39 @@ test("the chat opens on the latest 25 messages and fetches older ones as it is s
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await expect(message(61)).toHaveCount(1);
   await expect(message(1)).toHaveCount(1);
+});
+
+test("a comment and a chat message are reacted to, and the reaction stands after a reload", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const post = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Kamp i morgen" } });
+  await db.postComment.create({ data: { postId: post.id, authorId: anna.id, body: "Husk benskinner" } });
+  await db.chatMessage.create({ data: { teamId: team.id, authorId: anna.id, body: "Hvem kører?" } });
+  await loginAs(bo);
+
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "1 kommentar", exact: true }).click();
+  const comments = page.getByRole("dialog", { name: "Kommentarer" });
+  await comments.getByRole("button", { name: "Reager" }).click();
+  // The six lie over the drawer; choosing one leaves the drawer open.
+  await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Griner 😂" }).click();
+  await expect(comments.getByRole("button", { name: "😂 1: Bo" })).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => db.reaction.count({ where: { postCommentId: { not: null }, kind: "LAUGH" } })).toBe(1);
+  // Escape closes the six and not the drawer.
+  await comments.getByRole("button", { name: "Reager" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("group", { name: "Vælg en reaktion" })).toBeHidden();
+  await expect(comments).toBeVisible();
+
+  await page.goto("/chat");
+  await expect(page.getByText("Hvem kører?")).toBeVisible();
+  await page.getByRole("button", { name: "Reager" }).click();
+  await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Synes godt om 👍" }).click();
+  await expect.poll(() => db.reaction.count({ where: { chatMessageId: { not: null }, kind: "THUMBS" } })).toBe(1);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "👍 1: Bo" })).toHaveAttribute("aria-pressed", "true");
+
+  // Anna sees Bo's reaction, not marked as hers.
+  await loginAs(anna);
+  await page.goto("/chat");
+  await expect(page.getByRole("button", { name: "👍 1: Bo" })).toHaveAttribute("aria-pressed", "false");
 });

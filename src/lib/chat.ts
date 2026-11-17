@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
 import { latest } from "./push-summary";
 import { UNREAD_UP_TO } from "./chat-count";
+import { reactionRows, reactionSummary, type ReactionView } from "./reactions";
 
 /** How many messages the chat fetches at a time: on opening, and each time it is scrolled to the top. */
 export const CHAT_PAGE = 25;
@@ -15,29 +16,31 @@ export type ChatItem = {
   task: { id: string; title: string } | null;
   createdAt: string;
   author: { id: string; name: string; photoId: string | null };
+  /** The reactions on it, as the viewer sees them (`reactionSummary`). */
+  reactions: ReactionView[];
 };
 
 /** A page of messages, oldest first, and whether there are older ones still to fetch. */
 export type ChatPage = { messages: ChatItem[]; more: boolean };
 
-/** The latest messages, oldest first, as the chat page and `/api/chat` both draw them. */
-export function latestMessages(teamId: string): Promise<ChatPage> {
-  return messagesPage(teamId, {});
+/** The latest messages, oldest first, as the chat page and `/api/chat` both draw them for the viewer. */
+export function latestMessages(teamId: string, viewerId: string): Promise<ChatPage> {
+  return messagesPage(teamId, viewerId, {});
 }
 
 /**
  * The page of messages just before `beforeId`, oldest first, fetched as the chat is scrolled
  * up. Null when there is no such message on this team (another team's id, or deleted).
  */
-export async function olderMessages(teamId: string, beforeId: string): Promise<ChatPage | null> {
+export async function olderMessages(teamId: string, viewerId: string, beforeId: string): Promise<ChatPage | null> {
   const cursor = await teamDb(teamId).chatMessage.findFirst({ where: { id: beforeId }, select: { id: true, createdAt: true } });
   if (!cursor) return null;
-  return messagesPage(teamId, {
+  return messagesPage(teamId, viewerId, {
     OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
   });
 }
 
-async function messagesPage(teamId: string, where: Prisma.ChatMessageWhereInput): Promise<ChatPage> {
+async function messagesPage(teamId: string, viewerId: string, where: Prisma.ChatMessageWhereInput): Promise<ChatPage> {
   const rows = await teamDb(teamId).chatMessage.findMany({
     where,
     // The id breaks ties, so a page ends at the same message every time it is asked.
@@ -50,15 +53,17 @@ async function messagesPage(teamId: string, where: Prisma.ChatMessageWhereInput)
       author: { select: { id: true, name: true, photoId: true } },
       task: { select: { id: true, title: true } },
       photos: { orderBy: { position: "asc" }, select: { photoId: true } },
+      reactions: reactionRows,
     },
   });
   const more = rows.length > CHAT_PAGE;
   const messages = rows
     .slice(0, CHAT_PAGE)
     .reverse()
-    .map(({ photos, ...row }) => ({
+    .map(({ photos, reactions, ...row }) => ({
       ...row,
       photoIds: photos.map((photo) => photo.photoId),
+      reactions: reactionSummary(reactions, viewerId),
       createdAt: row.createdAt.toISOString(),
     }));
   return { messages, more };

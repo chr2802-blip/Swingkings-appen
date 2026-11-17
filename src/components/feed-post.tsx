@@ -1,16 +1,16 @@
-import { likersView, type feedPosts } from "@/lib/feed";
+import type { feedPosts } from "@/lib/feed";
+import { reactionSummary, reactorsView } from "@/lib/reactions";
 import { stampLabel } from "@/lib/time";
 import { Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
-import { LikersDrawer } from "@/components/likers-drawer";
+import { ReactorsDrawer } from "@/components/reactors-drawer";
+import { Reactions } from "@/components/reactions";
 import { PlayerLink } from "@/components/player-link";
 import { PhotoCarousel } from "@/components/photo-carousel";
 import { PollView } from "@/components/poll-view";
 import { CommentsDrawer } from "@/components/comments-drawer";
 import type { CommentMember } from "@/components/comment-form";
-import { ActionButton } from "@/components/action-button";
 import { PostMenu, PostState } from "@/components/post-menu";
-import { toggleLike } from "@/app/actions/social";
 
 export type FeedPost = Awaited<ReturnType<typeof feedPosts>>[number];
 
@@ -30,8 +30,7 @@ export function FeedPostCard({
   /** The team, for tagging in comments. */
   members: CommentMember[];
 }) {
-  const liked = post.likes.some((like) => like.userId === viewerId);
-  const likers = likersView(post.likes);
+  const reactors = reactorsView(post.reactions);
   return (
     <PostState>
       <Card padded={false} className="overflow-hidden">
@@ -62,29 +61,15 @@ export function FeedPostCard({
             poll={post.poll}
           />
         </div>
-        {/* What the author wrote comes first, above pictures, poll, likes and comments. */}
+        {/* What the author wrote comes first, above pictures, poll, reactions and comments. */}
         {post.body && <p className="px-4 pb-3 text-sm whitespace-pre-line">{post.body}</p>}
         {post.photoIds.length > 0 && (
           <PhotoCarousel photoIds={post.photoIds} alt={post.body ?? `Billede fra ${post.author.name}`} />
         )}
         <div className="space-y-3 px-4 py-3">
           {post.poll && <PollView poll={post.poll} />}
-          <div className="flex items-center gap-1">
-            <ActionButton
-              action={toggleLike}
-              fields={{ postId: post.id }}
-              variant="ghost"
-              className="-ml-2"
-              label={
-                <span className={`flex items-center gap-1.5 ${liked ? "text-red-600" : ""}`}>
-                  <svg viewBox="0 0 24 24" className={`h-5 w-5 ${liked ? "animate-pop" : ""}`} fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8">
-                    <path d="M12 20s-7-4.4-9.2-8.6C1.3 8.3 3.2 5 6.4 5c2 0 3.3 1.1 4 2.3h3.2C14.3 6.1 15.6 5 17.6 5c3.2 0 5.1 3.3 3.6 6.4C19 15.6 12 20 12 20z" strokeLinejoin="round" />
-                  </svg>
-                  {post.likes.length > 0 && post.likes.length}
-                  <span className="sr-only">{liked ? "Fjern like" : "Like"}</span>
-                </span>
-              }
-            />
+          <div className="flex flex-wrap items-center gap-1">
+            <Reactions target="post" id={post.id} reactions={reactionSummary(post.reactions, viewerId)} className="-ml-1" />
             <CommentsDrawer
               postId={post.id}
               members={members}
@@ -96,16 +81,11 @@ export function FeedPostCard({
                 stamp: stampLabel(comment.createdAt),
                 author: { id: comment.author.id, name: comment.author.name, photoId: comment.author.photoId },
                 canDelete: comment.author.id === viewerId || admin,
+                reactions: reactionSummary(comment.reactions, viewerId),
               }))}
             />
-            {/* Who liked it, as overlapping faces; pressing them lists everybody. */}
-            {likers.faces.length > 0 && (
-              <LikersDrawer
-                likers={post.likes.map((like) => ({ id: like.userId, name: like.user.name, photoId: like.user.photoId }))}
-                shown={likers.faces.length}
-                label={likers.label}
-              />
-            )}
+            {/* Who reacted, as overlapping faces; pressing them lists everybody and what they gave. */}
+            {reactors.faces.length > 0 && <ReactorsDrawer reactors={reactors.people} shown={reactors.faces.length} label={reactors.label} />}
           </div>
         </div>
       </Card>

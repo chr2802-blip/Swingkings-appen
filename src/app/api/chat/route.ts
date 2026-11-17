@@ -14,10 +14,10 @@ export async function GET(request: Request) {
   if (!user?.teamId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const before = new URL(request.url).searchParams.get("before");
   if (before) {
-    const page = await olderMessages(user.teamId, before);
+    const page = await olderMessages(user.teamId, user.id, before);
     if (!page) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(page, { headers: { "Cache-Control": "no-store" } });
   }
-  const [page] = await Promise.all([latestMessages(user.teamId), markChatSeen(user.teamId, user.id)]);
+  const [page] = await Promise.all([latestMessages(user.teamId, user.id), markChatSeen(user.teamId, user.id)]);
   return NextResponse.json(page, { headers: { "Cache-Control": "no-store" } });
 }

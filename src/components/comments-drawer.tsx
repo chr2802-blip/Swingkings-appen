@@ -2,23 +2,11 @@
 
 import { useState } from "react";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
-import { Avatar } from "@/components/photo";
-import { PlayerLink } from "@/components/player-link";
-import { ActionButton } from "@/components/action-button";
 import { CommentForm, type CommentMember, type ReplyTarget } from "@/components/comment-form";
-import { mentionSegments } from "@/lib/mentions";
-import { deleteComment } from "@/app/actions/social";
+import { CommentThreads, type CommentView } from "@/components/comment-thread";
+import { addComment, deleteComment } from "@/app/actions/social";
 
-export type CommentView = {
-  id: string;
-  /** The comment this one answers; null for a comment on the post itself. */
-  parentId: string | null;
-  body: string;
-  /** Already written out on the server, in Copenhagen time. */
-  stamp: string;
-  author: { id: string; name: string; photoId: string | null };
-  canDelete: boolean;
-};
+export type { CommentView };
 
 /**
  * A post's comments, the Facebook way: the card shows only a 💬 and the count, and the
@@ -41,8 +29,6 @@ export function CommentsDrawer({
   const [open, setOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const count = comments.length;
-  const threads = comments.filter((c) => !c.parentId || !comments.some((p) => p.id === c.parentId));
-  const repliesTo = (id: string) => comments.filter((c) => c.parentId === id);
 
   function close() {
     setOpen(false);
@@ -67,93 +53,18 @@ export function CommentsDrawer({
           {count === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">Ingen kommentarer endnu. Skriv den første!</p>
           ) : (
-            <ul aria-label="Kommentarer" className="space-y-4">
-              {threads.map((comment) => {
-                const replies = repliesTo(comment.id);
-                return (
-                  <li key={comment.id}>
-                    <Comment comment={comment} members={members} onReply={setReplyTo} />
-                    {replies.length > 0 && (
-                      <ul aria-label={`Svar til ${comment.author.name}`} className="mt-3 space-y-3 pl-10">
-                        {replies.map((reply) => (
-                          <li key={reply.id}>
-                            <Comment comment={reply} members={members} onReply={setReplyTo} small />
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <CommentThreads comments={comments} members={members} onReply={setReplyTo} target="comment" onDelete={deleteComment} />
           )}
         </ModalBody>
         <ModalFooter>
           <CommentForm
-            postId={postId}
+            action={addComment}
+            fields={{ postId }}
             members={members}
             viewerId={viewerId}
             replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSent={() => setReplyTo(null)} />
         </ModalFooter>
       </Modal>
     </>
-  );
-}
-
-function Comment({
-  comment,
-  members,
-  onReply,
-  small = false,
-}: {
-  comment: CommentView;
-  members: CommentMember[];
-  onReply: (to: ReplyTarget) => void;
-  small?: boolean;
-}) {
-  return (
-    <div className="flex items-start gap-2.5">
-      <PlayerLink userId={comment.author.id} className="shrink-0" aria-label={comment.author.name}>
-        <Avatar name={comment.author.name} photoId={comment.author.photoId} size={small ? "xs" : "sm"} />
-      </PlayerLink>
-      <div className="min-w-0 flex-1">
-        <div className="w-fit max-w-full rounded-2xl rounded-tl-md bg-slate-100 px-3.5 py-2">
-          <p className="text-[13px] font-semibold">
-            <PlayerLink userId={comment.author.id}>{comment.author.name}</PlayerLink>
-          </p>
-          <p className="text-sm break-words whitespace-pre-line">
-            {mentionSegments(comment.body, members).map((segment, index) =>
-              segment.userId ? (
-                <PlayerLink key={index} userId={segment.userId} className="font-semibold text-[var(--accent-text)]">
-                  {segment.text}
-                </PlayerLink>
-              ) : (
-                segment.text
-              ),
-            )}
-          </p>
-        </div>
-        <div className="mt-1 flex items-center gap-3 px-3 text-xs text-slate-500">
-          <span>{comment.stamp}</span>
-          <button
-            type="button"
-            onClick={() => onReply({ id: comment.id, name: comment.author.name })}
-            aria-label={`Svar ${comment.author.name}`}
-            className="font-medium text-slate-500 hover:text-slate-700"
-          >
-            Svar
-          </button>
-          {comment.canDelete && (
-            <ActionButton
-              action={deleteComment}
-              fields={{ id: comment.id }}
-              label="Slet"
-              variant="ghost"
-              className="px-0! py-0! text-xs font-medium text-slate-500!"
-            />
-          )}
-        </div>
-      </div>
-    </div>
   );
 }
