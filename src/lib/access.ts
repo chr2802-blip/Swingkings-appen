@@ -42,6 +42,14 @@ export function canDeleteFine(user: SessionUser, teamId: string, fine: { issuedB
   return fine.issuedById === user.id || canManageFines(user, teamId);
 }
 
+/**
+ * Marking a job done (or not done) is for whoever is on it; an admin may do it for them.
+ * Taking a job is not a thing: a place on one only moves by being handed over.
+ */
+export function canFinishTask(user: SessionUser, teamId: string, task: { assignees: { userId: string }[] }) {
+  return task.assignees.some((a) => a.userId === user.id) || canAdministerTeam(user, teamId);
+}
+
 export function assertTeamAdmin(user: SessionUser, teamId: string) {
   if (!canAdministerTeam(user, teamId)) throw new NotAllowedError();
 }

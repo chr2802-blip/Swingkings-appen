@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { createTask, deleteTask, setTaskDone, toggleTakeTask, updateTask } from "@/app/actions/tasks";
+import { createTask, deleteTask, setTaskDone, updateTask } from "@/app/actions/tasks";
 import { taskCandidates } from "@/lib/tasks";
 import { formData, makeMatch, makeMember, makeSquad, signIn } from "../helpers/factories";
 import { expectRedirect, expectRedirectToLogin } from "../helpers/expect";
@@ -117,24 +117,42 @@ describe("editing and deleting", () => {
 });
 
 describe("doing jobs", () => {
-  it("marks a job done by whoever pressed, and undoes it", async () => {
+  it("marks a job done by whoever has it, and undoes it", async () => {
     const { team, anna, bo } = await makeSquad();
-    const task = await prisma.task.create({ data: { teamId: team.id, title: "Tøjvask", createdById: anna.id } });
+    const task = await prisma.task.create({
+      data: { teamId: team.id, title: "Tøjvask", createdById: anna.id, assignees: { create: { userId: bo.id } } },
+    });
     await signIn(bo);
-    await setTaskDone(undefined, formData({ id: task.id, done: "true" }));
+    expect(await setTaskDone(undefined, formData({ id: task.id, done: "true" }))).toEqual({ ok: true });
     expect(await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({ doneById: bo.id });
     await setTaskDone(undefined, formData({ id: task.id, done: "false" }));
     expect(await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({ doneAt: null, doneById: null });
   });
 
-  it("puts yourself on a job and takes yourself off again", async () => {
-    const { team, anna } = await makeSquad();
-    const task = await prisma.task.create({ data: { teamId: team.id, title: "Kage" } });
-    await signIn(anna);
-    await toggleTakeTask(undefined, formData({ id: task.id }));
-    expect(await assignees(task.id)).toEqual([anna.id]);
-    await toggleTakeTask(undefined, formData({ id: task.id }));
-    expect(await assignees(task.id)).toEqual([]);
+  it("refuses somebody who is not on the job, the one who made it and the bødekasseformand included", async () => {
+    const { team, anna, bo, treasurer } = await makeSquad();
+    const task = await prisma.task.create({
+      data: { teamId: team.id, title: "Tøjvask", createdById: anna.id, assignees: { create: { userId: bo.id } } },
+    });
+    for (const who of [anna, treasurer]) {
+      await signIn(who);
+      expect(await setTaskDone(undefined, formData({ id: task.id, done: "true" }))).toEqual({
+        ok: false,
+        error: "Kun dem, der har opgaven, kan markere den som udført.",
+      });
+    }
+    // Nobody on it: still only an admin.
+    const open = await prisma.task.create({ data: { teamId: team.id, title: "Kage" } });
+    expect(await setTaskDone(undefined, formData({ id: open.id, done: "true" }))).toMatchObject({ ok: false });
+    expect(await prisma.task.count({ where: { doneAt: { not: null } } })).toBe(0);
+  });
+
+  it("lets an admin mark anybody's job done", async () => {
+    const { team, admin, bo } = await makeSquad();
+    const task = await prisma.task.create({ data: { teamId: team.id, title: "Tøjvask", assignees: { create: { userId: bo.id } } } });
+    await signIn(admin);
+    expect(await setTaskDone(undefined, formData({ id: task.id, done: "true" }))).toEqual({ ok: true });
+    expect(await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({ doneById: admin.id });
   });
 
   it("cannot touch another team's job", async () => {
@@ -143,7 +161,6 @@ describe("doing jobs", () => {
     const theirs = await prisma.task.create({ data: { teamId: other.team.id, title: "Deres" } });
     await signIn(anna);
     expect(await setTaskDone(undefined, formData({ id: theirs.id, done: "true" }))).toEqual({ ok: false, error: "Opgaven findes ikke." });
-    expect(await toggleTakeTask(undefined, formData({ id: theirs.id }))).toEqual({ ok: false, error: "Opgaven findes ikke." });
     expect(await updateTask(undefined, formData({ id: theirs.id, title: "X", dueOn: "2030-01-01" }))).toEqual({ ok: false, error: "Du kan ikke rette den opgave." });
     expect(await prisma.task.findUniqueOrThrow({ where: { id: theirs.id } })).toMatchObject({ doneAt: null, title: "Deres" });
     expect(await assignees(theirs.id)).toEqual([]);

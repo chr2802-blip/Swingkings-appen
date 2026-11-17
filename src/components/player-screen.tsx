@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { TeamUser } from "@/lib/auth";
-import { canManageFines, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
+import { canAdministerTeam, canManageFines, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { fineBoard, fineHistory, matchOptions } from "@/lib/fine-data";
 import { fineUnits, kr } from "@/lib/money";
@@ -193,7 +193,7 @@ export async function PlayerScreen({
                   {nextTasks.length > 0 ? (
                     <List>
                       {nextTasks.map((task) => (
-                        <TaskRow key={task.id} task={task} viewerId={user.id} />
+                        <TaskRow key={task.id} task={task} viewerId={user.id} admin={canAdministerTeam(user, user.teamId)} />
                       ))}
                     </List>
                   ) : (
@@ -240,7 +240,7 @@ export async function PlayerScreen({
               ) : (
                 <List>
                   {tasks.map((task) => (
-                    <TaskRow key={task.id} task={task} viewerId={user.id} />
+                    <TaskRow key={task.id} task={task} viewerId={user.id} admin={canAdministerTeam(user, user.teamId)} />
                   ))}
                 </List>
               ),

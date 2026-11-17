@@ -7,12 +7,16 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam } from "@/lib/access";
+import { canAdministerTeam, canFinishTask } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { field, optionalText, readForm, requiredText } from "@/lib/form";
+import { field, MAX_MESSAGE, optionalText, readForm, requiredText } from "@/lib/form";
 import { deadlineOn } from "@/lib/time";
 import { createDistributedTasks, taskUrl } from "@/lib/tasks";
 import { notifyLater } from "@/lib/notify";
+import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
+import { announce } from "@/lib/realtime";
+import { CHAT_POSTED } from "@/lib/realtime-topic";
+import { notifyChatLater } from "@/lib/grouped-push";
 
 function refresh(taskId?: string, matchId?: string | null) {
   revalidatePath("/opgaver", "layout");
@@ -146,39 +150,22 @@ export async function updateTask(_prev: ActionResult, formData: FormData): Promi
   return ok();
 }
 
-/** Anybody on the team may mark a job done (or undo it): the kit gets washed by whoever has it. */
+/**
+ * Whoever is on the job marks it done (or undoes it); an admin may do it for anybody.
+ * Nobody else: a job is not done because a bystander says so.
+ */
 export async function setTaskDone(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const id = field(formData, "id");
   const done = formData.get("done") === "true";
   const db = teamDb(user.teamId);
-  const task = await db.task.findFirst({ where: { id }, select: { id: true, matchId: true } });
+  const task = await db.task.findFirst({ where: { id }, select: { id: true, matchId: true, assignees: { select: { userId: true } } } });
   if (!task) return fail("Opgaven findes ikke.");
+  if (!canFinishTask(user, user.teamId, task)) return fail("Kun dem, der har opgaven, kan markere den som udført.");
   await db.task.updateMany({
     where: { id },
     data: done ? { doneAt: new Date(), doneById: user.id } : { doneAt: null, doneById: null },
   });
-  refresh(task.id, task.matchId);
-  return ok();
-}
-
-/** Puts yourself on a job, or takes yourself off one. */
-export async function toggleTakeTask(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  const user = await requireTeamUser();
-  const id = field(formData, "id");
-  const task = await teamDb(user.teamId).task.findFirst({ where: { id }, select: { id: true, matchId: true } });
-  if (!task) return fail("Opgaven findes ikke.");
-  const mine = await prisma.taskAssignee.findUnique({ where: { taskId_userId: { taskId: id, userId: user.id } } });
-  if (mine) {
-    await prisma.$transaction([
-      prisma.taskAssignee.delete({ where: { taskId_userId: { taskId: id, userId: user.id } } }),
-      // Nobody can take over a place that is no longer there.
-      prisma.taskHandover.updateMany({
-        where: { taskId: id, fromId: user.id, status: "PENDING" },
-        data: { status: "WITHDRAWN", answeredAt: new Date() },
-      }),
-    ]);
-  } else await prisma.taskAssignee.create({ data: { taskId: id, userId: user.id } });
   refresh(task.id, task.matchId);
   return ok();
 }
@@ -198,6 +185,24 @@ const offerSchema = z.object({
   note: optionalText,
 });
 
+/** The job, if this person may hand their place on it to somebody else. */
+async function ownPlace(user: Awaited<ReturnType<typeof requireTeamUser>>, id: string) {
+  const task = await teamDb(user.teamId).task.findFirst({
+    where: { id },
+    select: { id: true, title: true, matchId: true, doneAt: true, assignees: { select: { userId: true } } },
+  });
+  if (!task) return { error: "Opgaven findes ikke." } as const;
+  if (task.doneAt) return { error: "Opgaven er allerede udført." } as const;
+  if (!task.assignees.some((a) => a.userId === user.id)) return { error: "Du kan kun give en opgave videre, du selv har." } as const;
+  return { task } as const;
+}
+
+/** The partial unique index: one open request per person per task. */
+function alreadyAsking(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+const ALREADY_ASKING = "Du venter allerede på svar på opgaven. Træk den forespørgsel tilbage først.";
+
 /**
  * Asks somebody else to take over your place on a job — you cannot make the match, say.
  * Nothing moves until they accept (`answerHandover`); the request stays as the task's
@@ -207,14 +212,10 @@ export async function offerTask(_prev: ActionResult, formData: FormData): Promis
   const user = await requireTeamUser();
   const form = readForm(offerSchema, formData);
   if (!form.ok) return fail(form.error);
+  const place = await ownPlace(user, form.fields.id);
+  if (place.error) return fail(place.error);
+  const { task } = place;
   const db = teamDb(user.teamId);
-  const task = await db.task.findFirst({
-    where: { id: form.fields.id },
-    select: { id: true, title: true, matchId: true, doneAt: true, assignees: { select: { userId: true } } },
-  });
-  if (!task) return fail("Opgaven findes ikke.");
-  if (task.doneAt) return fail("Opgaven er allerede udført.");
-  if (!task.assignees.some((a) => a.userId === user.id)) return fail("Du kan kun give en opgave videre, du selv har.");
   const { toId } = form.fields;
   if (toId === user.id) return fail("Vælg en anden end dig selv.");
   const to = await db.teamMember.findFirst({ where: { userId: toId }, select: { user: { select: { name: true } } } });
@@ -226,10 +227,7 @@ export async function offerTask(_prev: ActionResult, formData: FormData): Promis
       data: { teamId: user.teamId, taskId: task.id, fromId: user.id, toId, note: form.fields.note },
     });
   } catch (error) {
-    // The partial unique index: one open request per person per task.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return fail("Du venter allerede på svar på opgaven. Træk den forespørgsel tilbage først.");
-    }
+    if (alreadyAsking(error)) return fail(ALREADY_ASKING);
     throw error;
   }
   notifyLater([toId], user.id, {
@@ -242,9 +240,46 @@ export async function offerTask(_prev: ActionResult, formData: FormData): Promis
   return ok();
 }
 
+const askSchema = z.object({ id: z.string().min(1), note: optionalText });
+
 /**
- * The person asked says yes or no. Yes moves the place on the job from the asker to
- * them; the status guard means a double press moves it once.
+ * Asks the whole team, in the chat, whether somebody will take over your place on a job.
+ * The request names nobody (`toId` null) until the first one says yes on the task's page;
+ * the chat message carries the task, so it is drawn as a link to it.
+ */
+export async function askInChat(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  const form = readForm(askSchema, formData);
+  if (!form.ok) return fail(form.error);
+  const place = await ownPlace(user, form.fields.id);
+  if (place.error) return fail(place.error);
+  const { task } = place;
+  const limit = await checkRateLimit("chat", user.id);
+  if (!limit.allowed) return fail("Du sender meget hurtigt. Vent lidt.");
+
+  const note = form.fields.note;
+  const body = `Kan nogen overtage min opgave “${task.title}”?${note ? `\n${note}` : ""}`;
+  try {
+    await prisma.$transaction([
+      prisma.taskHandover.create({ data: { teamId: user.teamId, taskId: task.id, fromId: user.id, toId: null, inChat: true, note } }),
+      prisma.chatMessage.create({ data: { teamId: user.teamId, authorId: user.id, body: body.slice(0, MAX_MESSAGE), taskId: task.id } }),
+    ]);
+  } catch (error) {
+    if (alreadyAsking(error)) return fail(ALREADY_ASKING);
+    throw error;
+  }
+  await recordAttempt("chat", user.id);
+  announce(user.teamId, CHAT_POSTED);
+  notifyChatLater(user.teamId, user.teamName, user.id);
+  revalidatePath("/chat");
+  refresh(task.id, task.matchId);
+  return ok();
+}
+
+/**
+ * The person asked says yes or no — or, asked in the chat, the first one on the team who
+ * says yes takes it. Yes moves the place on the job from the asker to them; the status
+ * guard means a double press (or two people at once) moves it once.
  */
 export async function answerHandover(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -259,9 +294,15 @@ export async function answerHandover(_prev: ActionResult, formData: FormData): P
     },
   });
   if (!handover) return fail("Forespørgslen findes ikke.");
-  if (handover.toId !== user.id) return fail("Det er ikke dig, der er spurgt.");
+  const open = handover.inChat;
+  if (open ? handover.fromId === user.id : handover.toId !== user.id) return fail("Det er ikke dig, der er spurgt.");
   if (handover.status !== "PENDING") return fail("Forespørgslen er allerede besvaret.");
+  // Nobody declines for the whole team; you just do not say yes.
+  if (open && !accept) return fail("Forespørgslen er til hele holdet. Lad den være, hvis du ikke kan.");
   if (accept && handover.task.doneAt) return fail("Opgaven er allerede udført.");
+  if (accept && (await prisma.taskAssignee.findUnique({ where: { taskId_userId: { taskId: handover.taskId, userId: user.id } } }))) {
+    return fail("Du har allerede opgaven.");
+  }
 
   const outcome = await prisma.$transaction(async (tx) => {
     const now = new Date();
@@ -274,12 +315,12 @@ export async function answerHandover(_prev: ActionResult, formData: FormData): P
     }
     const { count } = await tx.taskHandover.updateMany({
       where: { id, status: "PENDING" },
-      data: { status: "ACCEPTED", answeredAt: now },
+      data: { status: "ACCEPTED", answeredAt: now, toId: user.id },
     });
     if (count !== 1) return "answered";
     const gone = await tx.taskAssignee.deleteMany({ where: { taskId: handover.taskId, userId: handover.fromId } });
     if (gone.count !== 1) {
-      await tx.taskHandover.update({ where: { id }, data: { status: "WITHDRAWN" } });
+      await tx.taskHandover.update({ where: { id }, data: { status: "WITHDRAWN", toId: handover.toId } });
       return "moot";
     }
     await tx.taskAssignee.createMany({ data: [{ taskId: handover.taskId, userId: user.id }], skipDuplicates: true });

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransitio
 import { sendChatMessage, deleteChatMessage } from "@/app/actions/social";
 import { Avatar, Photo } from "@/components/photo";
 import { PhotoViewer } from "@/components/photo-viewer";
+import Link from "next/link";
 import { PlayerLink } from "@/components/player-link";
 import { uploadPhoto } from "@/components/photo-field";
 import { PhotoError } from "@/lib/downscale";
@@ -162,6 +163,16 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
                     <ChatPhotos photoIds={message.photoIds} onOpen={(index) => setViewing({ photoIds: message.photoIds, index })} />
                   )}
                   {message.body && <p className="px-3.5 py-2 text-sm whitespace-pre-line">{message.body}</p>}
+                  {message.task && (
+                    <Link
+                      href={`/opgaver/${message.task.id}`}
+                      className={`mx-2 mb-2 block rounded-xl px-3 py-2 text-sm font-medium ${
+                        own ? "bg-white/15 text-white" : "bg-slate-100 text-[var(--accent-text)]"
+                      }`}
+                    >
+                      📋 {message.task.title} · Se opgaven →
+                    </Link>
+                  )}
                 </div>
                 <span className="mt-0.5 flex gap-2 px-1 text-[11px] text-slate-400">
                   {stampLabel(new Date(message.createdAt))}

@@ -107,12 +107,18 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   old rows may have `matchId` null). There is no tasks menu; `/kampe` and `/opgaver` redirect.
   Standard jobs are added with `addTemplatesToActivity` (ticked ids, or `"auto"`), copied
   from an earlier activity with `copyTasksFromActivity` (`src/lib/tasks.ts`).
-- **Giving a task away** (`offerTask`, `answerHandover`, `withdrawHandover`): somebody on a
-  task asks one teammate to take over their place. Nothing moves until that person accepts;
-  accepting swaps the two `TaskAssignee` rows, guarded on status so a double press moves it
-  once. One open request per person per task (a partial unique index). The `TaskHandover`
-  rows stay as the task's history ("Historik" on `/opgaver/<id>`); leaving the task or being
-  taken off it withdraws an open request.
+- **Nobody takes a task themselves.** A place on one moves only by being handed over, or
+  by the creator/admin editing the task. Marking a task done (or undone) is for those on it
+  and `canAdministerTeam` (`canFinishTask`, `src/lib/access.ts`); everybody else sees the tick.
+- **Giving a task away** (`offerTask`, `askInChat`, `answerHandover`, `withdrawHandover`):
+  somebody on a task asks one teammate, or the whole team in the chat (`askInChat`: a
+  `TaskHandover` with `inChat` and `toId` null, plus a `ChatMessage` whose `taskId` draws a
+  link to the task), to take over their place. Nothing moves until somebody accepts on the
+  task's page; accepting swaps the two `TaskAssignee` rows (and writes the taker into
+  `toId`), guarded on status so a double press — or two people at once — moves it once.
+  One open request per person per task (a partial unique index), chat or not. The
+  `TaskHandover` rows stay as the task's history ("Historik" on `/opgaver/<id>`); being
+  taken off the task withdraws an open request.
 - **KampKlar** is read as the team's iCalendar export (`src/lib/ical.ts`,
   `src/lib/kampklar.ts`), fetched with `safeFetch`. Rows are matched by UID; hand-made
   activities are never touched by the sync. New future MATCH rows get the team's

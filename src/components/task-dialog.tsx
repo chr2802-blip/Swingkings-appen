@@ -101,7 +101,7 @@ function NewTaskFields({ members, activityId }: { members: Member[]; activityId:
         <Select id="assign" name="assign" value={assign} onChange={(e) => setAssign(e.target.value as typeof assign)}>
           <option value="auto">Fordel retfærdigt (dem med færrest opgaver)</option>
           <option value="pick">Jeg vælger selv</option>
-          <option value="none">Ingen endnu — nogen tager den</option>
+          <option value="none">Ingen endnu — fordeles senere</option>
         </Select>
       </Field>
       {assign === "auto" && (
