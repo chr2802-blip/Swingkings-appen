@@ -197,26 +197,26 @@ model User {
 
 /// One person on one team, and what they may do there.
 model TeamMember {
-  userId      String
-  teamId      String
-  role        MemberRole @default(PLAYER)
+  userId       String
+  teamId       String
+  role         MemberRole @default(PLAYER)
   /// Shirt number, shown beside the name. Optional: not everybody on a team plays.
-  shirtNumber Int?
+  shirtNumber  Int?
   /**
    * Whether the automatic task distribution may hand this person jobs. A coach who
    * never washes the kit can be on the team without being picked for it.
    */
-  takesTasks  Boolean    @default(true)
+  takesTasks   Boolean    @default(true)
   /// When this person last had the feed in view; posts after it are "nye opslag".
-  feedSeenAt  DateTime?
+  feedSeenAt   DateTime?
   /// When this person last had the team chat open; a chat push is held back while it is recent.
-  chatSeenAt  DateTime?
+  chatSeenAt   DateTime?
   /// When an admin marked this season's kontingent (membership fee) paid; null while it is not. A new season clears it.
-  duesPaidAt  DateTime?
+  duesPaidAt   DateTime?
   /// The name KampKlar's feed gives this person, set by an admin when it is not their name here.
   /// Their sign-ups in KampKlar are matched by it first.
   kampklarName String?
-  createdAt   DateTime   @default(now())
+  createdAt    DateTime   @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -358,28 +358,28 @@ model Challenge {
  * adding it twice. Every activity can have tasks.
  */
 model Match {
-  id          String       @id @default(cuid())
-  teamId      String
-  title       String
-  opponent    String?
-  kind        ActivityKind @default(MATCH)
-  startsAt    DateTime
-  endsAt      DateTime?
-  location    String?
+  id              String       @id @default(cuid())
+  teamId          String
+  title           String
+  opponent        String?
+  kind            ActivityKind @default(MATCH)
+  startsAt        DateTime
+  endsAt          DateTime?
+  location        String?
   /// Home or away, where it can be told; null when nobody knows.
-  isHome      Boolean?
-  note        String?
-  source      MatchSource  @default(MANUAL)
-  externalUid String?
+  isHome          Boolean?
+  note            String?
+  source          MatchSource  @default(MANUAL)
+  externalUid     String?
   /// Set when the feed marks it cancelled or it disappears from the feed.
-  cancelledAt DateTime?
+  cancelledAt     DateTime?
   /// The activity in KampKlar (its "Aktivitetslink"), where a KampKlar activity is signed up for.
-  externalUrl String?
+  externalUrl     String?
   /// Who KampKlar says is coming, by name: `{ going: string[], notGoing: string[] }`, or
   /// null when the feed does not say. Matched to the roster by name when shown.
   externalSignups Json?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   team       Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
   tasks      Task[]
@@ -412,12 +412,13 @@ model Task {
   lastNotifiedAt DateTime?
   createdAt      DateTime  @default(now())
 
-  team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  match     Match?         @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  createdBy User?          @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  doneBy    User?          @relation("TaskDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
-  assignees TaskAssignee[]
-  handovers TaskHandover[]
+  team         Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  match        Match?         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  createdBy    User?          @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  doneBy       User?          @relation("TaskDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
+  assignees    TaskAssignee[]
+  handovers    TaskHandover[]
+  chatMessages ChatMessage[]
 
   @@index([teamId, dueAt])
   @@index([matchId])
@@ -425,23 +426,26 @@ model Task {
   @@index([doneById])
 }
 
-/// One person asking another to take over their place on a task. The row stays as the
+/// One person asking another — or anybody, in the chat — to take over their place on a task. The row stays as the
 /// task's history once it is answered (or withdrawn).
 model TaskHandover {
   id         String         @id @default(cuid())
   teamId     String
   taskId     String
   fromId     String
-  toId       String
+  /// Null while it is asked in the chat, open to anybody; whoever takes it is written here.
+  toId       String?
+  /// Asked of the whole team in the chat rather than of one person.
+  inChat     Boolean        @default(false)
   note       String?
   status     HandoverStatus @default(PENDING)
   createdAt  DateTime       @default(now())
   answeredAt DateTime?
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  from User @relation("HandoverFrom", fields: [fromId], references: [id], onDelete: Cascade)
-  to   User @relation("HandoverTo", fields: [toId], references: [id], onDelete: Cascade)
+  team Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  task Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  from User  @relation("HandoverFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   User? @relation("HandoverTo", fields: [toId], references: [id], onDelete: Cascade)
 
   @@index([teamId, toId, status])
   @@index([taskId])
@@ -492,14 +496,18 @@ model ChatMessage {
   teamId    String
   authorId  String
   body      String
+  /// A task shared in the chat ("Kan nogen tage den?"), drawn as a link to it.
+  taskId    String?
   createdAt DateTime @default(now())
 
   team   Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
   author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  task   Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
   photos ChatPhoto[]
 
   @@index([teamId, createdAt])
   @@index([authorId])
+  @@index([taskId])
 }
 
 /// One of a chat message's pictures. Reached through its message.

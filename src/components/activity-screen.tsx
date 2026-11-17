@@ -1,5 +1,5 @@
 import type { TeamUser } from "@/lib/auth";
-import { canManageFines } from "@/lib/access";
+import { canAdministerTeam, canManageFines } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { foundOr404 } from "@/lib/scoped";
@@ -242,7 +242,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
                 <Card padded={false}>
                   <ul className="divide-y divide-slate-100">
                     {match.tasks.map((task) => (
-                      <TaskRow key={task.id} task={task} viewerId={user.id} showMatch={false} />
+                      <TaskRow key={task.id} task={task} viewerId={user.id} admin={canAdministerTeam(user, user.teamId)} showMatch={false} />
                     ))}
                   </ul>
                 </Card>

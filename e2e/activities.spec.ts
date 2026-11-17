@@ -318,6 +318,9 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   await expect(dialog).toBeHidden();
   await page.getByRole("tab", { name: /^Opgaver/ }).click();
   await expect(jobsTab(page).getByText("Købe nye bolde")).toBeVisible();
+  // Anna is not on it: she sees the tick, but cannot press it.
+  await expect(jobsTab(page).getByRole("img", { name: "Ikke udført" })).toBeVisible();
+  await expect(jobsTab(page).getByRole("button", { name: "Markér som udført" })).toHaveCount(0);
 
   await loginAs(bo);
   await page.goto(`/aktiviteter/${match.id}/opgaver`);
@@ -372,19 +375,38 @@ test("an activity with nothing to copy and no standard jobs offers only a new jo
   await expect(dialog.getByRole("group", { name: "Hvordan?" })).toHaveCount(0);
 });
 
-test("somebody takes an open job", async ({ page, loginAs }) => {
-  const { team, bo } = await squad();
-  const task = await db.task.create({ data: { teamId: team.id, title: "Kage til kampen", dueAt: inDays(2) } });
+test("a player asks in the chat, and a teammate follows the link and takes the job over", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const task = await db.task.create({
+    data: { teamId: team.id, title: "Kage til kampen", dueAt: inDays(2), assignees: { create: { userId: anna.id } } },
+  });
+  // Nobody can put themselves on a job any more.
   await loginAs(bo);
   await page.goto(`/opgaver/${task.id}`);
-  await page.getByRole("button", { name: "Handlinger" }).click();
-  const menu = page.getByRole("dialog", { name: "Handlinger" });
-  await menu.getByRole("button", { name: "Jeg tager den" }).click();
-  // The drawer closes once it has worked, and offers the way back next time.
-  await expect(menu).toBeHidden();
-  await page.getByRole("button", { name: "Handlinger" }).click();
-  await expect(menu.getByRole("button", { name: "Tag mig af opgaven" })).toBeVisible();
-  expect(await db.taskAssignee.count({ where: { taskId: task.id, userId: bo.id } })).toBe(1);
+  await expect(page.getByRole("heading", { name: "Kage til kampen" })).toBeVisible();
+  for (const name of ["Jeg tager den", "Markér som udført ✓", "Spørg i chatten", "Handlinger"]) {
+    await expect(page.getByRole("button", { name })).toHaveCount(0);
+  }
+
+  await loginAs(anna);
+  await page.goto(`/opgaver/${task.id}`);
+  await page.getByRole("button", { name: "Spørg i chatten" }).click();
+  const dialog = page.getByRole("dialog", { name: "Spørg i chatten" });
+  await dialog.getByLabel("Besked").fill("Jeg er på ferie");
+  await dialog.getByRole("button", { name: "Send i chatten" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Du har spurgt i chatten, om nogen vil overtage opgaven.", { exact: false })).toBeVisible();
+
+  await loginAs(bo);
+  await page.goto("/chat");
+  await expect(page.getByText("Jeg er på ferie")).toBeVisible();
+  await page.getByRole("link", { name: /Kage til kampen · Se opgaven/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/opgaver/${task.id}$`));
+  await page.getByRole("button", { name: "Jeg tager den" }).click();
+  await expect(page.getByRole("button", { name: "Markér som udført ✓" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Jeg tager den" })).toHaveCount(0);
+  await expect(page.getByText("spurgte i chatten, om nogen ville overtage opgaven — Bo tog den")).toBeVisible();
+  expect((await db.taskAssignee.findMany({ where: { taskId: task.id } })).map((a) => a.userId)).toEqual([bo.id]);
 });
 
 test("an admin keeps the team's standard jobs under the team settings; a player cannot", async ({ page, loginAs }) => {
@@ -437,9 +459,8 @@ test("a player gives a job to a teammate, who accepts it, and the job keeps the 
   });
   await loginAs(anna);
   await page.goto(`/opgaver/${task.id}`);
-  await page.getByRole("button", { name: "Handlinger" }).click();
-  await page.getByRole("dialog", { name: "Handlinger" }).getByRole("button", { name: "Giv opgaven videre" }).click();
-  const dialog = page.getByRole("dialog", { name: "Giv opgaven videre" });
+  await page.getByRole("button", { name: "Spørg en bestemt" }).click();
+  const dialog = page.getByRole("dialog", { name: "Spørg en bestemt" });
   await dialog.getByLabel("Hvem skal overtage?").selectOption({ label: "Bo" });
   await dialog.getByLabel("Besked").fill("Jeg er ikke med til kampen");
   await dialog.getByRole("button", { name: "Spørg" }).click();

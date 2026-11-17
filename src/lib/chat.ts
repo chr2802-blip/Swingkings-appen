@@ -10,6 +10,8 @@ export type ChatItem = {
   body: string;
   /** Its pictures, in the order they were chosen. */
   photoIds: string[];
+  /** A task shared to ask whether somebody will take it over, drawn as a link to it. */
+  task: { id: string; title: string } | null;
   createdAt: string;
   author: { id: string; name: string; photoId: string | null };
 };
@@ -24,6 +26,7 @@ export async function latestMessages(teamId: string): Promise<ChatItem[]> {
       body: true,
       createdAt: true,
       author: { select: { id: true, name: true, photoId: true } },
+      task: { select: { id: true, title: true } },
       photos: { orderBy: { position: "asc" }, select: { photoId: true } },
     },
   });
