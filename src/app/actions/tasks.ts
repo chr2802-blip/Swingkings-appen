@@ -176,7 +176,10 @@ export async function deleteTask(_prev: ActionResult, formData: FormData): Promi
   if (!task) return fail("Du kan ikke slette den opgave.");
   await teamDb(user.teamId).task.deleteMany({ where: { id: task.id } });
   refresh(undefined, task.matchId);
-  redirect(task.matchId ? `/aktiviteter/${task.matchId}` : "/oversigt");
+  // A job on an activity is deleted from its sheet, which goes with its row; the page an
+  // old job without one has is left for the front page.
+  if (!task.matchId) redirect("/oversigt");
+  return ok();
 }
 
 const offerSchema = z.object({
@@ -233,7 +236,7 @@ export async function offerTask(_prev: ActionResult, formData: FormData): Promis
   notifyLater([toId], user.id, {
     title: `Vil du overtage: ${task.title}?`,
     body: `${user.name} spørger, om du kan tage opgaven.`,
-    url: `/opgaver/${task.id}`,
+    url: taskUrl(task),
     tag: `handover-${task.id}`,
   });
   refresh(task.id, task.matchId);
@@ -274,6 +277,14 @@ export async function askInChat(_prev: ActionResult, formData: FormData): Promis
   revalidatePath("/chat");
   refresh(task.id, task.matchId);
   return ok();
+}
+
+/**
+ * "Giv videre": one form for both ways of giving your place away — `toId` "chat" asks the
+ * whole team in the chat (`askInChat`), a teammate's id asks them (`offerTask`).
+ */
+export async function handOverTask(prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return field(formData, "toId") === "chat" ? askInChat(prev, formData) : offerTask(prev, formData);
 }
 
 /**
@@ -334,7 +345,7 @@ export async function answerHandover(_prev: ActionResult, formData: FormData): P
   notifyLater([handover.fromId], user.id, {
     title: outcome === "accepted" ? `${user.name} har overtaget: ${handover.task.title}` : `${user.name} kan ikke tage: ${handover.task.title}`,
     body: outcome === "accepted" ? "Du er taget af opgaven." : "Du har stadig opgaven. Spørg en anden.",
-    url: `/opgaver/${handover.task.id}`,
+    url: taskUrl(handover.task),
     tag: `handover-${handover.task.id}`,
   });
   refresh(handover.task.id, handover.task.matchId);

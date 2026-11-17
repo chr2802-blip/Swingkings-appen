@@ -1,5 +1,5 @@
 import type { TeamUser } from "@/lib/auth";
-import { canAdministerTeam, canManageFines } from "@/lib/access";
+import { canManageFines } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { foundOr404 } from "@/lib/scoped";
@@ -52,7 +52,18 @@ export function activityHref(id: string, tab: ActivityTab = "") {
  * The "+" makes a job or gives a fine on it; a hand-made activity is changed or deleted
  * with the buttons at the foot of Detaljer.
  */
-export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: string; show: ActivityTab }) {
+export async function ActivityScreen({
+  user,
+  id,
+  show,
+  openTaskId,
+}: {
+  user: TeamUser;
+  id: string;
+  show: ActivityTab;
+  /** A job whose sheet a link asked to open (`?opgave=`). */
+  openTaskId?: string;
+}) {
   const manages = canManageFines(user, user.teamId);
   const db = teamDb(user.teamId);
 
@@ -245,7 +256,7 @@ export async function ActivityScreen({ user, id, show }: { user: TeamUser; id: s
                 <Card padded={false}>
                   <ul className="divide-y divide-slate-100">
                     {match.tasks.map((task) => (
-                      <TaskRow key={task.id} task={task} viewerId={user.id} admin={canAdministerTeam(user, user.teamId)} showMatch={false} />
+                      <TaskRow key={task.id} task={task} user={user} members={roster} showMatch={false} openTaskId={openTaskId} />
                     ))}
                   </ul>
                 </Card>

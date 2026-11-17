@@ -105,9 +105,15 @@ export function venuesFor(isHome: boolean | null | undefined): Venue[] {
   return ["ALL", "HOME", "AWAY"];
 }
 
-/** Where a job about an activity is opened from: the activity's page. */
+/** The query parameter that opens a job's sheet on its activity's "Opgaver" tab. */
+export const OPEN_TASK_PARAM = "opgave";
+
+/**
+ * Where a job is opened: its sheet, over its activity's "Opgaver" tab. An old job with
+ * no activity has its own page.
+ */
 export function taskUrl(task: { id: string; matchId: string | null }) {
-  return task.matchId ? `/aktiviteter/${task.matchId}` : `/opgaver/${task.id}`;
+  return task.matchId ? `/aktiviteter/${task.matchId}/opgaver?${OPEN_TASK_PARAM}=${task.id}` : `/opgaver/${task.id}`;
 }
 
 /**

@@ -375,38 +375,88 @@ test("an activity with nothing to copy and no standard jobs offers only a new jo
   await expect(dialog.getByRole("group", { name: "Hvordan?" })).toHaveCount(0);
 });
 
-test("a player asks in the chat, and a teammate follows the link and takes the job over", async ({ page, loginAs }) => {
+test("a job opens in a sheet that says what it belongs to; nobody puts themselves on it", async ({ page, loginAs }) => {
   const { team, anna, bo } = await squad();
-  const task = await db.task.create({
-    data: { teamId: team.id, title: "Kage til kampen", dueAt: inDays(2), assignees: { create: { userId: anna.id } } },
+  const match = await db.match.create({
+    data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3), location: "Klubhuset" },
   });
-  // Nobody can put themselves on a job any more.
+  const task = await db.task.create({
+    data: { teamId: team.id, matchId: match.id, title: "Kage til festen", description: "Gerne chokolade", dueAt: inDays(2), assignees: { create: { userId: anna.id } } },
+  });
   await loginAs(bo);
-  await page.goto(`/opgaver/${task.id}`);
-  await expect(page.getByRole("heading", { name: "Kage til kampen" })).toBeVisible();
-  for (const name of ["Jeg tager den", "Markér som udført ✓", "Spørg i chatten", "Handlinger"]) {
-    await expect(page.getByRole("button", { name })).toHaveCount(0);
+  await page.goto(`/aktiviteter/${match.id}/opgaver`);
+  await jobsTab(page).getByRole("button", { name: /^Kage til festen/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Kage til festen" });
+  await expect(sheet.getByText("Opgave til aktivitet")).toBeVisible();
+  await expect(sheet.getByRole("link", { name: /Afslutningsfest/ })).toBeVisible();
+  await expect(sheet.getByText("📍 Klubhuset")).toBeVisible();
+  await expect(sheet.getByText("Gerne chokolade")).toBeVisible();
+  // Nobody can put themselves on a job; only those on it finish or give it away.
+  for (const name of ["Jeg tager den", "Markér som udført ✓", "Giv videre", "Ret opgave"]) {
+    await expect(sheet.getByRole("button", { name })).toHaveCount(0);
   }
+  await sheet.getByRole("link", { name: /Afslutningsfest/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}$`));
+
+  // A job's old address opens the same sheet over the activity's jobs.
+  await page.goto(`/opgaver/${task.id}`);
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/opgaver\\?opgave=${task.id}$`));
+  await expect(page.getByRole("dialog", { name: "Kage til festen" })).toBeVisible();
+  await page.getByRole("dialog", { name: "Kage til festen" }).getByRole("button", { name: "Luk" }).click();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/opgaver$`));
+});
+
+test("a player gives a job away in the chat, and a teammate follows the link and takes it over", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3) } });
+  const task = await db.task.create({
+    data: { teamId: team.id, matchId: match.id, title: "Kage til kampen", dueAt: inDays(2), assignees: { create: { userId: anna.id } } },
+  });
 
   await loginAs(anna);
-  await page.goto(`/opgaver/${task.id}`);
-  await page.getByRole("button", { name: "Spørg i chatten" }).click();
-  const dialog = page.getByRole("dialog", { name: "Spørg i chatten" });
-  await dialog.getByLabel("Besked").fill("Jeg er på ferie");
-  await dialog.getByRole("button", { name: "Send i chatten" }).click();
+  await page.goto(`/aktiviteter/${match.id}/opgaver`);
+  await jobsTab(page).getByRole("button", { name: /^Kage til kampen/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Kage til kampen" });
+  await sheet.getByRole("button", { name: "Giv videre" }).click();
+  const dialog = page.getByRole("dialog", { name: "Giv opgaven videre" });
+  await expect(dialog.getByLabel("Hele holdet i chatten")).toBeChecked();
+  await dialog.getByLabel("Besked (valgfri)").fill("Jeg er på ferie");
+  await dialog.getByRole("button", { name: "Spørg" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Du har spurgt i chatten, om nogen vil overtage opgaven.", { exact: false })).toBeVisible();
+  await expect(sheet.getByText("Søger en afløser i chatten")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Træk tilbage" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Giv videre" })).toHaveCount(0);
+  // The row under the sheet says so too. (Closing the sheet steps back in the history a
+  // moment later, which would abort the navigation below.)
+  await expect(jobsTab(page).getByText("Søger afløser")).toBeVisible();
 
   await loginAs(bo);
   await page.goto("/chat");
   await expect(page.getByText("Jeg er på ferie")).toBeVisible();
   await page.getByRole("link", { name: /Kage til kampen · Se opgaven/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/opgaver/${task.id}$`));
-  await page.getByRole("button", { name: "Jeg tager den" }).click();
-  await expect(page.getByRole("button", { name: "Markér som udført ✓" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Jeg tager den" })).toHaveCount(0);
-  await expect(page.getByText("spurgte i chatten, om nogen ville overtage opgaven — Bo tog den")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/opgaver\\?opgave=${task.id}$`));
+  const opened = page.getByRole("dialog", { name: "Kage til kampen" });
+  await opened.getByRole("button", { name: "Jeg tager den" }).click();
+  await expect(opened.getByRole("button", { name: "Markér som udført ✓" })).toBeVisible();
+  await expect(opened.getByRole("button", { name: "Jeg tager den" })).toHaveCount(0);
+  await opened.getByText("Historik (1)").click();
+  await expect(opened.getByText("Anna → Bo (via chatten)")).toBeVisible();
   expect((await db.taskAssignee.findMany({ where: { taskId: task.id } })).map((a) => a.userId)).toEqual([bo.id]);
+});
+
+test("whoever made a job deletes it from its sheet and stays on the activity's jobs", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3) } });
+  await db.task.create({ data: { teamId: team.id, matchId: match.id, title: "Grill", createdById: anna.id, dueAt: inDays(2) } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}/opgaver`);
+  await jobsTab(page).getByRole("button", { name: /^Grill/ }).click();
+  await page.getByRole("dialog", { name: "Grill" }).getByRole("button", { name: "Slet opgave" }).click();
+  await page.getByRole("dialog", { name: "Slet opgaven?" }).getByRole("button", { name: "Slet opgaven" }).click();
+  await expect(page.getByRole("dialog", { name: "Grill" })).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/opgaver$`));
+  await expect(jobsTab(page).getByText("Ingen opgaver endnu.", { exact: false })).toBeVisible();
+  expect(await db.task.count()).toBe(0);
 });
 
 test("an admin keeps the team's standard jobs under the team settings; a player cannot", async ({ page, loginAs }) => {
@@ -454,48 +504,32 @@ test("an activity's \"+\" makes a job or gives a fine, and hands over to the dia
 
 test("a player gives a job to a teammate, who accepts it, and the job keeps the history", async ({ page, loginAs }) => {
   const { team, anna, bo } = await squad();
+  const match = await db.match.create({ data: { teamId: team.id, title: "Afslutningsfest", kind: "OTHER", startsAt: inDays(3) } });
   const task = await db.task.create({
-    data: { teamId: team.id, title: "Tøjvask", dueAt: inDays(2), assignees: { create: { userId: anna.id } } },
+    data: { teamId: team.id, matchId: match.id, title: "Tøjvask", dueAt: inDays(2), assignees: { create: { userId: anna.id } } },
   });
   await loginAs(anna);
-  await page.goto(`/opgaver/${task.id}`);
-  await page.getByRole("button", { name: "Spørg en bestemt" }).click();
-  const dialog = page.getByRole("dialog", { name: "Spørg en bestemt" });
-  await dialog.getByLabel("Hvem skal overtage?").selectOption({ label: "Bo" });
-  await dialog.getByLabel("Besked").fill("Jeg er ikke med til kampen");
+  await page.goto(`/aktiviteter/${match.id}/opgaver`);
+  await jobsTab(page).getByRole("button", { name: /^Tøjvask/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Tøjvask" });
+  await sheet.getByRole("button", { name: "Giv videre" }).click();
+  const dialog = page.getByRole("dialog", { name: "Giv opgaven videre" });
+  await dialog.getByRole("radio", { name: "Bo", exact: true }).check();
+  await dialog.getByLabel("Besked (valgfri)").fill("Jeg er ikke med til kampen");
   await dialog.getByRole("button", { name: "Spørg" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Du har spurgt Bo, om de vil overtage opgaven.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Historik" })).toBeVisible();
+  await expect(sheet.getByText("Venter på svar fra Bo")).toBeVisible();
+  await expect(sheet.getByText("Historik (1)")).toBeVisible();
 
   await loginAs(bo);
   await page.goto("/oversigt");
   await page.getByRole("link", { name: /Opgave tilbudt/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/opgaver/${task.id}$`));
-  await expect(page.getByText("“Jeg er ikke med til kampen”").first()).toBeVisible();
-  await page.getByRole("button", { name: "Ja, jeg tager den" }).click();
-  await expect(page.getByRole("button", { name: "Ja, jeg tager den" })).toHaveCount(0);
-  await expect(page.getByText("Godkendt")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/opgaver\\?opgave=${task.id}$`));
+  const opened = page.getByRole("dialog", { name: "Tøjvask" });
+  await expect(opened.getByText("“Jeg er ikke med til kampen”").first()).toBeVisible();
+  await opened.getByRole("button", { name: "Ja, jeg tager den" }).click();
+  await expect(opened.getByRole("button", { name: "Ja, jeg tager den" })).toHaveCount(0);
+  await opened.getByText("Historik (1)").click();
+  await expect(opened.getByText("Godkendt")).toBeVisible();
   expect((await db.taskAssignee.findMany({ where: { taskId: task.id } })).map((a) => a.userId)).toEqual([bo.id]);
-});
-
-test("an activity's fines open as in the history, and their giver may delete one there", async ({ page, loginAs }) => {
-  const { team, treasurer, anna, bo } = await squad();
-  const match = await db.match.create({ data: { teamId: team.id, title: "Kamp", opponent: "FC Naboen", startsAt: new Date(Date.now() - 86_400_000) } });
-  await db.fine.create({ data: { teamId: team.id, matchId: match.id, playerId: bo.id, reason: "For sent", note: "Ti minutter", units: 2, unitPriceKr: 10, issuedById: anna.id } });
-  // A fine from no activity stays off its page.
-  await db.fine.create({ data: { teamId: team.id, playerId: bo.id, reason: "Glemt trøje", units: 1, unitPriceKr: 10, issuedById: treasurer.id } });
-
-  await loginAs(anna);
-  await page.goto(`/aktiviteter/${match.id}/boder`);
-  await expect(page.getByRole("tab", { name: "Bøder (1)" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Glemt trøje")).toHaveCount(0);
-  await page.getByRole("button", { name: /Bo · For sent/ }).click();
-  const sheet = page.getByRole("dialog", { name: "Bøde" });
-  await expect(sheet.getByText("Ti minutter")).toBeVisible();
-  await expect(sheet.getByText(/FC Naboen ·/)).toBeVisible();
-  await sheet.getByRole("button", { name: "Slet bøden" }).click();
-  await page.getByRole("dialog", { name: "Slet bøden til Bo?" }).getByRole("button", { name: "Slet bøden" }).click();
-  await expect(page.getByText("Ingen bøder endnu.")).toBeVisible();
-  expect(await db.fine.count({ where: { matchId: match.id } })).toBe(0);
 });

@@ -102,7 +102,7 @@ describe("editing and deleting", () => {
     });
   });
 
-  it("deletes and goes back to the activity it hung off, or the front page", async () => {
+  it("deletes a job on an activity where it stands (its sheet goes with it), and an old one goes to the front page", async () => {
     const { team, anna } = await makeSquad();
     const match = await makeMatch(team.id);
     const onMatch = await jobBy(anna, team.id, match.id);
@@ -110,7 +110,7 @@ describe("editing and deleting", () => {
     await signIn(anna);
     // A match job keeps its kick-off when no new date is given.
     expect(await updateTask(undefined, formData({ id: onMatch.id, title: "Kørsel" }))).toEqual({ ok: true });
-    await expectRedirect(() => deleteTask(undefined, formData({ id: onMatch.id })), `/aktiviteter/${match.id}`);
+    expect(await deleteTask(undefined, formData({ id: onMatch.id }))).toEqual({ ok: true });
     await expectRedirect(() => deleteTask(undefined, formData({ id: alone.id })), "/oversigt");
     expect(await prisma.task.count()).toBe(0);
   });

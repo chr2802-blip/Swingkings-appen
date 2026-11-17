@@ -540,27 +540,19 @@ async function swipe(page: Page, x: number, y: number, dx: number, dy = 0) {
   await cdp.detach();
 }
 
-// These run on a task: an activity's page has tabs swiped sideways, and Chromium as an
-// Android phone goes back by itself on a sideways overscroll there, whatever the CSS says.
+// These run on an old job's own page (one with no activity): an activity's page has tabs
+// swiped sideways, and Chromium as an Android phone goes back by itself on a sideways
+// overscroll there, whatever the CSS says.
 test("in the installed app a swipe in from the left edge goes back, and a short one does not", async ({
   page,
   loginAs,
 }) => {
   const { team, anna } = await squad();
-  const party = await db.match.create({
-    data: {
-      teamId: team.id,
-      kind: "OTHER",
-      title: "Afslutningsfest",
-      startsAt: new Date(Date.now() + 10 * 86_400_000),
-    },
-  });
   const task = await db.task.create({
     data: {
       teamId: team.id,
-      matchId: party.id,
       title: "Grill",
-      dueAt: party.startsAt,
+      dueAt: new Date(Date.now() + 10 * 86_400_000),
     },
   });
   await installed(page);
