@@ -547,6 +547,42 @@ test("the header's chat button counts the unread messages, and the chat clears i
   await expect(header.getByTestId("chat-unread")).toHaveText("1");
 });
 
+test("the chat opens on the latest 25 messages and fetches older ones as it is scrolled up", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  await db.chatMessage.createMany({
+    data: Array.from({ length: 60 }, (_, i) => ({
+      teamId: team.id,
+      authorId: i % 2 ? anna.id : bo.id,
+      body: `Besked ${i + 1}`,
+      createdAt: new Date(Date.now() - (60 - i) * 60_000),
+    })),
+  });
+  await loginAs(anna);
+  await page.goto("/chat");
+  const message = (n: number) => page.getByText(`Besked ${n}`, { exact: true });
+  await expect(message(60)).toBeInViewport();
+  await expect(message(36)).toHaveCount(1);
+  await expect(message(35)).toHaveCount(0);
+
+  // Up to the top: the page before arrives above, and what was read stays where it was.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(message(11)).toHaveCount(1);
+  await expect(message(36)).toBeInViewport();
+  await expect(message(10)).toHaveCount(0);
+
+  // Up again, to the very first message: there is nothing older to fetch.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(message(1)).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Vis ældre beskeder" })).toHaveCount(0);
+  await expect(page.locator("ol > li")).toHaveCount(60);
+
+  // A new message lands below, and the older ones stay.
+  await db.chatMessage.create({ data: { teamId: team.id, authorId: bo.id, body: "Besked 61" } });
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(message(61)).toHaveCount(1);
+  await expect(message(1)).toHaveCount(1);
+});
+
 test("a comment and a chat message are reacted to, and the reaction stands after a reload", async ({ page, loginAs }) => {
   const { team, anna, bo } = await squad();
   const post = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Kamp i morgen" } });

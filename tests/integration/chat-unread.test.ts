@@ -88,7 +88,7 @@ describe("GET /api/chat/unread", () => {
     expect(await response.json()).toEqual({ unread: 1 });
     expect(await (await unreadRoute()).json()).toEqual({ unread: 1 });
     // Opening the chat does.
-    await chatRoute();
+    await chatRoute(new Request("https://app.example/api/chat"));
     expect(await (await unreadRoute()).json()).toEqual({ unread: 0 });
   });
 

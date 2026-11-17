@@ -10,3 +10,7 @@ coverage
 screenshots
 test-results
 playwright-report
+
+# Load test: accounts with passwords and session cookies, and run results
+loadtest/accounts.json
+loadtest/results/

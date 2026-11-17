@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireTeamUser } from "@/lib/auth";
 import { teamDb } from "@/lib/team-db";
+import { canAdministerTeam } from "@/lib/access";
+import { teamFeed } from "@/lib/feed";
 import Image from "next/image";
 import { fineBoard, monthKings } from "@/lib/fine-data";
 import { waitsOn } from "@/lib/challenges";
@@ -19,6 +21,9 @@ import { playerTasksHref } from "@/components/player-link";
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
+  // The feed at the bottom is rendered only once all this is read; start its reads now, so
+  // they run alongside instead of after (`TeamFeed` picks up the same request-cached call).
+  void teamFeed(user.teamId, user.id, canAdministerTeam(user, user.teamId));
   const [board, kings, nextMatch, myTaskCount, openChallenges, pollsWaiting, newPosts, handoversToMe] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
