@@ -1,5 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { PASSWORD, db, squad } from "./helpers/database";
+import { choose } from "./helpers/select";
 
 test("logs in with the real form on a phone without the app, is offered the app, and can go on to the team", async ({ page }) => {
   const { anna } = await squad();
@@ -57,7 +58,7 @@ test("an admin makes an invitation link, and somebody new joins the team through
   const { team, admin } = await squad();
   await loginAs(admin);
   await page.goto("/hold/inviter");
-  await page.getByLabel("Højst antal personer").selectOption("5");
+  await choose(page.getByLabel("Højst antal personer"), "5 personer");
   await page.getByRole("button", { name: "Lav invitationslink" }).click();
   const link = page.getByRole("textbox", { name: "Invitationslink" });
   await expect(link).toHaveValue(/\/join\/[\w-]+$/);

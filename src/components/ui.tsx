@@ -51,9 +51,8 @@ export function Textarea({ className = "", ...props }: ComponentProps<"textarea"
   return <textarea className={`${field} ${className}`} {...props} />;
 }
 
-export function Select({ className = "", ...props }: ComponentProps<"select">) {
-  return <select className={`${field} ${className}`} {...props} />;
-}
+/** The app's own drop-down with search; never the browser's `<select>`. */
+export { Select } from "@/components/select";
 
 export function Label({ className = "", ...props }: ComponentProps<"label">) {
   return <label className={`block text-sm font-medium text-slate-700 ${className}`} {...props} />;

@@ -43,7 +43,7 @@ export function GiveFineDialog({
         <PlayerChecklist members={members} name="playerId" defaultChecked={defaultPlayerId ? [defaultPlayerId] : []} />
       </Field>
       <Field label="Bøde fra kataloget" htmlFor="fineTypeId">
-        <Select id="fineTypeId" name="fineTypeId" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+        <Select id="fineTypeId" name="fineTypeId" value={typeId} onValueChange={setTypeId}>
           <option value="">Skriv selv…</option>
           {fineTypes.map((type) => (
             <option key={type.id} value={type.id}>

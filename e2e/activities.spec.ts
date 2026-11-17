@@ -1,6 +1,7 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 import { hold, holdAndChoose } from "./helpers/hold";
+import { choose } from "./helpers/select";
 
 /** The jobs' tab: a job of your own is also named on the details. */
 const jobsTab = (page: import("@playwright/test").Page) => page.getByRole("tabpanel", { name: /^Opgaver/ });
@@ -316,7 +317,7 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   await page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Ny opgave" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Opgave").fill("Købe nye bolde");
-  await dialog.getByLabel("Hvem skal gøre det?").selectOption("pick");
+  await choose(dialog.getByLabel("Hvem skal gøre det?"), "Jeg vælger selv");
   await dialog.getByRole("checkbox", { name: "Bo" }).check();
   await dialog.getByRole("button", { name: "Opret opgave" }).click();
   await expect(dialog).toBeHidden();
@@ -360,7 +361,7 @@ test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from a
   // It opens on a new job again, whatever was used last.
   await expect(dialog.getByLabel("Opgave")).toBeVisible();
   await dialog.getByRole("button", { name: "Kopiér" }).click();
-  await dialog.getByLabel("Fra").selectOption({ index: 1 });
+  await choose(dialog.getByLabel("Fra"), /AB/, { search: "ab" });
   await dialog.getByRole("button", { name: "Kopiér og fordel" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => db.task.count({ where: { matchId: match.id } })).toBe(2);

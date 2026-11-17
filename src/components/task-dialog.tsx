@@ -140,7 +140,7 @@ function NewTaskFields({
         <Input id="dueOn" name="dueOn" type="date" />
       </Field>
       <Field label="Hvem skal gøre det?" htmlFor="assign">
-        <Select id="assign" name="assign" value={assign} onChange={(e) => setAssign(e.target.value as typeof assign)}>
+        <Select id="assign" name="assign" value={assign} onValueChange={(v) => setAssign(v as typeof assign)}>
           <option value="auto">Fordel retfærdigt (dem med færrest opgaver)</option>
           <option value="pick">Jeg vælger selv</option>
           <option value="none">Ingen endnu — fordeles senere</option>
