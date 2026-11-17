@@ -44,7 +44,7 @@ describe("answering a comment", () => {
     const reply = await prisma.postComment.findFirstOrThrow({ where: { body: "Enig!" } });
     expect(reply.parentId).toBe(comment.id);
     expect(pushed).toEqual([
-      { to: [anna.id], payload: { title: "Bo svarede på din kommentar", body: "Enig!", url: "/oversigt#feed" } },
+      { to: [anna.id], payload: { title: "Bo svarede på din kommentar", body: "Enig!", url: "/oversigt#feed", notificationId: expect.any(String) } },
       // Anna's comment was not news to the author yet either: both are counted.
       {
         to: [admin.id],
@@ -67,8 +67,10 @@ describe("answering a comment", () => {
     await runAfter();
 
     expect((await prisma.postComment.findFirstOrThrow({ where: { body: "Også mig" } })).parentId).toBe(comment.id);
-    expect(pushed).toEqual([
-      { to: [bo.id, anna.id], payload: { title: "Kasserer svarede på din kommentar", body: "Også mig", url: "/oversigt#feed" } },
+    // One push each, carrying each one's own notification in the center.
+    const answered = { title: "Kasserer svarede på din kommentar", body: "Også mig", url: "/oversigt#feed", notificationId: expect.any(String) };
+    expect(pushed.slice(0, 2)).toEqual(expect.arrayContaining([{ to: [bo.id], payload: answered }, { to: [anna.id], payload: answered }]));
+    expect(pushed.slice(2)).toEqual([
       {
         to: [admin.id],
         payload: {
@@ -88,7 +90,9 @@ describe("answering a comment", () => {
     await signIn(anna);
     await addComment(undefined, formData({ postId: post.id, parentId: own.id, body: "Selv tak" }));
     await runAfter();
-    expect(pushed).toEqual([{ to: [admin.id], payload: { title: "Anna svarede på din kommentar", body: "Selv tak", url: "/oversigt#feed" } }]);
+    expect(pushed).toEqual([
+      { to: [admin.id], payload: { title: "Anna svarede på din kommentar", body: "Selv tak", url: "/oversigt#feed", notificationId: expect.any(String) } },
+    ]);
 
     pushed.length = 0;
     await signIn(admin);

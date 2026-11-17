@@ -223,7 +223,13 @@ describe("a moved activity", () => {
     expect(pushed).toEqual([
       {
         to: [anna.id],
-        payload: { title: "Nye tidspunkter 📅", body: `${count} aktiviteter har fået nyt tidspunkt.`, url: "/aktiviteter", tag: "activity-moves" },
+        payload: {
+          title: "Nye tidspunkter 📅",
+          body: `${count} aktiviteter har fået nyt tidspunkt.`,
+          url: "/aktiviteter",
+          tag: "activity-moves",
+          notificationId: expect.any(String),
+        },
       },
     ]);
   });

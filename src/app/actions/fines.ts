@@ -11,7 +11,7 @@ import { field, optionalId, optionalText, readForm, requiredText, wholeNumber } 
 import { canMove } from "@/lib/challenges";
 import { PAYMENT_OPEN, settleChallenge } from "@/lib/fines";
 import { balances, fineUnits, kr } from "@/lib/money";
-import { notifyLater } from "@/lib/notify";
+import { notify, notifyEach } from "@/lib/notifications";
 
 function refresh() {
   revalidatePath("/boder", "layout");
@@ -113,7 +113,7 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
   }
 
   const team = await prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true } });
-  await db.fine.createMany({
+  const fines = await db.fine.createManyAndReturn({
     data: playerIds.map((playerId) => ({
       teamId: user.teamId,
       playerId,
@@ -126,12 +126,19 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
       issuedById: user.id,
     })),
   });
-  notifyLater(playerIds, user.id, {
-    title: "Du har fået en bøde 💸",
-    body: `${reason} — ${fineUnits(units)} (${kr(units * team.finePriceKr)})`,
-    url: "/boder",
-    tag: "fine",
-  });
+  await notifyEach(
+    user.teamId,
+    user.id,
+    fines.map((fine) => ({
+      userId: fine.playerId,
+      category: "FINES",
+      title: "Du har fået en bøde 💸",
+      body: `${reason} — ${fineUnits(units)} (${kr(units * team.finePriceKr)})`,
+      url: "/boder",
+      tag: "fine",
+      fineId: fine.id,
+    })),
+  );
   refresh();
   return ok(playerIds.length > 1 ? `${playerIds.length} bøder er givet.` : "Bøden er givet.");
 }
@@ -187,15 +194,22 @@ export async function setFinePayment(_prev: ActionResult, formData: FormData): P
       db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true } }),
       db.teamMember.findMany({ select: { userId: true } }),
     ]);
-    for (const row of balances(members.map((m) => m.userId), fines)) {
-      if (row.owesKr === 0 || !members.some((m) => m.userId === row.userId)) continue;
-      notifyLater([row.userId], user.id, {
-        title: "Betal dine bøder 💸",
-        body: `Bødekassen er åben for betaling. Du skal betale ${kr(row.owesKr)}.`,
-        url: `/spiller/${row.userId}`,
-        tag: "fine-payment",
-      });
-    }
+    await notifyEach(
+      user.teamId,
+      user.id,
+      balances(members.map((m) => m.userId), fines)
+        .filter((row) => row.owesKr > 0 && members.some((m) => m.userId === row.userId))
+        .map((row) => ({
+          userId: row.userId,
+          category: "FINES" as const,
+          title: "Betal dine bøder 💸",
+          body: `Bødekassen er åben for betaling. Du skal betale ${kr(row.owesKr)}.`,
+          url: `/spiller/${row.userId}`,
+          tag: "fine-payment",
+          // The season's money waits on it, so it is pushed whatever the settings say.
+          always: true,
+        })),
+    );
     refresh();
     return ok("Bødekassen er åben for betaling.");
   }
@@ -224,7 +238,13 @@ export async function markFinesPaid(_prev: ActionResult, formData: FormData): Pr
   });
   if (updated.count === 0) return fail("Spilleren er ikke på holdet.");
   if (paid) {
-    notifyLater([playerId], user.id, { title: "Tak for betalingen 🙌", body: `${user.name} har markeret dine bøder som betalt.`, url: "/boder", tag: "fine" });
+    await notify(user.teamId, [playerId], user.id, {
+      category: "FINES",
+      title: "Tak for betalingen 🙌",
+      body: `${user.name} har markeret dine bøder som betalt.`,
+      url: "/boder",
+      tag: "fine",
+    });
   }
   refresh();
   return ok(paid ? "Markeret som betalt." : "Ikke længere markeret som betalt.");
@@ -265,10 +285,12 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
   if (owed === 0) return fail(`${winnerName} har ingen bøder at udfordre sig ud af.`);
   if (units > owed) return fail(`${winnerName} har kun ${fineUnits(owed)} — indsatsen kan højst være det.`);
 
-  await db.challenge.create({
+  const challenge = await db.challenge.create({
     data: { teamId: user.teamId, reportedById: user.id, winnerId, loserId, description, units, matchId },
   });
-  notifyLater([opponentId], user.id, {
+  await notify(user.teamId, [opponentId], user.id, {
+    category: "CHALLENGES",
+    challengeId: challenge.id,
     title: "Godkend udfordringen ⚔️",
     body: `${user.name} melder ${outcome === "won" ? `sig selv` : "dig"} som vinder: ${description} — ${fineUnits(units)}`,
     url: "/boder?udfordringer",
@@ -305,7 +327,9 @@ export async function moveChallenge(_prev: ActionResult, formData: FormData): Pr
   } else {
     const result = await settleChallenge(id, user.id);
     if (!result.ok) return fail(result.error);
-    notifyLater([challenge.winnerId, challenge.loserId, challenge.reportedById], user.id, {
+    await notify(user.teamId, [challenge.winnerId, challenge.loserId, challenge.reportedById], user.id, {
+      category: "CHALLENGES",
+      challengeId: challenge.id,
       title: "Udfordringen er godkendt 🏆",
       body: `${challenge.winner.name} sendte ${fineUnits(result.units)} videre til ${challenge.loser.name}: ${challenge.description}`,
       url: "/boder?udfordringer",

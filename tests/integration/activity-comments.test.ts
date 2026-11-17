@@ -36,9 +36,20 @@ describe("commenting on an activity", () => {
     expect(await prisma.activityComment.findMany({ select: { teamId: true, matchId: true, authorId: true, body: true, parentId: true } })).toEqual([
       { teamId: team.id, matchId: match.id, authorId: anna.id, body: "Hvem kører?", parentId: null },
     ]);
-    expect(pushed).toHaveLength(1);
-    expect(sorted(pushed[0]!.to)).toEqual(sorted([admin.id, treasurer.id, bo.id]));
-    expect(pushed[0]!.payload).toEqual({ title: "Ny kommentar · B.93", body: "Anna: Hvem kører?", url: `/aktiviteter/${match.id}`, tag: `activity-comments-${match.id}` });
+    // One push each, carrying each one's notification in the center, which is the activity's.
+    expect(sorted(pushed.flatMap((p) => p.to))).toEqual(sorted([admin.id, treasurer.id, bo.id]));
+    for (const { payload } of pushed) {
+      expect(payload).toEqual({
+        title: "Ny kommentar · B.93",
+        body: "Anna: Hvem kører?",
+        url: `/aktiviteter/${match.id}`,
+        tag: `activity-comments-${match.id}`,
+        notificationId: expect.any(String),
+      });
+    }
+    const rows = await prisma.notification.findMany({ select: { userId: true, category: true, matchId: true } });
+    expect(sorted(rows.map((r) => r.userId))).toEqual(sorted([admin.id, treasurer.id, bo.id]));
+    expect(rows.every((r) => r.category === "COMMENTS" && r.matchId === match.id)).toBe(true);
   });
 
   it("puts an answer under the comment that started the thread, and tells who was answered and who was tagged in their own words", async () => {
@@ -53,9 +64,11 @@ describe("commenting on an activity", () => {
     expect((await prisma.activityComment.findFirstOrThrow({ where: { body: { startsWith: "Rigtigt" } } })).parentId).toBe(first.id);
     const url = `/aktiviteter/${match.id}`;
     const tag = `activity-comments-${match.id}`;
-    expect(pushed).toEqual([
-      { to: [bo.id, anna.id], payload: { title: "Træner svarede på din kommentar · Træning", body: "Rigtigt, spørg @Kasserer", url, tag } },
-      { to: [treasurer.id], payload: { title: "Træner nævnte dig · Træning", body: "Rigtigt, spørg @Kasserer", url, tag } },
+    const notificationId = expect.any(String);
+    const answered = { title: "Træner svarede på din kommentar · Træning", body: "Rigtigt, spørg @Kasserer", url, tag, notificationId };
+    expect(pushed.slice(0, 2)).toEqual(expect.arrayContaining([{ to: [bo.id], payload: answered }, { to: [anna.id], payload: answered }]));
+    expect(pushed.slice(2)).toEqual([
+      { to: [treasurer.id], payload: { title: "Træner nævnte dig · Træning", body: "Rigtigt, spørg @Kasserer", url, tag, notificationId } },
     ]);
   });
 

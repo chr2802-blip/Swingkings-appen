@@ -100,6 +100,8 @@ test("a super admin creates a team without joining it, looks into it, goes home 
   await expect(page).toHaveURL(/\/oversigt$/);
   const banner = page.getByRole("status").filter({ hasText: "som super admin" });
   await expect(banner).toContainText("Du kigger på Nyt hold som super admin. Du er ikke på holdet.");
+  // Not on the team, so nothing on it is for them: no bell.
+  await expect(page.getByRole("banner").getByRole("button", { name: /^Notifikationer/ })).toHaveCount(0);
   await banner.getByRole("button", { name: "Tilbage til Swingkings" }).click();
   await expect(banner).toBeHidden();
   expect((await db.user.findUniqueOrThrow({ where: { id: root.id } })).activeTeamId).toBe(home.id);

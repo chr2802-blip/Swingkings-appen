@@ -9,7 +9,7 @@ import { fail, type ActionResult } from "@/lib/action-result";
 import { readForm, requiredText } from "@/lib/form";
 import { MAX_SEASON_NAME } from "@/lib/season";
 import { startSeason } from "@/lib/season-data";
-import { notifyLater } from "@/lib/notify";
+import { notify } from "@/lib/notifications";
 import { teamDb } from "@/lib/team-db";
 
 const seasonSchema = z.object({
@@ -31,10 +31,17 @@ export async function startNewSeason(_prev: ActionResult, formData: FormData): P
   if (!result.ok) return fail(result.error);
 
   const members = await teamDb(user.teamId).teamMember.findMany({ select: { userId: true } });
-  notifyLater(
+  await notify(
+    user.teamId,
     members.map((m) => m.userId),
     user.id,
-    { title: "Ny sæson ⚽", body: `${form.fields.name} er slut. Bødekassen starter forfra.`, url: "/hold/saesoner", tag: "season" },
+    {
+      category: "TEAM",
+      title: "Ny sæson ⚽",
+      body: `${form.fields.name} er slut. Bødekassen starter forfra.`,
+      url: "/hold/saesoner",
+      tag: "season",
+    },
   );
   revalidatePath("/", "layout");
   redirect("/hold/saesoner");

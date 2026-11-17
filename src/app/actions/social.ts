@@ -17,7 +17,7 @@ import { parseLocalDateTime } from "@/lib/time";
 import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED } from "@/lib/realtime-topic";
-import { notifyLater } from "@/lib/notify";
+import { notify, recordComment } from "@/lib/notifications";
 import { notifyChatLater, notifyCommentLater } from "@/lib/grouped-push";
 import { mentionedIds } from "@/lib/mentions";
 
@@ -141,7 +141,7 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
   }
   if (!text.data && photos.photoIds.length === 0 && !poll) return fail("Vælg billeder, skriv noget eller lav en afstemning.");
 
-  await db.post.create({
+  const post = await db.post.create({
     data: {
       teamId: user.teamId,
       authorId: user.id,
@@ -165,12 +165,15 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
     },
   });
   const members = await db.teamMember.findMany({ select: { userId: true } });
-  notifyLater(
+  await notify(
+    user.teamId,
     members.map((m) => m.userId),
     user.id,
     poll
-      ? { title: `${user.name} har lavet en afstemning 🗳️`, body: poll.question, url: "/oversigt#feed", tag: "feed" }
+      ? { category: "FEED", postId: post.id, title: `${user.name} har lavet en afstemning 🗳️`, body: poll.question, url: "/oversigt#feed", tag: "feed" }
       : {
+          category: "FEED",
+          postId: post.id,
           title: `${user.name} delte i feedet`,
           body: text.data?.slice(0, 140) ?? (photos.photoIds.length > 1 ? `📷 ${photos.photoIds.length} nye billeder` : "📷 Nyt billede"),
           url: "/oversigt#feed",
@@ -320,10 +323,12 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   // this team's roster, so nobody on another team can be tagged.
   const answered = replyTo && thread ? [replyTo.authorId, thread.authorId] : [];
   const tagged = mentionedIds(text.data, await teamRoster(user.teamId)).filter((id) => !answered.includes(id));
-  notifyLater(answered, user.id, { title: `${user.name} svarede på din kommentar`, body: preview, url: "/oversigt#feed" });
-  notifyLater(tagged, user.id, { title: `${user.name} nævnte dig i en kommentar`, body: preview, url: "/oversigt#feed" });
+  const about = { category: "COMMENTS", url: "/oversigt#feed", postId: post.id } as const;
+  await notify(user.teamId, answered, user.id, { ...about, title: `${user.name} svarede på din kommentar`, body: preview });
+  await notify(user.teamId, tagged, user.id, { ...about, title: `${user.name} nævnte dig i en kommentar`, body: preview });
   if (!answered.includes(post.authorId) && !tagged.includes(post.authorId)) {
-    // Grouped per post: one buzz, then a quiet count — `src/lib/grouped-push.ts`.
+    // Grouped per post, in the center and on the phone: one buzz, then a quiet count.
+    await recordComment(user.teamId, post.id, user.id);
     notifyCommentLater(post.id, user.id);
   }
   revalidatePath("/oversigt");

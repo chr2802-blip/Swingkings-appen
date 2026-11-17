@@ -1,7 +1,7 @@
 import type { ActivityKind, Prisma, Venue } from "@prisma/client";
 import { prisma } from "./prisma";
 import { distribute, type Candidate } from "./distribution";
-import { notifyLater } from "./notify";
+import { notify as notifyTeam } from "./notifications";
 import { kickoffLabel } from "./time";
 
 /** "Still to do" as a where clause. Every query meaning that uses it. */
@@ -77,14 +77,17 @@ export async function createDistributedTasks(
   );
   // Everybody hears about the job they were handed, except whoever handed it out.
   for (const task of notify ? tasks : []) {
-    notifyLater(
+    await notifyTeam(
+      teamId,
       task.assignees.map((a) => a.userId),
       createdById,
       {
+        category: "TASKS",
         title: `Ny opgave: ${task.title}`,
         body: "Du er blevet valgt til en opgave på holdet.",
         url: taskUrl(task),
         tag: `task-${task.id}`,
+        taskId: task.id,
       },
     );
   }
@@ -237,7 +240,8 @@ export async function announceActivityMoves(teamId: string, moves: ActivityMove[
   const members = await prisma.teamMember.findMany({ where: { teamId }, select: { userId: true } });
   const to = members.map((m) => m.userId);
   if (moves.length > MAX_SEPARATE_MOVE_PUSHES) {
-    notifyLater(to, actorId, {
+    await notifyTeam(teamId, to, actorId, {
+      category: "ACTIVITIES",
       title: "Nye tidspunkter 📅",
       body: `${moves.length} aktiviteter har fået nyt tidspunkt.`,
       url: "/aktiviteter",
@@ -247,7 +251,9 @@ export async function announceActivityMoves(teamId: string, moves: ActivityMove[
   }
   for (const move of moves) {
     const name = move.kind === "MATCH" && move.opponent ? `Mod ${move.opponent}` : move.title;
-    notifyLater(to, actorId, {
+    await notifyTeam(teamId, to, actorId, {
+      category: "ACTIVITIES",
+      matchId: move.id,
       title: MOVED_TITLE[move.kind],
       body: `${name}: nu ${kickoffLabel(move.to)} (før ${kickoffLabel(move.from)}).`,
       url: `/aktiviteter/${move.id}`,

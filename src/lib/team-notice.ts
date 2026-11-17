@@ -46,11 +46,6 @@ export function normalizeNoticeLink(input: string): string | null {
   return url.href;
 }
 
-/** Whether the destination differs per person, so each gets a push of their own. */
-export function isPersonal(destination: NoticeDestination) {
-  return destination === "min-side" || destination === "mobilepay-kontingent";
-}
-
 /**
  * Where the notification opens for one person, or null when the destination cannot be
  * reached (MobilePay without a box, a link that is not one).
