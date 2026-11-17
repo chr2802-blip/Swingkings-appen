@@ -11,7 +11,8 @@ import { kr } from "@/lib/money";
 type FineType = { id: string; name: string; description: string | null; units: number };
 
 /**
- * The catalogue's dialog. Without a `fineType` it is the "+ Ny bøde" row that makes one.
+ * The catalogue's dialog. Without a `fineType` it is "Ny bøde i kataloget" in the fine box's "+"
+ * (only for who manages the fines), which makes one.
  * With one, `children` is the fine's row and the whole row is the button: a tap opens the
  * fine to be changed, and deleting it is in there too — as a fine in the history is opened.
  */
@@ -29,10 +30,8 @@ export function FineTypeDialog({
   if (!fineType) {
     return (
       <FormDialog
-        trigger="+ Ny bøde"
-        triggerVariant="ghost"
-        // A new one is made from the catalogue's last row, so its button is that whole row.
-        triggerClassName="min-h-15 w-full rounded-none! text-[var(--accent-text)]!"
+        trigger="Ny bøde i kataloget"
+        triggerIcon="📜"
         title="Ny bøde i kataloget"
         action={saveFineType}
         submitLabel="Gem"

@@ -75,6 +75,7 @@ export async function FinesScreen({
           fineTypes={board.fineTypes}
           finePriceKr={board.finePriceKr}
           matches={matches}
+          managesFines={manages}
         />
       )}
       {paying && (
@@ -245,11 +246,11 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
     <>
       {types.length === 0 && (
         <EmptyState icon="📜">
-          {manages ? "Kataloget er tomt. Opret holdets bøder, så er de klar, når der skal deles ud." : "Kataloget er tomt endnu."}
+          {manages ? "Kataloget er tomt. Opret holdets bøder med + nedenfor, så er de klar, når der skal deles ud." : "Kataloget er tomt endnu."}
         </EmptyState>
       )}
-      {(types.length > 0 || manages) && (
-        <Card padded={false} className={`overflow-hidden ${types.length === 0 ? "mt-3" : ""}`}>
+      {types.length > 0 && (
+        <Card padded={false} className="overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {types.map((type) => {
               const row = (
@@ -277,12 +278,6 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
                 </li>
               );
             })}
-            {/* Making a new one is the list's last row, where the new one will land. */}
-            {manages && (
-              <li>
-                <FineTypeDialog finePriceKr={board.finePriceKr} />
-              </li>
-            )}
           </ul>
         </Card>
       )}
