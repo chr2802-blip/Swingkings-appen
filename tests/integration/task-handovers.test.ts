@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { answerHandover, askInChat, offerTask, setTaskDone, updateTask, withdrawHandover } from "@/app/actions/tasks";
+import { answerHandover, askInChat, handOverTask, offerTask, setTaskDone, updateTask, withdrawHandover } from "@/app/actions/tasks";
 import { formData, makeMatch, makeSquad, signIn } from "../helpers/factories";
 import { expectRedirectToLogin } from "../helpers/expect";
 
@@ -289,5 +289,45 @@ describe("askInChat", () => {
     await signIn(bo);
     expect(await answer(handover.id, "accept")).toEqual({ ok: false, error: "Forespørgslen er allerede besvaret." });
     expect(await assignees(task.id)).toEqual([anna.id]);
+  });
+});
+
+describe("handOverTask (\"Giv videre\")", () => {
+  const giveAway = (id: string, toId: string, note?: string) => handOverTask(undefined, formData({ id, toId, note }));
+
+  it("asks the whole team in the chat when \"chat\" is picked", async () => {
+    const { anna, task } = await annasJob();
+    await signIn(anna);
+    expect(await giveAway(task.id, "chat", "Jeg er syg")).toEqual({ ok: true });
+    expect(await prisma.taskHandover.findFirstOrThrow()).toMatchObject({ fromId: anna.id, toId: null, inChat: true, note: "Jeg er syg" });
+    expect(await prisma.chatMessage.findFirstOrThrow()).toMatchObject({ taskId: task.id });
+  });
+
+  it("asks one teammate when they are picked, and posts nothing in the chat", async () => {
+    const { anna, bo, task } = await annasJob();
+    await signIn(anna);
+    expect(await giveAway(task.id, bo.id)).toEqual({ ok: true });
+    expect(await prisma.taskHandover.findFirstOrThrow()).toMatchObject({ fromId: anna.id, toId: bo.id, inChat: false });
+    expect(await prisma.chatMessage.count()).toBe(0);
+  });
+
+  it("refuses no choice, somebody not on the job and another team's job", async () => {
+    const { anna, bo, task } = await annasJob();
+    const other = await makeSquad("Andre");
+    await signIn(anna);
+    expect(await giveAway(task.id, "")).toEqual({ ok: false, error: "Vælg hvem der skal overtage opgaven." });
+    expect(await giveAway(task.id, other.bo.id)).toEqual({ ok: false, error: "Den valgte er ikke på holdet." });
+    await signIn(bo);
+    expect(await giveAway(task.id, "chat")).toEqual({ ok: false, error: "Du kan kun give en opgave videre, du selv har." });
+    await signIn(other.anna);
+    expect(await giveAway(task.id, "chat")).toEqual({ ok: false, error: "Opgaven findes ikke." });
+    expect(await giveAway(task.id, other.bo.id)).toEqual({ ok: false, error: "Opgaven findes ikke." });
+    expect(await prisma.taskHandover.count()).toBe(0);
+    expect(await prisma.chatMessage.count()).toBe(0);
+  });
+
+  it("asks the logged-out to log in", async () => {
+    const { task } = await annasJob();
+    await expectRedirectToLogin(() => giveAway(task.id, "chat"));
   });
 });

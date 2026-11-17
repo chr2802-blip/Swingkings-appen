@@ -178,4 +178,15 @@ describe("the daily job", () => {
     // A second run the same day reminds nobody again.
     expect(await (await call("Bearer test-cron-secret")).json()).toMatchObject({ tasksDue: 0 });
   });
+
+  it("opens a reminded job on an activity in its sheet, over the activity's jobs", async () => {
+    const { team, anna } = await makeSquad();
+    await subscribe(anna.id, 1);
+    const match = await prisma.match.create({ data: { teamId: team.id, title: "Grill", kind: "OTHER", startsAt: new Date(Date.now() + 5 * 3_600_000) } });
+    const due = await prisma.task.create({
+      data: { teamId: team.id, matchId: match.id, title: "Kul", dueAt: match.startsAt, assignees: { create: { userId: anna.id } } },
+    });
+    await call("Bearer test-cron-secret");
+    expect(JSON.parse(push.sent[0]!.payload)).toMatchObject({ url: `/aktiviteter/${match.id}/opgaver?opgave=${due.id}` });
+  });
 });

@@ -1,52 +1,57 @@
 "use client";
 
 import { FormDialog } from "@/components/form-dialog";
-import { Field, Select, Textarea } from "@/components/ui";
-import { askInChat, offerTask } from "@/app/actions/tasks";
+import { Avatar } from "@/components/photo";
+import { Field, Textarea } from "@/components/ui";
+import { handOverTask } from "@/app/actions/tasks";
+
+const option =
+  "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_10%,white)]";
 
 /**
- * Asks somebody else on the team to take over your place on a job. They have to accept
- * before anything moves.
+ * Giving your place on a job away: ask the whole team in the chat, or one teammate. Either
+ * way nothing moves until somebody says yes; until then the job is still yours.
  */
-export function HandoverDialog({ taskId, members }: { taskId: string; members: { userId: string; name: string }[] }) {
+export function GiveAwayDialog({
+  taskId,
+  members,
+}: {
+  taskId: string;
+  members: { userId: string; name: string; photoId: string | null }[];
+}) {
   return (
-    <FormDialog trigger="Spørg en bestemt" triggerVariant="secondary" title="Spørg en bestemt" action={offerTask} submitLabel="Spørg">
+    <FormDialog trigger="Giv videre" triggerVariant="secondary" title="Giv opgaven videre" action={handOverTask} submitLabel="Spørg">
       <input type="hidden" name="id" value={taskId} />
-      <p className="text-sm text-slate-600">Den du vælger, skal sige ja, før opgaven er deres. Indtil da har du den stadig.</p>
-      <Field label="Hvem skal overtage?" htmlFor="toId">
-        <Select id="toId" name="toId" required defaultValue="">
-          <option value="" disabled>
-            Vælg en spiller
-          </option>
-          {members.map((m) => (
-            <option key={m.userId} value={m.userId}>
-              {m.name}
-            </option>
-          ))}
-        </Select>
+      <fieldset>
+        <legend className="mb-2 text-sm font-medium">Hvem vil du spørge?</legend>
+        <div className="space-y-1 rounded-xl border border-slate-200 p-1.5">
+          <label className={option}>
+            <input type="radio" name="toId" value="chat" defaultChecked className="h-4 w-4 accent-[var(--accent)]" />
+            <span aria-hidden className="flex h-6 w-6 items-center justify-center text-base">
+              💬
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">Hele holdet i chatten</span>
+              <span className="block text-xs text-slate-500">Den første, der siger ja, overtager.</span>
+            </span>
+          </label>
+          {members.length > 0 && (
+            <div className="grid max-h-64 grid-cols-1 gap-1 overflow-y-auto border-t border-slate-100 pt-1 sm:grid-cols-2">
+              {members.map((m) => (
+                <label key={m.userId} className={option}>
+                  <input type="radio" name="toId" value={m.userId} className="h-4 w-4 accent-[var(--accent)]" />
+                  <Avatar name={m.name} photoId={m.photoId} size="xs" />
+                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      </fieldset>
+      <Field label="Besked (valgfri)" htmlFor="handover-note" hint="Fx hvorfor du ikke kan.">
+        <Textarea id="handover-note" name="note" rows={2} maxLength={500} />
       </Field>
-      <Field label="Besked" htmlFor="note" hint="Fx hvorfor du ikke kan.">
-        <Textarea id="note" name="note" rows={2} maxLength={500} />
-      </Field>
-    </FormDialog>
-  );
-}
-
-/**
- * Asks the whole team in the chat, with a link to the job. The first one who says yes on
- * the job's page takes over; until then it is still yours.
- */
-export function AskInChatDialog({ taskId }: { taskId: string }) {
-  return (
-    <FormDialog trigger="Spørg i chatten" triggerVariant="secondary" title="Spørg i chatten" action={askInChat} submitLabel="Send i chatten">
-      <input type="hidden" name="id" value={taskId} />
-      <p className="text-sm text-slate-600">
-        Holdet får en besked i chatten med et link til opgaven. Den første, der siger ja, overtager din plads. Indtil da har du den
-        stadig.
-      </p>
-      <Field label="Besked" htmlFor="chat-note" hint="Fx hvorfor du ikke kan.">
-        <Textarea id="chat-note" name="note" rows={2} maxLength={500} />
-      </Field>
+      <p className="text-xs text-slate-500">Du har opgaven, indtil nogen siger ja.</p>
     </FormDialog>
   );
 }

@@ -9,6 +9,13 @@ export const KIND_LABEL: Record<ActivityKind, string> = {
   OTHER: "Aktivitet",
 };
 
+/** The mark an activity of each kind carries beside its name. */
+export const KIND_ICON: Record<ActivityKind, string> = {
+  MATCH: "⚽",
+  TRAINING: "🏃",
+  OTHER: "📅",
+};
+
 /** What an activity is called in a list: the opponent for a match, else its title. */
 export function activityName(activity: {
   kind: ActivityKind;
