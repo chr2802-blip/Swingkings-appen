@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import type { MemberRole, Prisma } from "@prisma/client";
+import type { MemberRole, Prisma, ReactionKind } from "@prisma/client";
 import { prisma } from "./prisma";
 import { applyCalendar } from "./kampklar";
 import { settleChallenge } from "./fines";
@@ -438,7 +438,7 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   for (const [index, [author, body]] of CHAT_NOW.entries()) {
     messages.push({ teamId, authorId: who(author).id, body, createdAt: new Date(now.getTime() - (CHAT_NOW.length - index) * 600_000) });
   }
-  const sent = await prisma.chatMessage.createManyAndReturn({ data: messages, select: { id: true, body: true } });
+  const sent = await prisma.chatMessage.createManyAndReturn({ data: messages, select: { id: true, body: true, createdAt: true } });
   const chatPhotos: Prisma.ChatPhotoCreateManyInput[] = [];
   for (const message of sent) {
     for (let position = 0; position < (CHAT_PICTURES[message.body] ?? 0); position++) {
@@ -447,17 +447,28 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   }
   await prisma.chatPhoto.createMany({ data: chatPhotos });
 
-  // --- Feed: posts, pictures, likes and comments ----------------------------------------------
+  // --- Feed: posts, pictures, reactions and comments----------------------------------------------
   const posts = await prisma.post.createManyAndReturn({
     data: POSTS.map(([daysAgo, author, body]) => ({ teamId, authorId: who(author).id, body, createdAt: ago(daysAgo) })),
     select: { id: true, body: true, createdAt: true },
   });
   const postPhotos: Prisma.PostPhotoCreateManyInput[] = [];
   const comments: Prisma.PostCommentCreateManyInput[] = [];
-  const likes: Prisma.PostLikeCreateManyInput[] = [];
+  const reactions: Prisma.ReactionCreateManyInput[] = [];
+  /** Mostly ❤️ and 👍, now and then a laugh or a flame — as a team reacts. */
+  const someKind = (): ReactionKind => {
+    const roll = random();
+    return roll < 0.45 ? "HEART" : roll < 0.75 ? "THUMBS" : roll < 0.87 ? "LAUGH" : roll < 0.95 ? "FIRE" : "WOW";
+  };
   const liked = (postId: string, at: Date) => {
     for (const user of sample(everybody, 3 + Math.floor(random() * 10))) {
-      likes.push({ postId, userId: user.id, createdAt: new Date(at.getTime() + Math.floor(random() * 20) * 3_600_000) });
+      reactions.push({ teamId, postId, userId: user.id, kind: someKind(), createdAt: new Date(at.getTime() + Math.floor(random() * 20) * 3_600_000) });
+    }
+  };
+  /** A few reactions on one comment or chat message, from up to `most` people. */
+  const reactTo = (target: { postCommentId: string } | { chatMessageId: string } | { activityCommentId: string }, at: Date, most: number) => {
+    for (const user of sample(everybody, 1 + Math.floor(random() * most))) {
+      reactions.push({ teamId, ...target, userId: user.id, kind: someKind(), createdAt: new Date(at.getTime() + Math.floor(random() * 6) * 600_000) });
     }
   };
   for (const [, , body, pictures, said] of POSTS) {
@@ -520,8 +531,26 @@ export async function createDemoTeam(options: { password?: string; joinUserId?: 
   secret(partyDate, sample(everybody, 10), [4, 8, 5]);
 
   await prisma.postPhoto.createMany({ data: postPhotos });
-  await prisma.postComment.createMany({ data: comments });
-  await prisma.postLike.createMany({ data: likes });
+  const said = await prisma.postComment.createManyAndReturn({ data: comments, select: { id: true, createdAt: true } });
+  // About every third comment and every fourth chat message has a reaction or a few.
+  for (const comment of said) if (random() < 0.35) reactTo({ postCommentId: comment.id }, comment.createdAt, 3);
+  for (const message of sent) if (random() < 0.25) reactTo({ chatMessageId: message.id }, message.createdAt, 4);
+  // --- Comments on activities: the party being planned, and the last match ----------------
+  const party1 = await prisma.activityComment.create({
+    data: { teamId, matchId: party, authorId: who("Mads").id, body: "Skal vi have en DJ, eller klarer vi musikken selv?", createdAt: ago(2) },
+  });
+  await prisma.activityComment.createMany({
+    data: [
+      { teamId, matchId: party, authorId: who("Noah").id, body: "Jeg har en højttaler, den klarer det 🔊", parentId: party1.id, createdAt: ago(1.9) },
+      { teamId, matchId: party, authorId: who("Frederik").id, body: "Må man tage kæresten med?", createdAt: ago(1.5) },
+      { teamId, matchId: party, authorId: who("Jonas").id, body: "Bødekassen betaler maden – drikkevarer for egen regning 🍻", createdAt: ago(0.8) },
+      { teamId, matchId: lastMatch, authorId: who("Victor").id, body: "Hvad tid mødes vi i Hvidovre?", createdAt: ago(6) },
+      { teamId, matchId: lastMatch, authorId: who("Mads").id, body: "12:15 ved klubhuset, vi kører samlet", createdAt: ago(5.9) },
+    ],
+  });
+  reactTo({ activityCommentId: party1.id }, party1.createdAt, 4);
+
+  await prisma.reaction.createMany({ data: reactions });
   await prisma.pollBallot.createMany({ data: ballots });
   await prisma.pollVote.createMany({ data: votes });
 

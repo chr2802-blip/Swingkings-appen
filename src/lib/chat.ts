@@ -1,6 +1,7 @@
 import { teamDb } from "./team-db";
 import { latest } from "./push-summary";
 import { UNREAD_UP_TO } from "./chat-count";
+import { reactionRows, reactionSummary, type ReactionView } from "./reactions";
 
 /** How many messages the chat shows at once. */
 export const CHAT_PAGE = 60;
@@ -14,10 +15,12 @@ export type ChatItem = {
   task: { id: string; title: string } | null;
   createdAt: string;
   author: { id: string; name: string; photoId: string | null };
+  /** The reactions on it, as the viewer sees them (`reactionSummary`). */
+  reactions: ReactionView[];
 };
 
-/** The latest messages, oldest first, as the chat page and `/api/chat` both draw them. */
-export async function latestMessages(teamId: string): Promise<ChatItem[]> {
+/** The latest messages, oldest first, as the chat page and `/api/chat` both draw them for the viewer. */
+export async function latestMessages(teamId: string, viewerId: string): Promise<ChatItem[]> {
   const rows = await teamDb(teamId).chatMessage.findMany({
     orderBy: { createdAt: "desc" },
     take: CHAT_PAGE,
@@ -28,11 +31,13 @@ export async function latestMessages(teamId: string): Promise<ChatItem[]> {
       author: { select: { id: true, name: true, photoId: true } },
       task: { select: { id: true, title: true } },
       photos: { orderBy: { position: "asc" }, select: { photoId: true } },
+      reactions: reactionRows,
     },
   });
-  return rows.reverse().map(({ photos, ...row }) => ({
+  return rows.reverse().map(({ photos, reactions, ...row }) => ({
     ...row,
     photoIds: photos.map((photo) => photo.photoId),
+    reactions: reactionSummary(reactions, viewerId),
     createdAt: row.createdAt.toISOString(),
   }));
 }
