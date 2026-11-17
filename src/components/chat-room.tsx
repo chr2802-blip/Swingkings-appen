@@ -6,6 +6,7 @@ import { Avatar, Photo } from "@/components/photo";
 import { PhotoViewer } from "@/components/photo-viewer";
 import Link from "next/link";
 import { PlayerLink } from "@/components/player-link";
+import { Reactions } from "@/components/reactions";
 import { uploadPhoto } from "@/components/photo-field";
 import { PhotoError } from "@/lib/downscale";
 import { MAX_CHAT_PHOTOS, PHOTO_FIELD } from "@/lib/photo-file";
@@ -174,14 +175,15 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatItem
                     </Link>
                   )}
                 </div>
-                <span className="mt-0.5 flex gap-2 px-1 text-[11px] text-slate-400">
-                  {stampLabel(new Date(message.createdAt))}
+                <div className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-slate-500 ${own ? "flex-row-reverse" : ""}`}>
+                  <span>{stampLabel(new Date(message.createdAt))}</span>
                   {(own || canModerate) && (
                     <button type="button" onClick={() => remove(message.id)} className="hidden hover:text-red-600 group-hover:inline">
                       Slet
                     </button>
                   )}
-                </span>
+                  <Reactions target="chat" id={message.id} reactions={message.reactions} onChanged={refresh} align={own ? "end" : "start"} />
+                </div>
               </div>
             </li>
           );

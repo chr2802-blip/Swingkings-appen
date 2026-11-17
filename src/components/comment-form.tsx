@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useFormAction } from "@/components/use-form-action";
 import { Avatar } from "@/components/photo";
-import { addComment } from "@/app/actions/social";
+import type { ActionResult } from "@/lib/action-result";
 import { activeMention, insertMention, suggestMembers } from "@/lib/mentions";
 
 /** Who is being answered, when the comment is an answer: the comment and its writer. */
@@ -17,14 +17,18 @@ export type CommentMember = { userId: string; name: string; photoId: string | nu
  * and the server tags them.
  */
 export function CommentForm({
-  postId,
+  action,
+  fields,
   members,
   viewerId,
   replyTo = null,
   onCancelReply,
   onSent,
 }: {
-  postId: string;
+  /** What sends it: `addComment` for a post, `addActivityComment` for an activity. */
+  action: (prev: ActionResult, formData: FormData) => Promise<ActionResult>;
+  /** What it is on, sent along with the words (`postId`, `matchId`). */
+  fields: Record<string, string>;
   members: CommentMember[];
   viewerId: string;
   replyTo?: ReplyTarget | null;
@@ -36,7 +40,7 @@ export function CommentForm({
   const [highlight, setHighlight] = useState(0);
   const [dismissed, setDismissed] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
-  const { state, pending, handleSubmit } = useFormAction(addComment, {
+  const { state, pending, handleSubmit } = useFormAction(action, {
     onSuccess: () => {
       setValue("");
       setCaret(0);
@@ -53,7 +57,7 @@ export function CommentForm({
   const suggestions = mention && mention.start !== dismissed ? suggestMembers(mention.query, members, viewerId) : [];
   const open = suggestions.length > 0;
   const active = Math.min(highlight, suggestions.length - 1);
-  const listId = `mentions-${postId}`;
+  const listId = `mentions-${Object.values(fields).join("-")}`;
 
   function track(element: HTMLInputElement) {
     setValue(element.value);
@@ -127,7 +131,9 @@ export function CommentForm({
         </p>
       )}
       <div className="flex gap-2">
-        <input type="hidden" name="postId" value={postId} />
+        {Object.entries(fields).map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
         {replyTo && <input type="hidden" name="parentId" value={replyTo.id} />}
         <input
           ref={input}
