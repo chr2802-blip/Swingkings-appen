@@ -102,8 +102,10 @@ test("a player's page shows their latest fines and challenges and their next job
       .getByRole("tabpanel", { name: "Bøder og udfordringer" })
       .getByText("Glemt trøje"),
   ).toBeVisible();
-  // What Bo owes stands above the tabs, whichever is shown.
+  // What Bo owes, and how many fines and open jobs Bo has, stand above the tabs.
   await expect(page.getByText("bøder i alt")).toBeVisible();
+  await expect(page.locator("dl > div").filter({ hasText: "bøder" }).last()).toHaveText("bøder2");
+  await expect(page.locator("dl > div").filter({ hasText: "opgave" })).toHaveText("opgave1");
   await page.getByRole("tab", { name: "Opgaver (1)" }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/opgaver$`));
   await expect(
