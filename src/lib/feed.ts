@@ -1,5 +1,7 @@
+import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
+import { teamRoster } from "./roster";
 import { FEED_PAGE } from "./feed-page";
 import { isOpen, tally } from "./polls";
 import { kickoffLabel, readInZone } from "./time";
@@ -89,23 +91,26 @@ export async function feedPosts(
   const db = teamDb(teamId);
   // The pinned posts lead the first page, the latest pinned first; the pages after it are
   // the rest, newest first, so the cursor never meets a pinned post.
-  const pinned = after
-    ? []
-    : await db.post.findMany({
-        where: { pinnedAt: { not: null } },
-        orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
-        take: MAX_PINNED_SHOWN,
-        select,
-      });
-  const paged = await db.post.findMany({
-    where: {
-      pinnedAt: null,
-      ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take,
-    select,
-  });
+  // Both at once: neither waits on the other, and each is a round trip to the database.
+  const [pinned, paged] = await Promise.all([
+    after
+      ? []
+      : db.post.findMany({
+          where: { pinnedAt: { not: null } },
+          orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
+          take: MAX_PINNED_SHOWN,
+          select,
+        }),
+    db.post.findMany({
+      where: {
+        pinnedAt: null,
+        ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take,
+      select,
+    }),
+  ]);
   const posts = [...pinned, ...paged];
 
   return posts.map(({ poll, ...post }) => ({
@@ -198,3 +203,13 @@ export function sortByVotes<T extends { votes: number }>(options: T[]): T[] {
     .sort((a, b) => b.option.votes - a.option.votes || a.index - b.index)
     .map(({ option }) => option);
 }
+
+/**
+ * What the front page's feed section shows: the first page of posts and the roster. Cached
+ * for the request, so the front page can start it (`void teamFeed(…)`) alongside its own
+ * reads, and `TeamFeed` — rendered only once those are done — finds it already on its way
+ * instead of beginning a second round of trips to the database.
+ */
+export const teamFeed = cache((teamId: string, viewerId: string, canAdminister: boolean) =>
+  Promise.all([feedPosts(teamId, { id: viewerId, canAdminister }), teamRoster(teamId)]),
+);

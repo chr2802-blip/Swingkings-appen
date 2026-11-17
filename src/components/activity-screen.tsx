@@ -21,6 +21,7 @@ import { ActionButton } from "@/components/action-button";
 import { SwipePages, TurnButton } from "@/components/swipe-pages";
 import { AutoSync } from "@/components/auto-sync";
 import { ActivityComments } from "@/components/activity-comments";
+import { ClampedText } from "@/components/clamped-text";
 import { deleteActivity } from "@/app/actions/activities";
 import { SignupChoice } from "@/components/signup-choice";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
@@ -46,8 +47,8 @@ export function activityHref(id: string, tab: ActivityTab = "") {
  * One activity, on three tabs swiped between — each with its own address, all read at
  * once so a swipe never waits on the server:
  *
- * - **Detaljer**: when and where, the note, who has signed up, and the team's comments on
- *   it (`ActivityComments`) — KampKlar's feed says little more. A hand-made activity is signed up for here; one from KampKlar
+ * - **Detaljer**: one card with when and where, the note (folded when long) and the team's
+ *   comments on it (`ActivityComments`) — KampKlar's feed says little more — then who has signed up. A hand-made activity is signed up for here; one from KampKlar
  *   in KampKlar, behind its link.
  * - **Opgaver**: the activity's jobs.
  * - **Bøder**: the fines given at it, and its challenges.
@@ -127,6 +128,9 @@ export async function ActivityScreen({
     reactions: reactionSummary(comment.reactions, user.id),
   }));
 
+  const day = relativeDay(match.startsAt);
+  // Within a week it reads "i morgen" or "om 3 dage"; further off it is only the date again.
+  const nearby = day !== readInZone(match.startsAt, "d. MMM");
   const time = `${kickoffLabel(match.startsAt)}${match.endsAt ? `–${readInZone(match.endsAt, "HH:mm")}` : ""}`;
 
   return (
@@ -159,48 +163,65 @@ export async function ActivityScreen({
             title: "Detaljer",
             children: (
               <div>
-                <Card className="mb-6 space-y-3">
-                  <div>
-                    <p className="text-lg font-semibold">{time}</p>
-                    <p className="text-sm text-slate-500">{relativeDay(match.startsAt)}</p>
-                  </div>
-                  {match.location && (
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.location)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-start gap-1.5 text-sm text-slate-600 hover:underline"
-                    >
-                      <span aria-hidden="true">📍</span>
-                      <span>
-                        {match.location} <span className="sr-only">(vis på kort)</span>
-                      </span>
-                    </a>
-                  )}
-                  {match.kind === "MATCH" && match.title !== label && <p className="text-sm text-slate-600">{match.title}</p>}
-                  <div className="flex flex-wrap gap-2">
-                    {match.cancelledAt && <Badge tone="red">Aflyst</Badge>}
-                    {fromKampKlar && <Badge>Fra DBU KampKlar</Badge>}
-                    {match.kind !== "MATCH" && <Badge>{KIND_LABEL[match.kind]}</Badge>}
-                  </div>
-                  {match.note && <p className="text-sm whitespace-pre-line text-slate-600">{match.note}</p>}
-                  {fromKampKlar && match.externalUrl && (
-                    <a
-                      href={match.externalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={buttonClass("primary", "w-full")}
-                    >
-                      Åbn i KampKlar ↗
-                    </a>
-                  )}
-                  {fromKampKlar && (
-                    <p className="text-xs text-slate-400">
-                      {team.calendarSyncedAt
-                        ? `Hentet fra KampKlar ${readInZone(team.calendarSyncedAt, "d. MMM 'kl.' HH:mm")}`
-                        : "Ikke hentet fra KampKlar endnu"}
+                {/* One card: what, when and where on top, compact — a long note folded to a few
+                    lines — and the team's comments on it underneath. */}
+                <Card padded={false} className="mb-6 divide-y divide-slate-100">
+                  <div className="space-y-2 p-4">
+                    <p className="font-semibold">
+                      {time}
+                      {/* "i morgen", "om 3 dage" — not the date the line above already says. */}
+                      {nearby && <span className="font-normal text-slate-500"> · {day}</span>}
                     </p>
-                  )}
+                    {match.kind === "MATCH" && match.title !== label && <p className="text-sm text-slate-600">{match.title}</p>}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      {match.location && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start gap-1 text-sm text-slate-600 hover:underline"
+                        >
+                          <span aria-hidden="true">📍</span>
+                          <span>
+                            {match.location} <span className="sr-only">(vis på kort)</span>
+                          </span>
+                        </a>
+                      )}
+                      {(match.cancelledAt || fromKampKlar || match.kind !== "MATCH") && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {match.cancelledAt && <Badge tone="red">Aflyst</Badge>}
+                          {fromKampKlar && <Badge>Fra DBU KampKlar</Badge>}
+                          {match.kind !== "MATCH" && <Badge>{KIND_LABEL[match.kind]}</Badge>}
+                        </div>
+                      )}
+                    </div>
+                    {match.note && <ClampedText text={match.note} className="text-sm text-slate-600" />}
+                    {fromKampKlar && match.externalUrl && (
+                      <a
+                        href={match.externalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={buttonClass("primary", "w-full")}
+                      >
+                        Åbn i KampKlar ↗
+                      </a>
+                    )}
+                    {fromKampKlar && (
+                      <p className="text-xs text-slate-400">
+                        {team.calendarSyncedAt
+                          ? `Hentet fra KampKlar ${readInZone(team.calendarSyncedAt, "d. MMM 'kl.' HH:mm")}`
+                          : "Ikke hentet fra KampKlar endnu"}
+                      </p>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <ActivityComments
+                      matchId={match.id}
+                      comments={comments}
+                      members={roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId }))}
+                      viewerId={user.id}
+                    />
+                  </div>
                 </Card>
 
                 {myTasks.length > 0 && (
@@ -232,13 +253,6 @@ export async function ActivityScreen({
                     {going.length > 0 ? <SignupFaces people={going} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu.</p>}
                   </Card>
                 </section>
-
-                <ActivityComments
-                  matchId={match.id}
-                  comments={comments}
-                  members={roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId }))}
-                  viewerId={user.id}
-                />
 
                 {!fromKampKlar && (
                   <div className="mt-6 flex flex-wrap gap-2">
@@ -286,7 +300,7 @@ export async function ActivityScreen({
             children: (
               <div>
                 {/* The history's rows: a tap opens the fine with everything about it. */}
-                {fines.length === 0 ? <EmptyState>Ingen bøder endnu.</EmptyState> : <FineHistory fines={fines} user={user} />}
+                {fines.length === 0 ? <EmptyState>Ingen bøder endnu.</EmptyState> : <FineHistory fines={fines} />}
                 {match.challenges.length > 0 && (
                   <section className="mt-8">
                     <SectionTitle>Udfordringer</SectionTitle>

@@ -24,7 +24,7 @@ import {
   syncCalendar,
 } from "@/app/actions/activities";
 import { AUTO_SYNC_AFTER_MS, fetchCalendar, syncIfStale, syncTeamCalendar } from "@/lib/kampklar";
-import { LISTED_ACTIVITY, copyableActivities, kampKlarNames, templateOptions } from "@/lib/activity-data";
+import { LISTED_ACTIVITY, copyableActivities, kampKlarNames, templateOptions, upcomingActivities } from "@/lib/activity-data";
 import { KIND_LABEL, activityName, signupSummary } from "@/lib/activity";
 import { teamRoster } from "@/lib/roster";
 import { formData, makeMatch, makeSquad, signIn } from "../helpers/factories";
@@ -412,6 +412,22 @@ describe("copying jobs", () => {
     expect(labels).toHaveLength(1);
     expect(labels[0]).toMatch(/^Gammel · .* \(1 opgave\)$/);
     expect((await copyableActivities(team.id)).map((o) => o.label.split(" · ")[0])).toEqual(["Ny", "Gammel"]);
+  });
+});
+
+describe("upcomingActivities", () => {
+  it("offers the team's activities from today on, soonest first, and nobody else's", async () => {
+    const { team } = await makeSquad();
+    const other = await makeSquad("Naboerne");
+    const now = new Date("2030-05-10T12:00:00Z");
+    await makeMatch(team.id, { kind: "OTHER", title: "I går", startsAt: new Date("2030-05-09T18:00:00Z") });
+    await makeMatch(team.id, { kind: "OTHER", title: "Senere", startsAt: new Date("2030-05-20T18:00:00Z") });
+    await makeMatch(team.id, { kind: "TRAINING", title: "Træning", startsAt: new Date("2030-05-12T18:00:00Z") });
+    // Earlier today counts: a job can still be put on it.
+    await makeMatch(team.id, { opponent: "B.93", startsAt: new Date("2030-05-10T08:00:00Z") });
+    await makeMatch(other.team.id, { kind: "OTHER", title: "Naboens", startsAt: new Date("2030-05-15T18:00:00Z") });
+    const labels = (await upcomingActivities(team.id, now)).map((o) => o.label.split(" · ")[0]);
+    expect(labels).toEqual(["B.93", "Træning", "Senere"]);
   });
 });
 

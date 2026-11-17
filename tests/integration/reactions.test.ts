@@ -159,9 +159,9 @@ describe("react", () => {
         { teamId: team.id, chatMessageId: message.id, userId: anna.id, kind: "LAUGH" },
       ],
     });
-    const [forBo] = await latestMessages(team.id, bo.id);
+    const [forBo] = (await latestMessages(team.id, bo.id)).messages;
     expect(forBo!.reactions).toEqual([{ kind: "LAUGH", emoji: "😂", label: "Griner", count: 2, mine: true, names: [bo.name, anna.name] }]);
-    const [forAdmin] = await latestMessages(team.id, "somebody-else");
+    const [forAdmin] = (await latestMessages(team.id, "somebody-else")).messages;
     expect(forAdmin!.reactions[0]!.mine).toBe(false);
   });
 

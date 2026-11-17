@@ -114,7 +114,7 @@ describe("the team chat", () => {
   it("counts the chat as open while it is polled", async () => {
     const { team, anna } = await chatTeam();
     await signIn(anna);
-    await chatRoute();
+    await chatRoute(new Request("https://app.example/api/chat"));
     const seen = await prisma.teamMember.findFirstOrThrow({ where: { teamId: team.id, userId: anna.id } });
     expect(seen.chatSeenAt).not.toBeNull();
   });
