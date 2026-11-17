@@ -39,8 +39,9 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
   await page.goto(`/aktiviteter/${party.id}`);
   await expect(page.getByText("Kommer du?")).toBeVisible();
   await page.getByRole("button", { name: "Jeg kommer", exact: true }).click();
-  await expect(page.getByText("Du kommer ✅")).toBeVisible();
   await expect(page.getByRole("button", { name: "Jeg kommer", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // The chosen button says it; no line above repeats it.
+  await expect(page.getByText("Kommer du?")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Jeg kommer ikke" })).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByRole("heading", { name: "Tilmeldte (1)" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Anna", exact: true })).toBeVisible();
@@ -48,7 +49,6 @@ test("players sign up for a hand-made activity and see who comes", async ({ page
   await loginAs(bo);
   await page.goto(`/aktiviteter/${party.id}`);
   await page.getByRole("button", { name: "Jeg kommer ikke" }).click();
-  await expect(page.getByText("Du kommer ikke", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Jeg kommer ikke" })).toHaveAttribute("aria-pressed", "true");
   // Only those coming are shown: Bo's no is not.
   await expect(page.getByRole("heading", { name: "Tilmeldte (1)" })).toBeVisible();
@@ -535,4 +535,89 @@ test("a player gives a job to a teammate, who accepts it, and the job keeps the 
   await opened.getByText("Historik (1)").click();
   await expect(opened.getByText("Godkendt")).toBeVisible();
   expect((await db.taskAssignee.findMany({ where: { taskId: task.id } })).map((a) => a.userId)).toEqual([bo.id]);
+});
+
+test("the team comments on an activity under its details, answers and reacts, and older comments fold away", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: inDays(10) } });
+  const details = page.getByRole("tabpanel", { name: /^Detaljer/ });
+
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await expect(details.getByRole("heading", { name: "Kommentarer (0)" })).toBeVisible();
+  await expect(details.getByText("Ingen kommentarer endnu")).toBeVisible();
+  await details.getByRole("textbox", { name: "Kommentar" }).fill("Skal vi have DJ?");
+  await details.getByRole("textbox", { name: "Kommentar" }).press("Enter");
+  await expect(details.getByRole("heading", { name: "Kommentarer (1)" })).toBeVisible();
+  await expect(details.getByText("Skal vi have DJ?")).toBeVisible();
+  await expect(details.getByRole("textbox", { name: "Kommentar" })).toHaveValue("");
+
+  await loginAs(bo);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await details.getByRole("button", { name: "Svar Anna" }).click();
+  await details.getByRole("textbox", { name: "Svar" }).fill("Jeg har en højttaler");
+  await details.getByRole("textbox", { name: "Svar" }).press("Enter");
+  await expect(details.getByRole("list", { name: "Svar til Anna" }).getByText("Jeg har en højttaler")).toBeVisible();
+  // Bo may delete his own answer, not Anna's comment.
+  await expect(details.getByRole("button", { name: "Slet", exact: true })).toHaveCount(1);
+
+  const annas = details.getByRole("listitem").filter({ hasText: "Skal vi have DJ?" }).first();
+  await annas.getByRole("button", { name: "Reager" }).first().click();
+  await page.getByRole("group", { name: "Vælg en reaktion" }).getByRole("button", { name: "Ild 🔥" }).click();
+  await expect(details.getByRole("button", { name: "🔥 1: Bo" })).toBeVisible();
+  await expect.poll(() => db.reaction.count({ where: { activityCommentId: { not: null }, kind: "FIRE", userId: bo.id } })).toBe(1);
+
+  // Five comments: folded together, the latest two show, and the rest are one press away.
+  for (const [index, body] of ["Mad kl. 19", "Husk pokalerne", "Jeg tager kage med"].entries()) {
+    await db.activityComment.create({ data: { teamId: team.id, matchId: party.id, authorId: anna.id, body, createdAt: new Date(Date.now() + (index + 1) * 1000) } });
+  }
+  await page.reload();
+  await expect(details.getByRole("heading", { name: "Kommentarer (5)" })).toBeVisible();
+  await expect(details.getByText("Jeg tager kage med")).toBeVisible();
+  await expect(details.getByText("Husk pokalerne")).toBeVisible();
+  await expect(details.getByText("Skal vi have DJ?")).toBeHidden();
+  const fold = details.getByRole("button", { name: "Vis alle 5" });
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await details.getByRole("button", { name: "Se 3 tidligere kommentarer" }).click();
+  await expect(details.getByText("Skal vi have DJ?")).toBeVisible();
+  await expect(details.getByRole("button", { name: "Skjul ældre" })).toHaveAttribute("aria-expanded", "true");
+
+  // The phone remembers it was folded out, and folds it back on a press.
+  await page.reload();
+  await expect(details.getByText("Skal vi have DJ?")).toBeVisible();
+  await details.getByRole("button", { name: "Skjul ældre" }).click();
+  await expect(details.getByText("Skal vi have DJ?")).toBeHidden();
+  await page.reload();
+  await expect(details.getByRole("button", { name: "Vis alle 5" })).toBeVisible();
+  await expect(details.getByText("Skal vi have DJ?")).toBeHidden();
+});
+
+test("a long note is folded to a few lines with Vis mere, a short one is shown whole", async ({ page, loginAs }) => {
+  const { team, anna } = await squad();
+  const long = Array.from({ length: 12 }, (_, i) => `Linje ${i + 1}: husk det hele`).join("\n");
+  const party = await db.match.create({ data: { teamId: team.id, kind: "OTHER", title: "Afslutningsfest", startsAt: inDays(10), note: long } });
+  const training = await db.match.create({ data: { teamId: team.id, kind: "TRAINING", title: "Træning", startsAt: inDays(2), note: "Medbring bolde" } });
+  const details = page.getByRole("tabpanel", { name: /^Detaljer/ });
+
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${party.id}`);
+  await expect(details.getByText(/^Linje 1: husk det hele/)).toBeVisible();
+  const more = details.getByRole("button", { name: "Vis mere" });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  // Folded, the note is cut off: shorter than its text.
+  const note = details.getByText(/^Linje 1: husk det hele/);
+  await expect.poll(() => note.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await more.click();
+  await expect(details.getByRole("button", { name: "Vis mindre" })).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(() => note.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(false);
+  await details.getByRole("button", { name: "Vis mindre" }).click();
+  await expect(details.getByRole("button", { name: "Vis mere" })).toBeVisible();
+  // The comments sit in the same card, under the details.
+  await expect(details.getByRole("heading", { name: "Kommentarer (0)" })).toBeVisible();
+
+  await page.goto(`/aktiviteter/${training.id}`);
+  await expect(details.getByText("Medbring bolde")).toBeVisible();
+  // Two days off, the day is said as words beside the time.
+  await expect(details.getByText("· om 2 dage")).toBeVisible();
+  await expect(details.getByRole("button", { name: "Vis mere" })).toHaveCount(0);
 });

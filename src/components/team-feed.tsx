@@ -1,7 +1,6 @@
 import type { TeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
-import { FEED_PAGE, feedPosts, nextFeedCursor } from "@/lib/feed";
-import { teamRoster } from "@/lib/roster";
+import { FEED_PAGE, nextFeedCursor, teamFeed } from "@/lib/feed";
 import { EmptyState, SectionTitle } from "@/components/ui";
 import { PostDialog } from "@/components/post-dialog";
 import { CreateAction } from "@/components/create-button";
@@ -18,10 +17,7 @@ import { FeedMore } from "@/components/feed-more";
  */
 export async function TeamFeed({ user }: { user: TeamUser }) {
   const admin = canAdministerTeam(user, user.teamId);
-  const [posts, roster] = await Promise.all([
-    feedPosts(user.teamId, { id: user.id, canAdminister: admin }),
-    teamRoster(user.teamId),
-  ]);
+  const [posts, roster] = await teamFeed(user.teamId, user.id, admin);
   const members = roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId }));
   // Changes on every render, so the posts `FeedMore` fetched are fetched again when an
   // action (a like, a comment) has the page rendered anew.

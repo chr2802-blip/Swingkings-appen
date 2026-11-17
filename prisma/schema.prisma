@@ -146,24 +146,26 @@ model Team {
   finePaymentOpenedAt DateTime?
   createdAt           DateTime  @default(now())
 
-  members         TeamMember[]
-  activeFor       User[]           @relation("ActiveTeam")
-  inviteLinks     InviteLink[]
-  fineTypes       FineType[]
-  fines           Fine[]
-  challenges      Challenge[]
-  matches         Match[]
-  tasks           Task[]
-  taskHandovers   TaskHandover[]
-  taskTemplates   TaskTemplate[]
-  chatMessages    ChatMessage[]
-  posts           Post[]
-  polls           Poll[]
-  activitySignups ActivitySignup[]
-  seasons         Season[]
-  notifications   Notification[]
-  photos          Photo[]          @relation("PhotoTeam")
-  photo           Photo?           @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  members          TeamMember[]
+  activeFor        User[]            @relation("ActiveTeam")
+  inviteLinks      InviteLink[]
+  fineTypes        FineType[]
+  fines            Fine[]
+  challenges       Challenge[]
+  matches          Match[]
+  tasks            Task[]
+  taskHandovers    TaskHandover[]
+  taskTemplates    TaskTemplate[]
+  chatMessages     ChatMessage[]
+  posts            Post[]
+  polls            Poll[]
+  activitySignups  ActivitySignup[]
+  activityComments ActivityComment[]
+  reactions        Reaction[]
+  seasons          Season[]
+  notifications    Notification[]
+  photos           Photo[]           @relation("PhotoTeam")
+  photo            Photo?            @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
 
   @@index([photoId])
 }
@@ -208,14 +210,15 @@ model User {
   handoversIn  TaskHandover[] @relation("HandoverTo")
   taskAssigned TaskAssignee[]
 
-  chatMessages ChatMessage[]
-  posts        Post[]
-  pollOptions  PollOption[]     @relation("PollOptionPlayer")
-  pollVotes    PollVote[]       @relation("PollVoter")
-  pollBallots  PollBallot[]     @relation("PollBallot")
-  signups      ActivitySignup[]
-  postLikes    PostLike[]
-  postComments PostComment[]
+  chatMessages     ChatMessage[]
+  posts            Post[]
+  pollOptions      PollOption[]      @relation("PollOptionPlayer")
+  pollVotes        PollVote[]        @relation("PollVoter")
+  pollBallots      PollBallot[]      @relation("PollBallot")
+  signups          ActivitySignup[]
+  postComments     PostComment[]
+  reactions        Reaction[]
+  activityComments ActivityComment[]
 
   @@index([activeTeamId])
   @@index([photoId])
@@ -417,12 +420,13 @@ model Match {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  team       Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team       Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
   tasks      Task[]
   fines      Fine[]
   challenges Challenge[]
   polls      Poll[]
   signups    ActivitySignup[]
+  comments   ActivityComment[]
 
   notifications Notification[]
 
@@ -540,10 +544,11 @@ model ChatMessage {
   taskId    String?
   createdAt DateTime @default(now())
 
-  team   Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  task   Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  photos ChatPhoto[]
+  team      Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  task      Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  photos    ChatPhoto[]
+  reactions Reaction[]
 
   @@index([teamId, createdAt])
   @@index([authorId])
@@ -578,12 +583,12 @@ model Post {
   /// Pinned posts lie at the top of the feed, the latest pinned first. Anybody on the team pins and unpins.
   pinnedAt  DateTime?
 
-  team     Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  photos   PostPhoto[]
-  poll     Poll?
-  likes    PostLike[]
-  comments PostComment[]
+  team      Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  photos    PostPhoto[]
+  poll      Poll?
+  reactions Reaction[]
+  comments  PostComment[]
 
   notifications Notification[]
 
@@ -731,18 +736,6 @@ model PollBallot {
 }
 
 /// Reached through its post.
-model PostLike {
-  postId    String
-  userId    String
-  createdAt DateTime @default(now())
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([postId, userId])
-  @@index([userId])
-}
-
 /// Reached through its post.
 model PostComment {
   id        String   @id @default(cuid())
@@ -757,10 +750,11 @@ model PostComment {
    */
   parentId  String?
 
-  post    Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author  User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent  PostComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies PostComment[] @relation("CommentReplies")
+  post      Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent    PostComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   PostComment[] @relation("CommentReplies")
+  reactions Reaction[]
 
   @@index([postId, createdAt])
   @@index([authorId])
@@ -877,4 +871,75 @@ model Notification {
   @@index([matchId])
   @@index([challengeId])
   @@index([fineId])
+}
+
+/**
+ * The six reactions, in the order they are offered: 👍 ❤️ 😂 😮 😢 🔥 (`src/lib/reactions.ts`).
+ */
+enum ReactionKind {
+  THUMBS
+  HEART
+  LAUGH
+  WOW
+  SAD
+  FIRE
+}
+
+/**
+ * Somebody's reaction to a post, a comment on one, a chat message or a comment on an
+ * activity — exactly one of the four (a CHECK in the migration). Each person gives each
+ * kind once per thing; a ❤️ on a post is what a like used to be. Carries the team, so
+ * `teamDb` scopes it, and goes with the thing it is on.
+ */
+model Reaction {
+  id                String       @id @default(cuid())
+  teamId            String
+  userId            String
+  kind              ReactionKind
+  postId            String?
+  postCommentId     String?
+  chatMessageId     String?
+  activityCommentId String?
+  createdAt         DateTime     @default(now())
+
+  team            Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post            Post?            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postComment     PostComment?     @relation(fields: [postCommentId], references: [id], onDelete: Cascade)
+  chatMessage     ChatMessage?     @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
+  activityComment ActivityComment? @relation(fields: [activityCommentId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, kind])
+  @@unique([postCommentId, userId, kind])
+  @@unique([chatMessageId, userId, kind])
+  @@unique([activityCommentId, userId, kind])
+  @@index([teamId])
+  @@index([userId])
+}
+
+/**
+ * A comment on an activity, or an answer to one (`parentId`, always a top-level comment of
+ * the same activity, as with `PostComment`). Goes with the activity, so a new season takes
+ * the comments of the activities it clears.
+ */
+model ActivityComment {
+  id        String   @id @default(cuid())
+  teamId    String
+  matchId   String
+  authorId  String
+  body      String
+  parentId  String?
+  createdAt DateTime @default(now())
+
+  team      Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  match     Match             @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  author    User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent    ActivityComment?  @relation("ActivityCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   ActivityComment[] @relation("ActivityCommentReplies")
+  reactions Reaction[]
+
+  @@index([matchId, createdAt])
+  @@index([teamId])
+  @@index([authorId])
+  @@index([parentId])
 }

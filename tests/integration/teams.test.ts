@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { findInviteLink } from "@/lib/invite-links";
+import { getCurrentUser } from "@/lib/auth";
+import { canAdministerTeam, canManageFines } from "@/lib/access";
+import { teamRoster } from "@/lib/roster";
 import { DEFAULT_LINK_DAYS, DEFAULT_LINK_MAX_USES, LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import {
   createInviteLink,
@@ -381,24 +384,41 @@ describe("switching teams", () => {
 });
 
 describe("super admin", () => {
-  it("creates a team with a one-place link for its coach, and does not join it", async () => {
+  it("creates a team with a one-place link for its coach, and never joins it", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
     await signIn(root);
-    const result = await createTeam(undefined, formData({ name: "Nyt hold", adminLink: "on" }));
+    const result = await createTeam(undefined, formData({ name: "Nyt hold" }));
     expect(result?.ok).toBe(true);
     const team = await prisma.team.findFirstOrThrow({ where: { name: "Nyt hold" } });
     const token = (result as { note: string }).note.replace(/^\/join\//, "");
     expect(await findInviteLink(token)).toMatchObject({ teamId: team.id, maxUses: 1 });
     expect(await prisma.teamMember.count({ where: { userId: root.id } })).toBe(0);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: root.id } })).activeTeamId).toBeNull();
   });
 
-  it("joins a team it creates without a coach, as its admin", async () => {
+  it("refuses a team with no name", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
     await signIn(root);
-    expect(await createTeam(undefined, formData({ name: "Nyt hold" }))).toEqual({ ok: true, note: "Nyt hold er oprettet, og du er træner på det." });
-    const team = await prisma.team.findFirstOrThrow({ where: { name: "Nyt hold" } });
-    expect(await prisma.teamMember.findFirst({ where: { userId: root.id, teamId: team.id } })).toMatchObject({ role: "ADMIN" });
-    expect((await prisma.user.findUniqueOrThrow({ where: { id: root.id } })).activeTeamId).toBe(team.id);
+    expect(await createTeam(undefined, formData({ name: " " }))).toEqual({ ok: false, error: "Giv holdet et navn." });
+    expect(await prisma.team.count()).toBe(0);
+  });
+
+  it("visits a team without joining it: full rights there, but not on its roster", async () => {
+    const root = await makeUser({ role: "SUPER_ADMIN" });
+    const home = await makeTeam("Hjem");
+    await joinTeam(root.id, home.id);
+    const { team } = await makeSquad();
+    await signIn(root);
+    await expectRedirect(() => visitTeam(team.id), "/oversigt");
+    const user = (await getCurrentUser())!;
+    expect(user).toMatchObject({ teamId: team.id, teamRole: null, teams: [expect.objectContaining({ id: home.id })] });
+    expect(canAdministerTeam(user, team.id)).toBe(true);
+    expect(canManageFines(user, team.id)).toBe(true);
+    expect((await teamRoster(team.id)).some((m) => m.userId === root.id)).toBe(false);
+    expect(await prisma.teamMember.count({ where: { userId: root.id } })).toBe(1);
+
+    await expectRedirect(() => switchTeam(home.id), "/oversigt");
+    expect((await getCurrentUser())!.teamId).toBe(home.id);
   });
 
   it("visits and deletes any team", async () => {

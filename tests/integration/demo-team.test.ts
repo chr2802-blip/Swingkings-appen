@@ -39,8 +39,13 @@ describe("createDemoTeam", () => {
     expect(await prisma.post.count({ where: { teamId } })).toBe(20);
     expect(await prisma.post.count({ where: { teamId, createdAt: { gt: now } } })).toBe(0);
     expect(await prisma.postComment.count({ where: { post: { teamId } } })).toBe(24);
-    expect(await prisma.postLike.count({ where: { post: { teamId } } })).toBeGreaterThan(60);
-    expect(await prisma.post.count({ where: { teamId, likes: { none: {} } } })).toBe(0);
+    expect(await prisma.reaction.count({ where: { teamId, postId: { not: null } } })).toBeGreaterThan(60);
+    expect(await prisma.post.count({ where: { teamId, reactions: { none: {} } } })).toBe(0);
+    expect(await prisma.reaction.count({ where: { teamId, postCommentId: { not: null } } })).toBeGreaterThan(0);
+    expect(await prisma.reaction.count({ where: { teamId, chatMessageId: { not: null } } })).toBeGreaterThan(0);
+    expect(await prisma.reaction.groupBy({ by: ["kind"], where: { teamId } })).not.toHaveLength(1);
+    expect(await prisma.activityComment.count({ where: { teamId } })).toBe(6);
+    expect(await prisma.reaction.count({ where: { teamId, activityCommentId: { not: null } } })).toBeGreaterThan(0);
     expect(await prisma.poll.count({ where: { teamId } })).toBe(6);
     expect(await prisma.poll.count({ where: { teamId, closedAt: { not: null } } })).toBe(3);
 
@@ -53,9 +58,9 @@ describe("createDemoTeam", () => {
     const picture = async () => {
       const team = await createDemoTeam({ now });
       const fines = await prisma.fine.findMany({ where: { teamId: team.id, challengeId: null }, select: { reason: true, createdAt: true, player: { select: { name: true } } } });
-      const likes = await prisma.postLike.findMany({ where: { post: { teamId: team.id } }, select: { user: { select: { name: true } }, post: { select: { createdAt: true } } } });
+      const reactions = await prisma.reaction.findMany({ where: { teamId: team.id }, select: { kind: true, user: { select: { name: true } }, createdAt: true } });
       const key = (rows: object[]) => rows.map((row) => JSON.stringify(row)).sort();
-      return { fines: key(fines), likes: key(likes) };
+      return { fines: key(fines), reactions: key(reactions) };
     };
     expect(await picture()).toEqual(await picture());
   });
@@ -204,12 +209,12 @@ describe("createDemoTeam", () => {
 });
 
 describe("the test team on /admin", () => {
-  it("lets the super admin make it, as its admin, and take it away again", async () => {
+  it("lets the super admin make it, look into it without joining, and take it away again", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
     await signIn(root);
-    expect(await createDemoTeamAction()).toEqual({ ok: true, note: "Testholdet er oprettet, og du er admin på det." });
+    expect(await createDemoTeamAction()).toEqual({ ok: true, note: "Testholdet er oprettet, og du kigger på det." });
     const team = await prisma.team.findFirstOrThrow({ where: { name: DEMO_TEAM_NAME } });
-    expect(await prisma.teamMember.findFirst({ where: { teamId: team.id, userId: root.id } })).toMatchObject({ role: "ADMIN" });
+    expect(await prisma.teamMember.count({ where: { userId: root.id } })).toBe(0);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: root.id } })).activeTeamId).toBe(team.id);
 
     expect(await removeDemoTeamAction()).toEqual({ ok: true, note: "Testholdet og dets spillere er slettet." });

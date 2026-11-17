@@ -14,14 +14,17 @@ import { ChatButton } from "@/components/chat-button";
 import { unreadChatCount } from "@/lib/chat";
 import { NotificationBell } from "@/components/notification-bell";
 import { unseenCount } from "@/lib/notifications";
+import { VisitingBanner } from "@/components/visiting-banner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const showAdmin = user.role === "SUPER_ADMIN";
-  // Your own page is your profile; somebody on no team has only the settings.
-  const profileHref = user.teamId ? playerHref(user.id) : "/profil";
+  // The super admin looking into a team they are not on: on screen, but not one of them.
+  const visiting = user.teamId !== null && user.teamRole === null;
+  // Your own page is your profile; somebody on no team (or only visiting one) has only the settings.
+  const profileHref = user.teamId && !visiting ? playerHref(user.id) : "/profil";
   const [unread, unseen] = user.teamId
-    ? await Promise.all([unreadChatCount(user.teamId, user.id), unseenCount(user.teamId, user.id)])
+    ? await Promise.all([unreadChatCount(user.teamId, user.id), visiting ? 0 : unseenCount(user.teamId, user.id)])
     : [0, 0];
 
   return (
@@ -42,7 +45,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <NavLinks showAdmin={showAdmin} />
           <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
-            {user.teamId && <NotificationBell initialUnseen={unseen} />}
+            {/* A visiting super admin is told nothing on the team, so has no bell there. */}
+            {user.teamId && !visiting && <NotificationBell initialUnseen={unseen} />}
             {user.teamId && <ChatButton initialUnread={unread} />}
             {/* On a phone the profile is a tab in the bar below, which somebody on no team does not have. */}
             <Link
@@ -59,6 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main className="mx-auto max-w-5xl pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:pb-10">
+        {visiting && <VisitingBanner teamName={user.teamName ?? ""} home={user.teams[0] ?? null} />}
         <PageTransition>{children}</PageTransition>
       </main>
 

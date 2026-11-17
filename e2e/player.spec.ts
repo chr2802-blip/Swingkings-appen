@@ -191,6 +191,90 @@ test("your own page is your profile: the tab bar's Profil opens it, and Rediger 
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
 });
 
+test("a person's + gives them a fine, reports a challenge against them or gives them a job on a coming activity", async ({
+  page,
+  loginAs,
+}) => {
+  const { team, anna, bo } = await squad();
+  const match = await db.match.create({
+    data: { teamId: team.id, title: "Kamp", opponent: "FC Naboen", startsAt: new Date(Date.now() + 3 * 86_400_000) },
+  });
+  // Gone by: no job is put on it from here.
+  await db.match.create({
+    data: { teamId: team.id, kind: "OTHER", title: "Gammel fest", startsAt: new Date(Date.now() - 3 * 86_400_000) },
+  });
+  await loginAs(anna);
+  await page.goto(`/spiller/${bo.id}`);
+  // The fine is no longer a button beside the name.
+  await expect(page.getByRole("heading", { name: "Bo", level: 1 })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Giv bøde" })).toHaveCount(0);
+
+  const menu = page.getByRole("dialog", { name: "Opret" });
+  await page.getByRole("button", { name: "Opret" }).click();
+  await menu.getByRole("button", { name: "Giv bøde" }).click();
+  const fine = page.getByRole("dialog", { name: "Giv bøde" });
+  await expect(fine.getByRole("checkbox", { name: /Bo$/ })).toBeChecked();
+  await expect(fine.getByRole("checkbox", { name: /Anna$/ })).not.toBeChecked();
+  await fine.getByLabel("Hvad er bøden for?").fill("Glemt trøje");
+  await fine.getByRole("button", { name: "Giv bøde" }).click();
+  await expect(fine).toBeHidden();
+  await expect.poll(() => db.fine.count({ where: { teamId: team.id, playerId: bo.id } })).toBe(1);
+
+  await page.getByRole("button", { name: "Opret" }).click();
+  await menu.getByRole("button", { name: "Meld udfordring" }).click();
+  const challenge = page.getByRole("dialog", { name: "Meld en udfordring" });
+  await expect(challenge.getByLabel("Hvem spillede du mod?")).toHaveValue(bo.id);
+  // Bo, who has a fine now, won: the stake moves from Bo's fines to Anna's.
+  await challenge.getByLabel("Hvem vandt?").selectOption("lost");
+  await challenge.getByLabel("Hvad gik udfordringen ud på?").fill("Flest straffe");
+  await challenge.getByRole("button", { name: "Send til godkendelse" }).click();
+  await expect(challenge).toBeHidden();
+  await expect
+    .poll(() => db.challenge.count({ where: { teamId: team.id, winnerId: bo.id, loserId: anna.id } }))
+    .toBe(1);
+
+  await page.getByRole("button", { name: "Opret" }).click();
+  await menu.getByRole("button", { name: "Opret opgave" }).click();
+  const task = page.getByRole("dialog", { name: "Ny opgave" });
+  const activity = task.getByLabel("Aktivitet");
+  await expect(activity.getByRole("option", { name: /FC Naboen/ })).toHaveCount(1);
+  await expect(activity.getByRole("option", { name: /Gammel fest/ })).toHaveCount(0);
+  await activity.selectOption({ label: (await activity.getByRole("option", { name: /FC Naboen/ }).textContent())! });
+  await task.getByLabel("Opgave", { exact: true }).fill("Vaske trøjer");
+  await expect(task.getByLabel("Hvem skal gøre det?")).toHaveValue("pick");
+  await expect(task.getByRole("checkbox", { name: /Bo$/ })).toBeChecked();
+  await task.getByRole("button", { name: "Opret opgave" }).click();
+  await expect(task).toBeHidden();
+  await expect(
+    page.getByRole("tabpanel", { name: "Detaljer" }).getByRole("region", { name: "Næste opgave" }).getByText("Vaske trøjer"),
+  ).toBeVisible();
+  const made = await db.task.findFirstOrThrow({ where: { teamId: team.id }, include: { assignees: true } });
+  expect(made.matchId).toBe(match.id);
+  expect(made.assignees.map((a) => a.userId)).toEqual([bo.id]);
+});
+
+test("on your own page the pencil is Rediger, and the name is never cut short", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  const long = "Anna-Sofie Kristiansen Vestergaard Holm-Nielsen";
+  await db.user.update({ where: { id: anna.id }, data: { name: long } });
+  await page.setViewportSize({ width: 360, height: 760 });
+  await loginAs(anna);
+  await page.goto(`/spiller/${anna.id}`);
+  const heading = page.getByRole("heading", { name: long, level: 1 });
+  await expect(heading).toBeVisible();
+  // All of it shows: nothing is hidden behind an ellipsis.
+  expect(await heading.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  const edit = page.getByRole("link", { name: "Rediger" });
+  await expect(edit).toHaveText("");
+  // With no activity coming there is no job to make, but the fine and the challenge are there.
+  await page.getByRole("button", { name: "Opret" }).click();
+  await expect(page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Meld udfordring" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Opret opgave" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await edit.click();
+  await expect(page).toHaveURL(/\/profil$/);
+});
+
 test("names in the feed, the comments and the chat open the person's page", async ({
   page,
   loginAs,

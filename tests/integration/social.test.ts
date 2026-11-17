@@ -10,11 +10,10 @@ import {
   editPost,
   pinPost,
   sendChatMessage,
-  toggleLike,
   vote,
 } from "@/app/actions/social";
 import { feedPosts } from "@/lib/feed";
-import { CHAT_PAGE, latestMessages } from "@/lib/chat";
+import { CHAT_PAGE, latestMessages, olderMessages } from "@/lib/chat";
 import { PHOTO_FIELD, formData, makeMatch, makePhoto, makePoll, makeSquad, signIn } from "../helpers/factories";
 import { afterQueue } from "../helpers/next-mocks";
 import { expectRedirectToLogin } from "../helpers/expect";
@@ -26,7 +25,7 @@ describe("chat", () => {
     await signIn(anna);
     expect(await sendChatMessage(undefined, formData({ body: " Hej holdet " }))).toEqual({ ok: true });
     expect(await sendChatMessage(undefined, formData({ [PHOTO_FIELD]: photo.id }))).toEqual({ ok: true });
-    const messages = await latestMessages(team.id);
+    const { messages } = await latestMessages(team.id, anna.id);
     expect(messages.map((m) => [m.body, m.photoIds])).toEqual([
       ["Hej holdet", []],
       ["", [photo.id]],
@@ -39,7 +38,7 @@ describe("chat", () => {
     const [a, b, c] = [await makePhoto(team.id), await makePhoto(team.id), await makePhoto(team.id)];
     await signIn(anna);
     expect(await sendChatMessage(undefined, formData({ body: "Fra kampen", [PHOTO_FIELD]: [c.id, a.id, b.id] }))).toEqual({ ok: true });
-    const [message] = await latestMessages(team.id);
+    const [message] = (await latestMessages(team.id, anna.id)).messages;
     expect(message).toMatchObject({ body: "Fra kampen", photoIds: [c.id, a.id, b.id] });
     expect(await prisma.chatMessage.count()).toBe(1);
   });
@@ -87,10 +86,55 @@ describe("chat", () => {
       data: Array.from({ length: CHAT_PAGE + 5 }, (_, i) => ({ teamId: team.id, authorId: anna.id, body: `${i}`, createdAt: new Date(1_900_000_000_000 + i * 1000) })),
     });
     await prisma.chatMessage.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "fremmed" } });
-    const messages = await latestMessages(team.id);
+    const { messages, more } = await latestMessages(team.id, anna.id);
+    expect(CHAT_PAGE).toBe(25);
     expect(messages).toHaveLength(CHAT_PAGE);
+    expect(messages[0]!.body).toBe("5");
     expect(messages.at(-1)!.body).toBe(`${CHAT_PAGE + 4}`);
+    expect(more).toBe(true);
     expect(messages.some((m) => m.body === "fremmed")).toBe(false);
+  });
+
+  it("says there is nothing older when the whole chat fits on one page", async () => {
+    const { team, anna } = await makeSquad();
+    await prisma.chatMessage.createMany({
+      data: Array.from({ length: CHAT_PAGE }, (_, i) => ({ teamId: team.id, authorId: anna.id, body: `${i}`, createdAt: new Date(1_900_000_000_000 + i * 1000) })),
+    });
+    expect(await latestMessages(team.id, anna.id)).toMatchObject({ more: false });
+    expect((await latestMessages(team.id, anna.id)).messages).toHaveLength(CHAT_PAGE);
+  });
+
+  it("fetches the older pages one after the other, each oldest first, until the first message", async () => {
+    const { team, anna } = await makeSquad();
+    // Two of them at the very same moment: the id decides, and neither is skipped or shown twice.
+    const at = (i: number) => new Date(1_900_000_000_000 + Math.min(i, 30) * 1000);
+    await prisma.chatMessage.createMany({
+      data: Array.from({ length: 2 * CHAT_PAGE + 3 }, (_, i) => ({ teamId: team.id, authorId: anna.id, body: `${i}`, createdAt: at(i) })),
+    });
+    const seen: string[] = [];
+    let page = await latestMessages(team.id, anna.id);
+    seen.unshift(...page.messages.map((m) => m.id));
+    const pages = [page];
+    while (page.more) {
+      page = (await olderMessages(team.id, anna.id, page.messages[0]!.id))!;
+      seen.unshift(...page.messages.map((m) => m.id));
+      pages.push(page);
+    }
+    expect(pages.map((p) => p.messages.length)).toEqual([CHAT_PAGE, CHAT_PAGE, 3]);
+    expect(pages.at(-1)!.more).toBe(false);
+    expect(new Set(seen).size).toBe(2 * CHAT_PAGE + 3);
+    const all = await prisma.chatMessage.findMany({ orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true } });
+    expect(seen).toEqual(all.map((m) => m.id));
+    expect(pages.at(-1)!.messages[0]!.body).toBe("0");
+  });
+
+  it("finds nothing before another team's message, or one that is gone", async () => {
+    const { team } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const theirs = await prisma.chatMessage.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "fremmed" } });
+    expect(await olderMessages(team.id, "x", theirs.id)).toBeNull();
+    expect(await olderMessages(team.id, "x", "findes-ikke")).toBeNull();
+    expect(await olderMessages(other.team.id, other.anna.id, theirs.id)).toEqual({ messages: [], more: false });
   });
 
   it("deletes your own message and all its pictures; an admin may delete anybody's", async () => {
@@ -250,14 +294,10 @@ describe("feed posts", () => {
     expect((await prisma.post.findUniqueOrThrow({ where: { id: post.id } })).editedAt).toBeNull();
   });
 
-  it("likes, unlikes, comments and deletes comments", async () => {
+  it("comments and deletes comments", async () => {
     const { team, anna, bo } = await makeSquad();
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "x" } });
     await signIn(bo);
-    await toggleLike(undefined, formData({ postId: post.id }));
-    expect(await prisma.postLike.count()).toBe(1);
-    await toggleLike(undefined, formData({ postId: post.id }));
-    expect(await prisma.postLike.count()).toBe(0);
 
     expect(await addComment(undefined, formData({ postId: post.id, body: " " }))).toEqual({ ok: false, error: "Skriv en kommentar." });
     expect(await addComment(undefined, formData({ postId: post.id, body: "Flot!" }))).toEqual({ ok: true });
@@ -269,31 +309,33 @@ describe("feed posts", () => {
     expect(await prisma.postComment.count()).toBe(0);
   });
 
-  it("reads who liked a post with their picture, first to like first", async () => {
+  it("reads who reacted to a post and to its comments with their picture, first to react first", async () => {
     const { team, anna, bo, admin } = await makeSquad();
     const photo = await makePhoto(team.id);
     await prisma.user.update({ where: { id: bo.id }, data: { photoId: photo.id } });
     const post = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "x" } });
-    await prisma.postLike.createMany({
+    const comment = await prisma.postComment.create({ data: { postId: post.id, authorId: bo.id, body: "y" } });
+    await prisma.reaction.createMany({
       data: [
-        { postId: post.id, userId: admin.id, createdAt: new Date("2026-11-01T12:00:00Z") },
-        { postId: post.id, userId: bo.id, createdAt: new Date("2026-11-01T10:00:00Z") },
+        { teamId: team.id, postId: post.id, userId: admin.id, kind: "FIRE", createdAt: new Date("2026-11-01T12:00:00Z") },
+        { teamId: team.id, postId: post.id, userId: bo.id, kind: "HEART", createdAt: new Date("2026-11-01T10:00:00Z") },
+        { teamId: team.id, postCommentId: comment.id, userId: anna.id, kind: "LAUGH" },
       ],
     });
     const [read] = await feedPosts(team.id, { id: anna.id, canAdminister: false });
-    expect(read!.likes).toEqual([
-      { userId: bo.id, user: { name: bo.name, photoId: photo.id } },
-      { userId: admin.id, user: { name: admin.name, photoId: null } },
+    expect(read!.reactions).toEqual([
+      { kind: "HEART", userId: bo.id, user: { name: bo.name, photoId: photo.id } },
+      { kind: "FIRE", userId: admin.id, user: { name: admin.name, photoId: null } },
     ]);
+    expect(read!.comments[0]!.reactions).toEqual([{ kind: "LAUGH", userId: anna.id, user: { name: anna.name, photoId: null } }]);
   });
 
-  it("cannot like, comment on, edit, pin or delete another team's post", async () => {
+  it("cannot comment on, edit, pin or delete another team's post", async () => {
     const { anna } = await makeSquad();
     const other = await makeSquad("Andre");
     const theirs = await prisma.post.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "x" } });
     const comment = await prisma.postComment.create({ data: { postId: theirs.id, authorId: other.anna.id, body: "x" } });
     await signIn(anna);
-    expect(await toggleLike(undefined, formData({ postId: theirs.id }))).toEqual({ ok: false, error: "Opslaget findes ikke." });
     expect(await addComment(undefined, formData({ postId: theirs.id, body: "x" }))).toEqual({ ok: false, error: "Opslaget findes ikke." });
     await deleteComment(undefined, formData({ id: comment.id }));
     await deletePost(undefined, formData({ id: theirs.id }));

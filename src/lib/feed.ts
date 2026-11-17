@@ -1,9 +1,12 @@
+import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
+import { teamRoster } from "./roster";
 import { FEED_PAGE } from "./feed-page";
 import { isOpen, tally } from "./polls";
 import { kickoffLabel, readInZone } from "./time";
 import type { PollViewData } from "@/components/poll-view";
+import { reactionRows } from "./reactions";
 
 export { FEED_PAGE };
 
@@ -61,9 +64,12 @@ export async function feedPosts(
     pinnedAt: true,
     author: person,
     photos: { orderBy: { position: "asc" }, select: { photoId: true } },
-    // Shown as faces, first to like first — hence the picture and the order.
-    likes: { orderBy: [{ createdAt: "asc" }, { userId: "asc" }], select: { userId: true, user: { select: { name: true, photoId: true } } } },
-    comments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, parentId: true, body: true, createdAt: true, author: person } },
+    // Shown as faces, first to react first — hence the picture and the order.
+    reactions: reactionRows,
+    comments: {
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, parentId: true, body: true, createdAt: true, author: person, reactions: reactionRows },
+    },
     poll: {
       select: {
         id: true,
@@ -85,23 +91,26 @@ export async function feedPosts(
   const db = teamDb(teamId);
   // The pinned posts lead the first page, the latest pinned first; the pages after it are
   // the rest, newest first, so the cursor never meets a pinned post.
-  const pinned = after
-    ? []
-    : await db.post.findMany({
-        where: { pinnedAt: { not: null } },
-        orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
-        take: MAX_PINNED_SHOWN,
-        select,
-      });
-  const paged = await db.post.findMany({
-    where: {
-      pinnedAt: null,
-      ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take,
-    select,
-  });
+  // Both at once: neither waits on the other, and each is a round trip to the database.
+  const [pinned, paged] = await Promise.all([
+    after
+      ? []
+      : db.post.findMany({
+          where: { pinnedAt: { not: null } },
+          orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
+          take: MAX_PINNED_SHOWN,
+          select,
+        }),
+    db.post.findMany({
+      where: {
+        pinnedAt: null,
+        ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take,
+      select,
+    }),
+  ]);
   const posts = [...pinned, ...paged];
 
   return posts.map(({ poll, ...post }) => ({
@@ -184,26 +193,6 @@ function whoVoted(votes: PollRow["votes"]) {
   return [...voters.values()].sort((a, b) => a.name.localeCompare(b.name, "da") || a.id.localeCompare(b.id));
 }
 
-/** A post shows this many of the faces that liked it; the rest are a number. */
-export const LIKERS_SHOWN = 5;
-
-/**
- * Who liked a post, as the feed shows it: the first few as faces, the rest counted, and
- * one sentence naming them for somebody who cannot see the faces.
- */
-export function likersView<T extends { user: { name: string } }>(likes: T[], shown = LIKERS_SHOWN) {
-  const faces = likes.slice(0, shown);
-  const more = likes.length - faces.length;
-  const names = faces.map((like) => like.user.name);
-  const list =
-    more > 0
-      ? `${names.join(", ")} og ${more} mere`
-      : names.length > 1
-        ? `${names.slice(0, -1).join(", ")} og ${names.at(-1)}`
-        : (names[0] ?? "");
-  return { faces, more, label: list ? `${list} synes godt om opslaget` : "" };
-}
-
 /**
  * Most votes first once the result is shown; ties keep the order the answers were
  * written in. Before that every count is 0, so the written order stands.
@@ -214,3 +203,13 @@ export function sortByVotes<T extends { votes: number }>(options: T[]): T[] {
     .sort((a, b) => b.option.votes - a.option.votes || a.index - b.index)
     .map(({ option }) => option);
 }
+
+/**
+ * What the front page's feed section shows: the first page of posts and the roster. Cached
+ * for the request, so the front page can start it (`void teamFeed(…)`) alongside its own
+ * reads, and `TeamFeed` — rendered only once those are done — finds it already on its way
+ * instead of beginning a second round of trips to the database.
+ */
+export const teamFeed = cache((teamId: string, viewerId: string, canAdminister: boolean) =>
+  Promise.all([feedPosts(teamId, { id: viewerId, canAdminister }), teamRoster(teamId)]),
+);

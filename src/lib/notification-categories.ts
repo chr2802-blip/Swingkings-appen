@@ -13,7 +13,7 @@ export const PUSH_CATEGORIES: { value: Exclude<NotificationCategory, "TEAM">; la
   { value: "REMINDERS", label: "Påmindelser", hint: "Når en af dine opgaver snart skal være klaret." },
   { value: "ACTIVITIES", label: "Aktiviteter", hint: "Når en kamp eller træning bliver flyttet." },
   { value: "FEED", label: "Feed", hint: "Nye opslag og afstemninger." },
-  { value: "COMMENTS", label: "Kommentarer", hint: "Kommentarer på dine opslag, svar til dig, og når nogen nævner dig." },
+  { value: "COMMENTS", label: "Kommentarer", hint: "Kommentarer på dine opslag og på aktiviteter, svar til dig, og når nogen nævner dig." },
   { value: "CHAT", label: "Chat", hint: "Nye beskeder i holdets chat. De står ikke under klokken." },
 ];
 
