@@ -15,12 +15,15 @@ export function ChallengeDialog({
   finePriceKr,
   matches,
   defaultMatchId,
+  defaultOpponentId,
   triggerClassName,
 }: {
   opponents: { userId: string; name: string }[];
   finePriceKr: number;
   matches: { id: string; label: string }[];
   defaultMatchId?: string;
+  /** Somebody chosen from the start: the person whose page the "+" is on. */
+  defaultOpponentId?: string;
   triggerClassName?: string;
 }) {
   const [units, setUnits] = useState(1);
@@ -34,7 +37,7 @@ export function ChallengeDialog({
       submitLabel="Send til godkendelse"
     >
       <Field label="Hvem spillede du mod?" htmlFor="opponentId">
-        <Select id="opponentId" name="opponentId" defaultValue="" required>
+        <Select id="opponentId" name="opponentId" defaultValue={defaultOpponentId ?? ""} required>
           <option value="" disabled>
             Vælg spiller…
           </option>
