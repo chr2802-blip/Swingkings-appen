@@ -23,7 +23,7 @@ vi.mock("@/lib/safe-fetch", async (importOriginal) => ({
 }));
 
 import { PUSH_TIMEOUT_MS, sendPushToUsers } from "@/lib/push";
-import { notifyLater } from "@/lib/notify";
+import { notify } from "@/lib/notifications";
 import { removeSubscription, saveSubscription, sendTestPush } from "@/app/actions/push";
 import { GET as dailyJob } from "@/app/api/cron/daily/route";
 import { makeSquad, makeUser, signIn } from "../helpers/factories";
@@ -125,24 +125,24 @@ describe("sendPushToUsers", () => {
   });
 });
 
-describe("notifyLater", () => {
+describe("notify", () => {
   it("tells everybody but the person who caused it, once each, after the response", async () => {
-    const { anna, bo, admin } = await makeSquad();
+    const { team, anna, bo, admin } = await makeSquad();
     await subscribe(anna.id, 1);
     await subscribe(bo.id, 2);
     await subscribe(admin.id, 3);
 
-    notifyLater([anna.id, bo.id, bo.id, admin.id], admin.id, { title: "Bøde", body: "x" });
+    await notify(team.id, [anna.id, bo.id, bo.id, admin.id], admin.id, { category: "FINES", title: "Bøde", body: "x", url: "/boder" });
     expect(push.sent).toHaveLength(0);
     await runAfter();
     expect(push.sent.map((s) => s.endpoint).sort()).toEqual([endpoint(1), endpoint(2)]);
   });
 
-  it("does nothing when only the actor would hear, or with no keys", async () => {
-    const anna = await makeUser();
-    notifyLater([anna.id], anna.id, { title: "x", body: "x" });
+  it("pushes nothing when only the actor would hear, or with no keys", async () => {
+    const { team, anna } = await makeSquad();
+    await notify(team.id, [anna.id], anna.id, { category: "FINES", title: "x", body: "x", url: "/" });
     delete process.env.VAPID_PRIVATE_KEY;
-    notifyLater(["someone"], anna.id, { title: "x", body: "x" });
+    await notify(team.id, ["someone"], anna.id, { category: "FINES", title: "x", body: "x", url: "/" });
     expect(afterQueue).toHaveLength(0);
   });
 });

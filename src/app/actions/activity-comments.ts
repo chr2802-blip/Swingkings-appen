@@ -9,7 +9,7 @@ import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { field } from "@/lib/form";
 import { teamRoster } from "@/lib/roster";
 import { mentionedIds } from "@/lib/mentions";
-import { notifyLater } from "@/lib/notify";
+import { notify } from "@/lib/notifications";
 import { activityName } from "@/lib/activity";
 import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 
@@ -69,9 +69,10 @@ export async function addActivityComment(_prev: ActionResult, formData: FormData
   const answered = replyTo && thread ? [...new Set([replyTo.authorId, thread.authorId])] : [];
   const tagged = mentionedIds(text.data, roster).filter((id) => !answered.includes(id));
   const rest = roster.map((m) => m.userId).filter((id) => !answered.includes(id) && !tagged.includes(id));
-  notifyLater(answered, user.id, { title: `${user.name} svarede på din kommentar · ${name}`, body: preview, url, tag });
-  notifyLater(tagged, user.id, { title: `${user.name} nævnte dig · ${name}`, body: preview, url, tag });
-  notifyLater(rest, user.id, { title: `Ny kommentar · ${name}`, body: `${user.name}: ${preview}`, url, tag });
+  const about = { category: "COMMENTS", url, tag, matchId: match.id } as const;
+  await notify(user.teamId, answered, user.id, { ...about, title: `${user.name} svarede på din kommentar · ${name}`, body: preview });
+  await notify(user.teamId, tagged, user.id, { ...about, title: `${user.name} nævnte dig · ${name}`, body: preview });
+  await notify(user.teamId, rest, user.id, { ...about, title: `Ny kommentar · ${name}`, body: `${user.name}: ${preview}` });
 
   refresh(match.id);
   return ok();

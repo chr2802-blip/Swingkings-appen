@@ -145,6 +145,19 @@ describe("GET /api/photos/<id>", () => {
     await signIn(await makeUser());
     expect((await fetchPhoto(avatar.id)).status).toBe(404);
   });
+
+  it("serves every picture to the super admin, on whichever team it is filed", async () => {
+    const { team } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const teamPicture = await makePhoto(team.id);
+    const avatar = await makePhoto(other.team.id);
+    await prisma.user.update({ where: { id: other.anna.id }, data: { photoId: avatar.id } });
+    const root = await makeUser({ role: "SUPER_ADMIN" });
+    await signIn(root);
+    expect((await fetchPhoto(teamPicture.id)).status).toBe(200);
+    expect((await fetchPhoto(avatar.id)).status).toBe(200);
+    expect((await fetchPhoto("findes-ikke")).status).toBe(404);
+  });
 });
 
 describe("pictures already in use", () => {

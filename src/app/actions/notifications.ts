@@ -1,6 +1,5 @@
 "use server";
 
-import { after } from "next/server";
 import { z } from "zod";
 import { requireTeamUser } from "@/lib/auth";
 import { assertTeamAdmin } from "@/lib/access";
@@ -9,12 +8,11 @@ import { readForm, requiredText } from "@/lib/form";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { takeAttempt } from "@/lib/rate-limit";
-import { sendPushToUsers } from "@/lib/push";
+import { notifyEach } from "@/lib/notifications";
 import {
   MAX_NOTICE_BODY,
   MAX_NOTICE_TITLE,
   NOTICE_DESTINATIONS,
-  isPersonal,
   noticeUrl,
   type NoticeDestination,
 } from "@/lib/team-notice";
@@ -31,8 +29,9 @@ const noticeSchema = z.object({
 
 /**
  * "Send notifikation" (admin, `/hold`): a push to everybody on the team but the sender
- * (`to=alle`), or to the players ticked (`to=valgte`, repeated `recipientId`), opening the page or link the admin picked. Nothing is stored; the push
- * goes after the response, like every other. Eight in a quarter of an hour per sender
+ * (`to=alle`), or to the players ticked (`to=valgte`, repeated `recipientId`), opening the page or link the admin picked.
+ * Everybody finds it in the notification center; those with notifications on get a push
+ * too, after the response, and it cannot be muted. Eight in a quarter of an hour per sender
  * (`takeAttempt("notice")`), so a slip of the finger cannot buzz the team all evening.
  */
 export async function sendTeamNotice(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -66,7 +65,16 @@ export async function sendTeamNotice(_prev: ActionResult, formData: FormData): P
     );
   }
 
-  // Who can be reached at all: a push only arrives where somebody has turned them on.
+  const limit = await takeAttempt("notice", user.id);
+  if (!limit.allowed) return fail(`Du har sendt mange på kort tid. Prøv igen om ${limit.retryAfterMinutes} min.`);
+
+  // Everybody gets it under the bell; a push only arrives where somebody has turned them on.
+  // No actor left out: an admin may tick themselves, to see how it looks.
+  await notifyEach(
+    user.teamId,
+    null,
+    recipients.map((r) => ({ userId: r.id, category: "TEAM" as const, title, body, url: r.url! })),
+  );
   const reachable = new Set(
     (
       await prisma.pushSubscription.findMany({
@@ -76,32 +84,11 @@ export async function sendTeamNotice(_prev: ActionResult, formData: FormData): P
       })
     ).map((row) => row.userId),
   );
-  if (reachable.size === 0) {
-    return fail(
-      everybody
-        ? "Ingen på holdet har slået notifikationer til endnu."
-        : one
-          ? "Personen har ikke slået notifikationer til."
-          : "Ingen af de valgte har slået notifikationer til.",
-    );
-  }
-  const limit = await takeAttempt("notice", user.id);
-  if (!limit.allowed) return fail(`Du har sendt mange på kort tid. Prøv igen om ${limit.retryAfterMinutes} min.`);
 
-  const targets = recipients.filter((r) => reachable.has(r.id));
-  const batches = isPersonal(destination)
-    ? targets.map((r) => ({ ids: [r.id], url: r.url! }))
-    : [{ ids: targets.map((r) => r.id), url: targets[0]!.url! }];
-  after(() =>
-    Promise.all(batches.map((batch) => sendPushToUsers(batch.ids, { title, body, url: batch.url }))).catch((error) =>
-      console.error(JSON.stringify({ event: "push_failed", error: String(error) })),
-    ),
-  );
-
-  const missing = recipients.length - targets.length;
-  if (one) return ok(`Sendt til ${targets[0]!.name}.`);
+  const missing = recipients.filter((r) => !reachable.has(r.id)).length;
+  if (one) return ok(`Sendt til ${recipients[0]!.name}.` + (missing ? " Personen har ikke slået notifikationer til og ser den under klokken." : ""));
   return ok(
-    `Sendt til ${targets.length} ${targets.length === 1 ? "person" : "personer"}.` +
-      (missing ? ` ${missing} har ikke slået notifikationer til.` : ""),
+    `Sendt til ${recipients.length} ${recipients.length === 1 ? "person" : "personer"}.` +
+      (missing ? ` ${missing} har ikke slået notifikationer til og ser den kun under klokken.` : ""),
   );
 }

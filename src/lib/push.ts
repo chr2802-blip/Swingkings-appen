@@ -38,6 +38,8 @@ export async function sendPushToUsers(
      * iPhone cannot do that — it would buzz every time — so Apple's devices are left out.
      */
     quiet?: boolean;
+    /** The notification center's row, marked read when the push is opened (`public/sw.js`). */
+    notificationId?: string;
   },
 ) {
   if (!configurePush() || userIds.length === 0) return 0;

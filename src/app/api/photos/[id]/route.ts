@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Serves a stored picture to somebody on the team it belongs to — and a person's own
- * picture to anybody who shares a team with them, wherever it happens to be filed.
+ * picture to anybody who shares a team with them, wherever it happens to be filed. The
+ * super admin, who may look into every team, is served every picture.
  * Anything else is "not found", the same as an id that never existed.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +22,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!photo) return new Response("Not found", { status: 404 });
 
   const teamIds = user.teams.map((team) => team.id);
-  const reachable = photo.teamId === user.teamId || teamIds.includes(photo.teamId);
+  const reachable = user.role === "SUPER_ADMIN" || photo.teamId === user.teamId || teamIds.includes(photo.teamId);
   const teammatesOwn =
     !reachable &&
     teamIds.length > 0 &&

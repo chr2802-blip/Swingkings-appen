@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOTICE_DESTINATIONS, isPersonal, normalizeNoticeLink, noticeUrl } from "@/lib/team-notice";
+import { normalizeNoticeLink, noticeUrl } from "@/lib/team-notice";
 
 const BOX = "https://qr.mobilepay.dk/box/b865a6da-62a7-4360-a406-b39a192c757e/pay-in";
 const anna = { id: "u1", name: "Anna" };
@@ -39,9 +39,5 @@ describe("noticeUrl", () => {
     expect(noticeUrl("link", { recipient: anna, team, link: "http://example.com" })).toBeNull();
     expect(noticeUrl("link", { recipient: anna, team })).toBeNull();
     expect(noticeUrl("link", { recipient: anna, team, link: "https://example.com/x" })).toBe("https://example.com/x");
-  });
-
-  it("knows which destinations differ per person", () => {
-    expect(NOTICE_DESTINATIONS.filter((d) => isPersonal(d.value)).map((d) => d.value)).toEqual(["min-side", "mobilepay-kontingent"]);
   });
 });

@@ -152,5 +152,16 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
 - **No Suspense boundaries** (`<Suspense>`, `loading.tsx`): an action that revalidates
   then waits on the boundary and its button can hang ("Stemmer…") on a slow machine. It
   happened twice and failed CI a few runs in ten; `tests/unit/no-suspense.test.ts` refuses it.
-- **Push and realtime are optional** and silent when unconfigured; `notifyLater` and
-  `announce` run after the response via `after()`.
+- **Notifications go through `notify`/`notifyEach`** (`src/lib/notifications.ts`), never
+  `sendPushToUsers` directly: they write a `Notification` row per person (the notification
+  center, the bell beside the chat) before the response, and push after it unless the person
+  muted that category on the team (`TeamMember.mutedPush`). Every notice names a `category`;
+  `TEAM` and `always: true` (pay your fines, take over a task) cannot be muted. Link it to what
+  it is about (`taskId`, `postId`, `matchId`, `challengeId`, `fineId`) so deleting that deletes
+  it. The chat has no rows (its own count), only a mutable push. Comments on one's own post
+  are one row per post while unread (`recordComment`). "Set" is `notificationsSeenAt` (the
+  bell's count); "ny" is `readAt` null, cleared by opening it in the center or the push.
+  The daily job deletes rows older than `KEEP_DAYS`; a new season deletes the fine and
+  challenge ones.
+- **Push and realtime are optional** and silent when unconfigured; the push from `notify`
+  and `announce` run after the response via `after()`.
