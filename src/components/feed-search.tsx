@@ -48,7 +48,7 @@ export function FeedSearch({ renderedAt, children }: { renderedAt: number; child
 
   return (
     <>
-      <div className="mb-3 flex min-h-9 items-center justify-between gap-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
         {open ? (
           <form role="search" onSubmit={(event) => event.preventDefault()} className="flex flex-1 items-center gap-2">
             <label className="flex h-10 flex-1 items-center gap-2 rounded-full bg-white px-3.5 ring-1 ring-slate-200 focus-within:ring-[var(--accent)]">
@@ -77,9 +77,10 @@ export function FeedSearch({ renderedAt, children }: { renderedAt: number; child
               type="button"
               aria-label="Søg i feedet"
               onClick={() => setOpen(true)}
-              className="press-icon -mr-2 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              // Pulled into the heading's own line, so the feed starts where it always has.
+              className="press-icon -my-2 -mr-2 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
             >
-              <SearchIcon className="h-5 w-5" />
+              <SearchIcon className="h-4 w-4" />
             </button>
           </>
         )}
