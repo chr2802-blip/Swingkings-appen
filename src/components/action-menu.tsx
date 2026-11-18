@@ -112,8 +112,8 @@ export function MenuTrigger({
 }: {
   variant?: Variant;
   className?: string;
-  /** Drawn before the words when the trigger is a row in a drawer. */
-  icon?: string;
+  /** Drawn before the words when the trigger is a row in a drawer: an emoji, or a mark of the app's own. */
+  icon?: React.ReactNode;
   onClick: () => void;
   children: React.ReactNode;
 }) {

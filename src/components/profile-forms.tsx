@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ActionForm } from "@/components/action-form";
 import { Button, Field, Input } from "@/components/ui";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
-import { PhotoField } from "@/components/photo-field";
+import { ProfilePhotoField } from "@/components/photo-field";
 import { useFormAction } from "@/components/use-form-action";
 import { changePassword, deleteMyAccount, setNewPassword, updateProfile } from "@/app/actions/profile";
 
@@ -14,7 +14,7 @@ export function ProfileForm({ name, photoId, canUpload }: { name: string; photoI
       <Field label="Navn" htmlFor="name">
         <Input id="name" name="name" defaultValue={name} maxLength={100} required />
       </Field>
-      {canUpload && <PhotoField label="Profilbillede" defaultPhotoId={photoId} aspect="aspect-square max-w-40" />}
+      {canUpload && <ProfilePhotoField name={name} defaultPhotoId={photoId} />}
     </ActionForm>
   );
 }

@@ -2,7 +2,7 @@
 
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
-import { useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { Holdable, type HoldAction } from "@/components/reactions";
 import type { CommentMember, ReplyTarget } from "@/components/comment-form";
 import { mentionSegments } from "@/lib/mentions";
@@ -48,17 +48,19 @@ export function CommentThreads({
 }) {
   const threads = comments.filter((c) => !c.parentId || !comments.some((p) => p.id === c.parentId));
   const repliesTo = (id: string) => comments.filter((c) => c.parentId === id);
+  const list = useRef<HTMLUListElement>(null);
+  useScrollToOwnNew(list, comments, viewerId);
   return (
-    <ul aria-label="Kommentarer" className="space-y-4">
+    <ul ref={list} aria-label="Kommentarer" className="space-y-4">
       {threads.map((comment) => {
         const replies = repliesTo(comment.id);
         return (
-          <li key={comment.id}>
+          <li key={comment.id} data-comment={comment.id}>
             <Comment comment={comment} members={members} onReply={onReply} target={target} onDelete={onDelete} viewerId={viewerId} />
             {replies.length > 0 && (
               <ul aria-label={`Svar til ${comment.author.name}`} className="mt-3 space-y-3 pl-10">
                 {replies.map((reply) => (
-                  <li key={reply.id}>
+                  <li key={reply.id} data-comment={reply.id}>
                     <Comment comment={reply} members={members} onReply={onReply} target={target} onDelete={onDelete} viewerId={viewerId} small />
                   </li>
                 ))}
@@ -69,6 +71,24 @@ export function CommentThreads({
       })}
     </ul>
   );
+}
+
+/**
+ * A comment of one's own that has just arrived is scrolled into view: under a long thread
+ * it lands below the fold, and the writer would not see that it was sent. Somebody else's
+ * comment arriving meanwhile moves nothing; the comments there on opening move nothing.
+ */
+function useScrollToOwnNew(list: React.RefObject<HTMLUListElement | null>, comments: CommentView[], viewerId: string) {
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = new Set(comments.map((c) => c.id));
+    if (!before) return;
+    const mine = comments.filter((c) => !before.has(c.id) && c.author.id === viewerId).at(-1);
+    if (!mine) return;
+    const row = list.current?.querySelector<HTMLElement>(`[data-comment="${CSS.escape(mine.id)}"]`);
+    row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [list, comments, viewerId]);
 }
 
 function Comment({

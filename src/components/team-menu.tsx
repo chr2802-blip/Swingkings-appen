@@ -53,7 +53,7 @@ export function TeamMenu({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="press-button flex min-w-0 items-center gap-2 rounded-xl py-1 pr-2"
+        className="press-button flex max-w-full min-w-0 items-center gap-2 rounded-xl py-1 pr-2"
       >
         {photoId ? (
           <Avatar name={label} photoId={photoId} size="sm" />
