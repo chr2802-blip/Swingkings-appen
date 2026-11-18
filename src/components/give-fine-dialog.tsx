@@ -8,6 +8,7 @@ import { PlayerSelect } from "@/components/player-select";
 import { giveFine } from "@/app/actions/fines";
 import { fineUnits, kr } from "@/lib/money";
 import { Star } from "@/components/crest";
+import { useShowFresh } from "@/components/fresh";
 
 type FineTypeOption = { id: string; name: string; units: number };
 type Member = { userId: string; name: string; photoId: string | null; shirtNumber: number | null };
@@ -36,9 +37,14 @@ export function GiveFineDialog({
 }) {
   const [typeId, setTypeId] = useState("");
   const chosen = fineTypes.find((type) => type.id === typeId);
+  const show = useShowFresh();
 
   return (
-    <FormDialog trigger={triggerLabel} triggerIcon={<Star className="h-5 w-5" />} title="Giv bøde" action={giveFine} submitLabel="Giv bøde">
+    <FormDialog trigger={triggerLabel} triggerIcon={<Star className="h-5 w-5" />} title="Giv bøde" action={giveFine}
+      submitLabel="Giv bøde"
+      // Given, the fines are shown where they are listed: the history slides in, and they pulse.
+      onDone={(result) => void show(result, "history")}
+    >
       <Field label="Hvem?" htmlFor="playerId">
         <PlayerSelect id="playerId" name="playerId" members={members} defaultSelected={defaultPlayerId ? [defaultPlayerId] : []} />
       </Field>

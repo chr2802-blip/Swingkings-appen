@@ -5,7 +5,7 @@ import { Button, type Variant } from "@/components/ui";
 import { MenuForm, MenuTrigger, useMenuSlot } from "@/components/action-menu";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { useFormAction } from "@/components/use-form-action";
-import type { FormAction } from "@/lib/action-result";
+import type { ActionResult, FormAction } from "@/lib/action-result";
 
 /**
  * One press that calls an action with a few fixed fields — accept, mark done, delete.
@@ -20,6 +20,7 @@ export function ActionButton({
   className = "",
   confirm,
   confirmLabel,
+  onDone,
 }: {
   action: FormAction;
   fields: Record<string, string>;
@@ -29,13 +30,16 @@ export function ActionButton({
   /** The question asked before going ahead, e.g. "Slet bøden?". */
   confirm?: string;
   confirmLabel?: string;
+  /** After the action has worked: where to show what it made. */
+  onDone?: (result: ActionResult) => void;
 }) {
   const [asking, setAsking] = useState(false);
   const menu = useMenuSlot();
   const { state, pending, handleSubmit } = useFormAction(action, {
-    onSuccess: () => {
+    onSuccess: (_form, result) => {
       setAsking(false);
       menu?.close();
+      onDone?.(result);
     },
   });
 

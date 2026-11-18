@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FormDialog } from "@/components/form-dialog";
+import { useShowFresh } from "@/components/fresh";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { createChallenge } from "@/app/actions/fines";
 import { fineUnits, kr } from "@/lib/money";
@@ -27,6 +28,7 @@ export function ChallengeDialog({
   triggerClassName?: string;
 }) {
   const [units, setUnits] = useState(1);
+  const show = useShowFresh();
   return (
     <FormDialog
       trigger="Meld udfordring"
@@ -35,6 +37,8 @@ export function ChallengeDialog({
       title="Meld en udfordring"
       action={createChallenge}
       submitLabel="Send til godkendelse"
+      // Reported, it waits among the challenges: their sheet opens with it pulsing.
+      onDone={(result) => void show(result, "challenges")}
     >
       <Field label="Hvem spillede du mod?" htmlFor="opponentId">
         <Select id="opponentId" name="opponentId" defaultValue={defaultOpponentId ?? ""} required>

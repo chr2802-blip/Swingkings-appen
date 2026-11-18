@@ -1,7 +1,15 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { choose, chooseMany, openChoices } from "./helpers/select";
+
+/** A row or card just made pulses once it is in view (`FreshPulse`). */
+async function expectPulse(target: Locator) {
+  await expect(target).toHaveClass(/fresh-pulse/);
+}
+
+/** The fine box's history, as the tab a person sees. */
+const history = (page: Page) => page.getByRole("tabpanel", { name: "Historik" });
 
 /** The fine box's "+": a drawer of what can be made there, and then one of them. */
 async function create(page: Page, name: string) {
@@ -110,6 +118,15 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
 
+  // The history slides in, and the two new fines pulse in it.
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await expect(page.getByRole("tab", { name: "Historik" })).toHaveAttribute("aria-selected", "true");
+  const given = history(page).locator("li").filter({ hasText: "For sent" });
+  await expect(given).toHaveCount(2);
+  await expectPulse(given.filter({ hasText: "Anna" }));
+  await expectPulse(given.filter({ hasText: "Bo" }));
+
+  await page.getByRole("tab", { name: "Bødetavlen" }).click();
   await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
   expect(
     await db.fine.count({
@@ -297,11 +314,10 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
   await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
   await expect(dialog).toBeHidden();
 
-  // The reporter sees it waiting in the sheet, but may not approve it.
-  await page
-    .getByRole("button", { name: /Udfordringer.*1 venter på godkendelse/ })
-    .click();
+  // Reported, the challenges' sheet opens by itself with the new one pulsing in it;
+  // the reporter sees it waiting, but may not approve it.
   const sheet = page.getByRole("dialog", { name: "Udfordringer" });
+  await expectPulse(sheet.locator("[data-fresh]").filter({ hasText: "Flest mål på træning" }));
   await expect(
     sheet.getByText("Venter på at en anden på holdet godkender."),
   ).toBeVisible();
@@ -317,15 +333,17 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
     sheet.getByRole("heading", { name: "Venter på din godkendelse" }),
   ).toBeVisible();
   await sheet.getByRole("button", { name: "Godkend" }).click();
-  // The sheet stays open, but holds only what waits: the settled one has left it.
-  await expect(sheet.getByText("Ingen udfordringer venter.")).toBeVisible();
-  await expect(sheet.getByText(/flyttet fra Anna til Bo/)).toHaveCount(0);
-  await sheet.getByRole("button", { name: "Luk" }).click();
-  // Closed, it does not open again on a reload, and with none waiting the overview says nothing of challenges.
-  await expect(page).toHaveURL(/\/boder$/);
-  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(
-    0,
-  );
+  // Approved, the sheet gets out of the way and the history slides in, with the two
+  // fines the challenge moved pulsing.
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  const moved = history(page).locator("li").filter({ hasText: "udfordring" });
+  await expect(moved).toHaveCount(2);
+  await expectPulse(moved.first());
+  await expectPulse(moved.last());
+  // With none waiting the overview says nothing of challenges.
+  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Bødetavlen" }).click();
   await expect(page.getByRole("link", { name: /Bo .*30 kr/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
   expect(
@@ -385,8 +403,9 @@ test("a challenge is reported from inside the challenges' sheet and lands in it"
   await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
   await expect(dialog).toBeHidden();
 
-  // The sheet is still open behind it, and now holds the new one too, waiting on somebody else.
+  // The sheet is still open behind it, and now holds the new one too, pulsing, waiting on somebody else.
   await expect(sheet.getByText("“Straffesparkskonkurrence”")).toBeVisible();
+  await expectPulse(sheet.locator("[data-fresh]").filter({ hasText: "Straffesparkskonkurrence" }));
   await expect(sheet.getByText("“Flest mål”")).toBeVisible();
   expect(
     await db.challenge.count({

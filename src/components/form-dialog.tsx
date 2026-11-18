@@ -5,7 +5,7 @@ import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { Button, type Variant } from "@/components/ui";
 import { MenuTrigger } from "@/components/action-menu";
 import { useFormAction } from "@/components/use-form-action";
-import type { FormAction } from "@/lib/action-result";
+import type { ActionResult, FormAction } from "@/lib/action-result";
 
 /**
  * The form inside a sheet. Mounted only while open, so reopening never shows the last
@@ -21,11 +21,11 @@ export function DialogForm({
 }: {
   action: FormAction;
   submitLabel: string;
-  onDone: () => void;
+  onDone: (result: ActionResult) => void;
   onCancel: () => void;
   children: React.ReactNode;
 }) {
-  const { state, pending, handleSubmit } = useFormAction(action, { onSuccess: onDone });
+  const { state, pending, handleSubmit } = useFormAction(action, { onSuccess: (_form, result) => onDone(result) });
   return (
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
       <ModalBody className="space-y-4">{children}</ModalBody>
@@ -58,6 +58,7 @@ export function FormDialog({
   action,
   submitLabel,
   size,
+  onDone,
   children,
 }: {
   trigger: React.ReactNode;
@@ -69,6 +70,8 @@ export function FormDialog({
   action: FormAction;
   submitLabel: string;
   size?: "screen" | "drawer";
+  /** After the action has worked and the sheet has closed: where to show what it made. */
+  onDone?: (result: ActionResult) => void;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -79,7 +82,10 @@ export function FormDialog({
       </MenuTrigger>
       <Modal open={open} onClose={() => setOpen(false)} title={title} size={size}>
         {open && (
-          <DialogForm action={action} submitLabel={submitLabel} onDone={() => setOpen(false)} onCancel={() => setOpen(false)}>
+          <DialogForm action={action} submitLabel={submitLabel} onDone={(result) => {
+              setOpen(false);
+              onDone?.(result);
+            }} onCancel={() => setOpen(false)}>
             {children}
           </DialogForm>
         )}

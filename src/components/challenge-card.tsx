@@ -3,6 +3,7 @@ import { Badge, Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
+import { ApproveChallengeButton } from "@/components/approve-challenge-button";
 import { moveChallenge } from "@/app/actions/fines";
 import { CHALLENGE_STATUS_LABEL, movesFor } from "@/lib/challenges";
 import { fineUnits, kr } from "@/lib/money";
@@ -57,7 +58,8 @@ export function ChallengeCard({
   const fields = (move: string) => ({ id: c.id, move });
 
   return (
-    <Card className="space-y-3">
+    // `card:<id>`: a challenge just reported pulses here (`FreshPulse`); its bare id is its fines'.
+    <Card className="space-y-3" data-fresh={`card:${c.id}`}>
       <div>
         <Badge tone={TONE[c.status]}>{CHALLENGE_STATUS_LABEL[c.status]}</Badge>
       </div>
@@ -88,7 +90,7 @@ export function ChallengeCard({
 
       {moves.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {moves.includes("approve") && <ActionButton action={moveChallenge} fields={fields("approve")} label="Godkend" variant="primary" />}
+          {moves.includes("approve") && <ApproveChallengeButton id={c.id} />}
           {moves.includes("cancel") && <ActionButton action={moveChallenge} fields={fields("cancel")} label="Træk tilbage" variant="ghost" />}
         </div>
       )}

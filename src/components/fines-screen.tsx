@@ -17,6 +17,7 @@ import { DetailSheet } from "@/components/detail-sheet";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { Crown } from "@/components/crest";
 import { LiveRefresh } from "@/components/live-refresh";
+import { FreshPulse } from "@/components/fresh";
 import { FINES_CHANGED } from "@/lib/realtime-topic";
 
 /** How far back the history page goes. A team gives a few fines a week, so this is a year or two. */
@@ -69,6 +70,7 @@ export async function FinesScreen({
   return (
     <div>
       <LiveRefresh events={[FINES_CHANGED]} />
+      <FreshPulse />
       <PageHeader title="Bødekassen" />
       {/* While the box is open for payment what each player owes stands still: nothing to give. */}
       {!paying && (

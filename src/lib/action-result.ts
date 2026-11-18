@@ -15,11 +15,20 @@ export type ActionResult =
        * matches it brought in, and a sync that found nothing new should say so.
        */
       note?: string;
+      /**
+       * The ids of what the press made (the fines given, the challenge reported), so the
+       * page can show them arriving — `useShowFresh` in `src/components/fresh.tsx`.
+       */
+      created?: string[];
     }
   | { ok: false; error: string }
   | undefined;
 
-export const ok = (note?: string): ActionResult => (note ? { ok: true, note } : { ok: true });
+export const ok = (note?: string, created?: string[]): ActionResult => ({
+  ok: true,
+  ...(note ? { note } : {}),
+  ...(created?.length ? { created } : {}),
+});
 
 export const fail = (error: string): ActionResult => ({ ok: false, error });
 

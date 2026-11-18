@@ -123,7 +123,7 @@ describe("the fine box", () => {
     const type = await prisma.fineType.create({ data: { teamId: team.id, name: "For sent", units: 1 } });
     await signIn(anna);
 
-    expect(await giveFine(undefined, formData({ playerId: bo.id, fineTypeId: type.id }))).toEqual({ ok: true, note: "Bøden er givet." });
+    expect(await giveFine(undefined, formData({ playerId: bo.id, fineTypeId: type.id }))).toMatchObject({ ok: true, note: "Bøden er givet." });
     const after = await heard();
     expect(after).toContainEqual(finesChanged(team.id));
     expect(after.map((m) => m.topic)).not.toContain(teamTopic(other.team.id));

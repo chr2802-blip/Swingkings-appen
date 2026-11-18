@@ -321,6 +321,24 @@ h1,
   }
 }
 
+/* Something just made — a fine given, a challenge reported — pulses where it is listed, three
+   times and then never again (`FreshPulse`, src/components/fresh.tsx). */
+@keyframes fresh-pulse {
+  0%,
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+
+.fresh-pulse {
+  animation: fresh-pulse 800ms ease-in-out 3;
+}
+
 @keyframes pop {
   0% {
     scale: 1;

@@ -13,7 +13,7 @@ import type { ActionResult, FormAction } from "@/lib/action-result";
  */
 export function useFormAction(
   action: FormAction,
-  options: { onSuccess?: (form: HTMLFormElement) => void } = {},
+  options: { onSuccess?: (form: HTMLFormElement, result: ActionResult) => void } = {},
 ) {
   const [state, setState] = useState<ActionResult>(undefined);
   const [pending, startTransition] = useTransition();
@@ -31,7 +31,7 @@ export function useFormAction(
       // An action that redirects never returns; Next unwinds the call and navigates.
       const result = await action(undefined, data);
       setState(result);
-      if (result?.ok) options.onSuccess?.(form);
+      if (result?.ok) options.onSuccess?.(form, result);
     });
   }
 

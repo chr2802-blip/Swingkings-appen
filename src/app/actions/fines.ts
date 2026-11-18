@@ -136,7 +136,10 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
     })),
   );
   refresh(user.teamId);
-  return ok(playerIds.length > 1 ? `${playerIds.length} bøder er givet.` : "Bøden er givet.");
+  return ok(
+    playerIds.length > 1 ? `${playerIds.length} bøder er givet.` : "Bøden er givet.",
+    fines.map((fine) => fine.id),
+  );
 }
 
 /**
@@ -293,7 +296,7 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
     tag: "challenge",
   });
   refresh(user.teamId);
-  return ok("Udfordringen venter på godkendelse.");
+  return ok("Udfordringen venter på godkendelse.", [challenge.id]);
 }
 
 /**
@@ -332,5 +335,6 @@ export async function moveChallenge(_prev: ActionResult, formData: FormData): Pr
     });
   }
   refresh(user.teamId);
-  return ok();
+  // Approved, the challenge's id finds the two fines it moved (each row carries it).
+  return move === "approve" ? ok(undefined, [id]) : ok();
 }
