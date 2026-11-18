@@ -937,3 +937,25 @@ test("a short page beside a long history ends where its own content does", async
   await expect(page.getByRole("tabpanel")).toHaveCount(1);
   expect(await beyond()).toBe(0);
 });
+
+test("a challenge's card shows both whole names on a phone, one line each", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const winner = "Christian Ørbæk Andersen";
+  const loser = "Frederik Lauritzen-Holm";
+  await db.user.update({ where: { id: anna.id }, data: { name: winner } });
+  await db.user.update({ where: { id: bo.id }, data: { name: loser } });
+  await db.challenge.create({
+    data: { teamId: team.id, winnerId: anna.id, loserId: bo.id, reportedById: anna.id, description: "Vhkl", units: 1 },
+  });
+
+  await loginAs(anna);
+  await page.goto("/boder");
+  await page.getByRole("button", { name: /Udfordringer/ }).click();
+  const card = page.getByRole("dialog", { name: "Udfordringer" }).locator("[data-fresh^='card:']");
+  for (const name of [`${winner} 🏆`, loser]) {
+    const shown = card.getByText(name, { exact: true });
+    await expect(shown).toBeVisible();
+    // Not cut off with "…": the text fits the room it is given.
+    expect(await shown.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+});
