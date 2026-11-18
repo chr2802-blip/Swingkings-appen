@@ -13,7 +13,7 @@ export function ApproveChallengeButton({ id }: { id: string }) {
       fields={{ id, move: "approve" }}
       label="Godkend"
       variant="primary"
-      onDone={(result) => void show(result, "history")}
+      onDone={(result) => void show(result)}
     />
   );
 }

@@ -16,6 +16,7 @@ import { unreadChatCount } from "@/lib/chat";
 import { NotificationBell } from "@/components/notification-bell";
 import { unseenCount } from "@/lib/notifications";
 import { VisitingBanner } from "@/components/visiting-banner";
+import { FreshPulse } from "@/components/fresh";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -71,6 +72,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
 
       <ScrollBars />
+      {/* What a press just made pulses wherever it is listed: the fine box, an activity, a player. */}
+      <FreshPulse />
       {user.teamId && <BottomNav profileHref={profileHref} />}
     </div>
   );

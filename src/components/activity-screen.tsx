@@ -150,6 +150,8 @@ export async function ActivityScreen({
             finePriceKr={board.finePriceKr}
             matches={option}
             defaultMatchId={match.id}
+            // Given here, the fines pulse in the activity's own Bøder tab, not in the fine box.
+            showIn={activityHref(match.id, "/boder")}
           />
         )}
       </CreateMenu>
