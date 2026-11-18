@@ -321,6 +321,7 @@ export function MultiSelect({
   defaultValues = [],
   placeholder = "Vælg…",
   title,
+  onValuesChange,
 }: {
   id?: string;
   name: string;
@@ -328,8 +329,14 @@ export function MultiSelect({
   defaultValues?: string[];
   placeholder?: string;
   title?: string;
+  /** Told every change, for a form that shows something about what is chosen. */
+  onValuesChange?: (values: string[]) => void;
 }) {
-  const [values, setValues] = useState<string[]>(defaultValues);
+  const [values, setOwn] = useState<string[]>(defaultValues);
+  const setValues = (next: string[]) => {
+    setOwn(next);
+    onValuesChange?.(next);
+  };
   const [open, setOpen] = useState(false);
   const [heading, setHeading] = useState(title ?? "");
   const button = useRef<HTMLButtonElement>(null);
@@ -338,7 +345,7 @@ export function MultiSelect({
   const summary = chosen.map((choice) => choice.label).join(", ");
 
   function toggle(value: string) {
-    setValues((now) => (now.includes(value) ? now.filter((v) => v !== value) : [...now, value]));
+    setValues(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
   }
 
   function openPicker() {

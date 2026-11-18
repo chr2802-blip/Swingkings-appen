@@ -937,3 +937,85 @@ test("a short page beside a long history ends where its own content does", async
   await expect(page.getByRole("tabpanel")).toHaveCount(1);
   expect(await beyond()).toBe(0);
 });
+
+test("a challenge's card shows both whole names on a phone, one line each", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const winner = "Christian Ørbæk Andersen";
+  const loser = "Frederik Lauritzen-Holm";
+  await db.user.update({ where: { id: anna.id }, data: { name: winner } });
+  await db.user.update({ where: { id: bo.id }, data: { name: loser } });
+  await db.challenge.create({
+    data: { teamId: team.id, winnerId: anna.id, loserId: bo.id, reportedById: anna.id, description: "Vhkl", units: 1 },
+  });
+
+  await loginAs(anna);
+  await page.goto("/boder");
+  await page.getByRole("button", { name: /Udfordringer/ }).click();
+  const card = page.getByRole("dialog", { name: "Udfordringer" }).locator("[data-fresh^='card:']");
+  for (const name of [`${winner} 🏆`, loser]) {
+    const shown = card.getByText(name, { exact: true });
+    await expect(shown).toBeVisible();
+    // Not cut off with "…": the text fits the room it is given.
+    expect(await shown.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+});
+
+test("a challenge still waiting stands in the history among the fines, on the fine box, the activity and the player's page", async ({
+  page,
+  loginAs,
+}) => {
+  const { team, admin, anna, bo } = await squad();
+  const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000);
+  const match = await db.match.create({
+    data: { teamId: team.id, title: "Kamp", opponent: "FC Naboen", startsAt: minutesAgo(120) },
+  });
+  for (const [reason, n] of [["Glemt trøje", 1], ["For sent", 10]] as const) {
+    await db.fine.create({
+      data: { teamId: team.id, playerId: bo.id, reason, units: 2, unitPriceKr: 10, issuedById: admin.id, matchId: match.id, createdAt: minutesAgo(n) },
+    });
+  }
+  await db.challenge.create({
+    data: {
+      teamId: team.id,
+      winnerId: bo.id,
+      loserId: anna.id,
+      reportedById: bo.id,
+      description: "Flest mål",
+      units: 1,
+      matchId: match.id,
+      createdAt: minutesAgo(5),
+    },
+  });
+  // In its place by time, between the two fines, marked as waiting.
+  const expectInHistory = async (list: Locator) => {
+    const rows = list.getByRole("listitem");
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText("Glemt trøje");
+    await expect(rows.nth(1)).toContainText("Bo 🏆 slog Anna");
+    await expect(rows.nth(1)).toContainText("“Flest mål” · 1 bøde · 10 kr");
+    await expect(rows.nth(1)).toContainText("Venter");
+    await expect(rows.nth(2)).toContainText("For sent");
+  };
+
+  await loginAs(admin);
+  await page.goto(`/aktiviteter/${match.id}/boder`);
+  await expect(page.getByRole("tab", { name: "Bøder (3)" })).toBeVisible();
+  await expectInHistory(page.getByRole("tabpanel", { name: "Bøder (3)" }));
+  await page.goto(`/spiller/${anna.id}/boder`);
+  // Anna has no fine yet, only the challenge she lost.
+  const annas = page.getByRole("tabpanel", { name: "Bøder og udfordringer" }).getByRole("listitem");
+  await expect(annas).toHaveCount(1);
+  await expect(annas).toContainText("Bo 🏆 slog Anna");
+
+  await page.goto("/boder/historik");
+  await expectInHistory(history(page));
+  // Tapped, it opens in full, and somebody but the reporter approves it from there.
+  await history(page).getByRole("button", { name: /Bo 🏆 slog Anna/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Udfordring" });
+  await sheet.getByRole("button", { name: "Godkend" }).click();
+  await expect(sheet).toBeHidden();
+  // Approved, it is the two fines it moved, and waits no more.
+  const moved = history(page).locator("li").filter({ hasText: "udfordring" });
+  await expect(moved).toHaveCount(2);
+  await expect(history(page).getByText("Venter", { exact: true })).toHaveCount(0);
+});

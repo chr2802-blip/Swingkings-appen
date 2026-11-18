@@ -107,6 +107,43 @@ describe("giveFine", () => {
     });
   });
 
+  it("gives several fines from the catalogue at once, each to every player chosen", async () => {
+    const { team, treasurer, anna, bo } = await makeSquad("Swingkings", { finePriceKr: 10 });
+    const late = await prisma.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
+    const pads = await prisma.fineType.create({ data: { teamId: team.id, name: "Glemte benskinner", units: 1 } });
+    await signIn(treasurer);
+
+    const result = await giveFine(undefined, formData({ playerId: [anna.id, bo.id], fineTypeId: [late.id, pads.id, late.id] }));
+    const fines = await prisma.fine.findMany({ where: { teamId: team.id }, orderBy: { reason: "asc" } });
+    expect(fines.map((f) => [f.playerId === anna.id ? "Anna" : "Bo", f.reason, f.units]).sort()).toEqual([
+      ["Anna", "For sent", 2],
+      ["Anna", "Glemte benskinner", 1],
+      ["Bo", "For sent", 2],
+      ["Bo", "Glemte benskinner", 1],
+    ]);
+    expect(result).toEqual({ ok: true, note: "4 bøder er givet.", created: expect.arrayContaining(fines.map((f) => f.id)) });
+    // One notice per player, naming both fines.
+    const notices = await prisma.notification.findMany({ where: { userId: anna.id } });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ title: "Du har fået 2 bøder 💸", body: "For sent, Glemte benskinner — 3 bøder (30 kr)" });
+  });
+
+  it("gives none of several fines when one of them is not in the catalogue", async () => {
+    const { team, treasurer, anna } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const late = await prisma.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
+    const archived = await prisma.fineType.create({ data: { teamId: team.id, name: "Gammel", units: 1, archivedAt: new Date() } });
+    const theirs = await prisma.fineType.create({ data: { teamId: other.team.id, name: "Deres", units: 1 } });
+    await signIn(treasurer);
+    for (const bad of [archived.id, theirs.id]) {
+      expect(await giveFine(undefined, formData({ playerId: anna.id, fineTypeId: [late.id, bad] }))).toEqual({
+        ok: false,
+        error: "Bøden findes ikke i kataloget længere.",
+      });
+    }
+    expect(await prisma.fine.count()).toBe(0);
+  });
+
   it("refuses what it cannot give", async () => {
     const { team, treasurer, anna } = await makeSquad();
     const other = await makeSquad("Andre");

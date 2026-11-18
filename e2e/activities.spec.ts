@@ -623,7 +623,7 @@ test("a long note is folded to a few lines with Vis mere, a short one is shown w
   await expect(details.getByRole("button", { name: "Vis mere" })).toHaveCount(0);
 });
 
-test("a fine given from an activity opens the fine box's history, with the new fine pulsing", async ({ page, loginAs }) => {
+test("a fine given from an activity stays on the activity, and pulses in its own Bøder tab", async ({ page, loginAs }) => {
   const { team, anna, bo } = await squad();
   const match = await db.match.create({ data: { teamId: team.id, title: "Kamp", opponent: "FC Naboen", startsAt: inDays(3) } });
   await db.fineType.create({ data: { teamId: team.id, name: "Glemt benskinner", units: 1 } });
@@ -636,11 +636,10 @@ test("a fine given from an activity opens the fine box's history, with the new f
   await choose(dialog.getByLabel("Bøde fra kataloget"), "Glemt benskinner (1 bøde)");
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page).toHaveURL(/\/boder\/historik$/);
-  const row = page.getByRole("tabpanel", { name: "Historik" }).locator("li").filter({ hasText: "Glemt benskinner" });
+  // Not to the fine box: the activity's own Bøder tab slides in, with the new fine pulsing.
+  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/boder$`));
+  await expect(page.getByRole("tab", { name: /^Bøder/ })).toHaveAttribute("aria-selected", "true");
+  const row = page.getByRole("tabpanel", { name: /^Bøder/ }).locator("li").filter({ hasText: "Glemt benskinner" });
   await expect(row).toHaveClass(/fresh-pulse/);
   expect(await db.fine.findFirstOrThrow({ where: { playerId: bo.id } })).toMatchObject({ matchId: match.id, issuedById: anna.id });
-  // Back goes to the activity it was given from, not to a sheet left behind.
-  await page.goBack();
-  await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}$`));
 });

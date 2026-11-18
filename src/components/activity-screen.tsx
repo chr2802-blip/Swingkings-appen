@@ -14,8 +14,8 @@ import { ActivityDialog } from "@/components/activity-dialog";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
-import { FineHistory } from "@/components/fine-history";
-import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
+import { FineHistory, historyItems } from "@/components/fine-history";
+import { challengeCardInclude } from "@/components/challenge-card";
 import { CreateMenu } from "@/components/create-button";
 import { ActionButton } from "@/components/action-button";
 import { SwipePages, TurnButton } from "@/components/swipe-pages";
@@ -77,7 +77,8 @@ export async function ActivityScreen({
       where: { id },
       include: {
         tasks: { orderBy: { createdAt: "asc" }, select: TASK_SELECT },
-        challenges: { orderBy: { createdAt: "desc" }, include: challengeCardInclude },
+        // Only those still waiting: a settled one is in the history as the fines it moved.
+        challenges: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude },
         signups: { select: { userId: true, going: true } },
         comments: {
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -101,6 +102,7 @@ export async function ActivityScreen({
     copyableActivities(user.teamId, match.id),
     fineHistory(user.teamId, { matchId: match.id }),
   ]);
+  const history = historyItems(fines, match.challenges);
   const label = activityName(match);
   const fromKampKlar = match.source === "KAMPKLAR";
   const option = [{ id: match.id, label: `${label} · ${kickoffLabel(match.startsAt)}` }];
@@ -152,6 +154,8 @@ export async function ActivityScreen({
             finePriceKr={board.finePriceKr}
             matches={option}
             defaultMatchId={match.id}
+            // Given here, the fines pulse in the activity's own Bøder tab, not in the fine box.
+            showIn={activityHref(match.id, "/boder")}
           />
         )}
       </CreateMenu>
@@ -298,23 +302,14 @@ export async function ActivityScreen({
           },
           {
             href: activityHref(match.id, "/boder"),
-            title: fines.length > 0 ? `Bøder (${fines.length})` : "Bøder",
-            children: (
-              <div>
-                {/* The history's rows: a tap opens the fine with everything about it. */}
-                {fines.length === 0 ? <EmptyState icon="😇">Ingen bøder endnu. Alle opførte sig pænt – eller ingen så det.</EmptyState> : <FineHistory fines={fines} />}
-                {match.challenges.length > 0 && (
-                  <section className="mt-8">
-                    <SectionTitle>Udfordringer</SectionTitle>
-                    <div className="space-y-3">
-                      {match.challenges.map((c) => (
-                        <ChallengeCard key={c.id} challenge={c} viewerId={user.id} managesFines={manages} finePriceKr={board.finePriceKr} />
-                      ))}
-                    </div>
-                  </section>
-                )}
-              </div>
-            ),
+            title: history.length > 0 ? `Bøder (${history.length})` : "Bøder",
+            // The history's rows, challenges still waiting among them: a tap opens it in full.
+            children:
+              history.length === 0 ? (
+                <EmptyState icon="😇">Ingen bøder endnu. Alle opførte sig pænt – eller ingen så det.</EmptyState>
+              ) : (
+                <FineHistory items={history} viewer={{ viewerId: user.id, managesFines: manages, finePriceKr: board.finePriceKr }} />
+              ),
           },
         ]}
       />

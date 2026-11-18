@@ -74,13 +74,13 @@ export async function removeFineType(_prev: ActionResult, formData: FormData): P
 /* ── Giving fines ───────────────────────────────────────────────────────────────── */
 
 const fineSchema = z.object({
-  fineTypeId: optionalId,
   note: optionalText,
   matchId: optionalId,
 });
 
 /**
- * Gives one fine to one or more players at once — the whole back four were late. Always
+ * Gives one fine to one or more players at once — the whole back four were late — or
+ * several fines from the catalogue to each of them (late *and* forgot the shin pads). Always
  * from the catalogue: its name and its number of fines, never written freely or priced
  * by whoever gives it. A `reason` or `units` in the form is not read.
  */
@@ -97,12 +97,13 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
   const members = await db.teamMember.findMany({ where: { userId: { in: playerIds } }, select: { userId: true } });
   if (members.length !== playerIds.length) return fail("En af spillerne er ikke på holdet.");
 
-  if (!form.fields.fineTypeId) return fail("Vælg en bøde fra kataloget.");
-  const type = await db.fineType.findFirst({ where: { id: form.fields.fineTypeId, archivedAt: null } });
-  if (!type) return fail("Bøden findes ikke i kataloget længere.");
-  const fineTypeId = type.id;
-  const reason = type.name;
-  const units = type.units;
+  // One fine from the catalogue, or several at once (a player's page): each to every player.
+  const typeIds = [...new Set(formData.getAll("fineTypeId").map(String).filter(Boolean))];
+  if (typeIds.length === 0) return fail("Vælg en bøde fra kataloget.");
+  const found = await db.fineType.findMany({ where: { id: { in: typeIds }, archivedAt: null } });
+  if (found.length !== typeIds.length) return fail("Bøden findes ikke i kataloget længere.");
+  // In the order they were chosen, so the history reads as the giver picked them.
+  const types = typeIds.map((id) => found.find((type) => type.id === id)!);
 
   if (form.fields.matchId && !(await db.match.findFirst({ where: { id: form.fields.matchId }, select: { id: true } }))) {
     return fail("Kampen findes ikke.");
@@ -110,34 +111,42 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
 
   const team = await prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { finePriceKr: true } });
   const fines = await db.fine.createManyAndReturn({
-    data: playerIds.map((playerId) => ({
-      teamId: user.teamId,
-      playerId,
-      fineTypeId,
-      reason,
-      units,
-      unitPriceKr: team.finePriceKr,
-      note: form.fields.note,
-      matchId: form.fields.matchId,
-      issuedById: user.id,
-    })),
+    data: playerIds.flatMap((playerId) =>
+      types.map((type) => ({
+        teamId: user.teamId,
+        playerId,
+        fineTypeId: type.id,
+        reason: type.name,
+        units: type.units,
+        unitPriceKr: team.finePriceKr,
+        note: form.fields.note,
+        matchId: form.fields.matchId,
+        issuedById: user.id,
+      })),
+    ),
   });
   await notifyEach(
     user.teamId,
     user.id,
-    fines.map((fine) => ({
-      userId: fine.playerId,
-      category: "FINES",
-      title: "Du har fået en bøde 💸",
-      body: `${reason} — ${fineUnits(units)} (${kr(units * team.finePriceKr)})`,
-      url: "/boder",
-      tag: "fine",
-      fineId: fine.id,
-    })),
+    // One notice per player (`notifyEach` takes one per person), naming every fine they got;
+    // it is linked to the first of them.
+    playerIds.map((playerId) => {
+      const theirs = fines.filter((fine) => fine.playerId === playerId);
+      const units = theirs.reduce((sum, fine) => sum + fine.units, 0);
+      return {
+        userId: playerId,
+        category: "FINES" as const,
+        title: theirs.length > 1 ? `Du har fået ${theirs.length} bøder 💸` : "Du har fået en bøde 💸",
+        body: `${theirs.map((fine) => fine.reason).join(", ")} — ${fineUnits(units)} (${kr(units * team.finePriceKr)})`,
+        url: "/boder",
+        tag: "fine",
+        fineId: theirs[0]!.id,
+      };
+    }),
   );
   refresh(user.teamId);
   return ok(
-    playerIds.length > 1 ? `${playerIds.length} bøder er givet.` : "Bøden er givet.",
+    fines.length > 1 ? `${fines.length} bøder er givet.` : "Bøden er givet.",
     fines.map((fine) => fine.id),
   );
 }

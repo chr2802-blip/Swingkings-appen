@@ -1,6 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
-import { choose, openChoices } from "./helpers/select";
+import { choose, chooseMany, openChoices } from "./helpers/select";
 
 test("a player's page shows their latest fines and challenges and their next job, and no way to edit somebody else", async ({
   page,
@@ -117,13 +117,11 @@ test("a player's page shows their latest fines and challenges and their next job
   await expect(page.getByText("bøder i alt")).toBeVisible();
   await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
 
-  // A challenge still waiting stands above the list on the same tab: a short row that
-  // opens in full, and a name there leads on.
+  // A challenge still waiting stands in the list on the same tab, among the fines: a row
+  // that opens in full, and a name there leads on.
   await page
     .getByRole("tabpanel", { name: "Bøder og udfordringer" })
-    .getByRole("region", { name: "Venter på godkendelse" })
-    // Marked as a challenge with the swords, as in the history.
-    .getByRole("button", { name: /^Udfordring: Anna 🏆 slog Bo/ })
+    .getByRole("button", { name: /Anna 🏆 slog Bo.*Venter/ })
     .click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
   await sheet.getByRole("link", { name: /^Anna/ }).click();
@@ -153,12 +151,10 @@ test("a player's page opens straight on a tab", async ({ page, loginAs }) => {
   await expect(
     page.getByRole("tab", { name: "Bøder og udfordringer" }),
   ).toHaveAttribute("aria-selected", "true");
-  // With no challenge waiting, the tab says nothing of one.
+  // With no challenge, the tab shows the fine and nothing else.
   await expect(
-    page
-      .getByRole("tabpanel", { name: "Bøder og udfordringer" })
-      .getByRole("region", { name: "Venter på godkendelse" }),
-  ).toHaveCount(0);
+    page.getByRole("tabpanel", { name: "Bøder og udfordringer" }).getByRole("listitem"),
+  ).toHaveCount(1);
   await page.goto(`/spiller/${anna.id}/opgaver`);
   await expect(page.getByRole("tab", { name: "Opgaver" })).toHaveAttribute(
     "aria-selected",
@@ -206,6 +202,7 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
     data: { teamId: team.id, kind: "OTHER", title: "Gammel fest", startsAt: new Date(Date.now() - 3 * 86_400_000) },
   });
   await db.fineType.create({ data: { teamId: team.id, name: "Glemt trøje", units: 1 } });
+  await db.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
   await loginAs(anna);
   await page.goto(`/spiller/${bo.id}`);
   // The fine is no longer a button beside the name.
@@ -218,14 +215,17 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   const fine = page.getByRole("dialog", { name: "Giv bøde" });
   // Opened from Bo's page, the fine is for Bo.
   await expect(fine.getByLabel("Hvem?")).toHaveText(/^Bo/);
-  await choose(fine.getByLabel("Bøde fra kataloget"), "Glemt trøje (1 bøde)");
+  // From a player's page, several fines from the catalogue go in one go.
+  await chooseMany(fine.getByLabel("Bøder fra kataloget"), ["Glemt trøje (1 bøde)", "For sent (2 bøder)"]);
+  await expect(fine.getByText("3 bøder á 10 kr — i alt 30 kr pr. spiller.")).toBeVisible();
   await fine.getByRole("button", { name: "Giv bøde" }).click();
   await expect(fine).toBeHidden();
-  await expect.poll(() => db.fine.count({ where: { teamId: team.id, playerId: bo.id } })).toBe(1);
-  // Given, the fine box's history opens with the new fine pulsing.
-  await expect(page).toHaveURL(/\/boder\/historik$/);
-  await expect(page.getByRole("tabpanel", { name: "Historik" }).locator("li").filter({ hasText: "Glemt trøje" })).toHaveClass(/fresh-pulse/);
-  await page.goto(`/spiller/${bo.id}`);
+  await expect.poll(() => db.fine.count({ where: { teamId: team.id, playerId: bo.id } })).toBe(2);
+  // Given, the page stays on Bo: his own fines slide in, with both new ones pulsing.
+  await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/boder$`));
+  const list = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
+  await expect(list.locator("li").filter({ hasText: "Glemt trøje" })).toHaveClass(/fresh-pulse/);
+  await expect(list.locator("li").filter({ hasText: "For sent" })).toHaveClass(/fresh-pulse/);
 
   await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Meld udfordring" }).click();
@@ -431,20 +431,18 @@ test("Seneste shows the three newest fines and challenges; the tab merges them a
       .getByText("Ingen opgaver lige nu."),
   ).toBeVisible();
 
-  // The tab is one list as in the history: the fines given and the settled challenge's,
-  // newest first; the challenge still waiting stands above it.
+  // The tab is one list as in the history, newest first: the fines given, the settled
+  // challenge's, and the challenge still waiting in its place among them.
   await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
   const tab = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
-  await expect(
-    tab
-      .getByRole("region", { name: "Venter på godkendelse" })
-      .getByText(/Flest mål/),
-  ).toBeVisible();
-  const rows = tab.getByRole("list").last().getByRole("listitem");
-  await expect(rows).toHaveCount(5);
+  const rows = tab.getByRole("listitem");
+  await expect(rows).toHaveCount(6);
   await expect(rows.nth(0)).toContainText("Udfordring vundet");
   await expect(rows.nth(0)).toContainText("Udfordring");
-  await expect(rows.nth(4)).toContainText("Bøde nummer 6");
+  await expect(rows.nth(1)).toContainText("Bøde nummer 1");
+  await expect(rows.nth(2)).toContainText("Flest mål");
+  await expect(rows.nth(2)).toContainText("Venter");
+  await expect(rows.nth(5)).toContainText("Bøde nummer 6");
   await rows.nth(0).getByRole("button").click();
   await expect(
     page.getByRole("dialog", { name: "Udfordring" }).getByText(/Længst spark/),
