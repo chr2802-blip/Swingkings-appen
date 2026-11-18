@@ -3,6 +3,7 @@ import { canDeleteFine, canManageFines } from "@/lib/access";
 import type { HistoryFine } from "@/components/fine-history";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
 import { readInZone } from "@/lib/time";
+import { DELETED_USER } from "@/lib/names";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
@@ -21,7 +22,8 @@ export function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser 
         ["For", fine.reason],
         ["Antal", fineUnits(fine.units)],
         ["Pris pr. bøde", kr(fine.unitPriceKr)],
-        ["Givet af", <PlayerLink key="giver" userId={fine.issuedBy.id}>{fine.issuedBy.name}</PlayerLink>],
+        // Null once the giver deleted their account; the fine stands without them.
+        ["Givet af", fine.issuedBy ? <PlayerLink key="giver" userId={fine.issuedBy.id}>{fine.issuedBy.name}</PlayerLink> : DELETED_USER],
         ["Hvornår", when],
       ];
   if (!fine.challenge && fine.match) rows.push(["Aktivitet", `${fine.match.opponent ?? fine.match.title} · ${readInZone(fine.match.startsAt, "d. MMM yyyy")}`]);

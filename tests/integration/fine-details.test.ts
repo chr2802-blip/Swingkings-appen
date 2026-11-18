@@ -30,6 +30,15 @@ describe("loadFineDetails", () => {
     expect(his).not.toContain("Slet bøden");
   });
 
+  it("names a giver who has deleted their account as 'Slettet bruger', and nobody may delete it as its giver", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const fine = await prisma.fine.create({ data: { teamId: team.id, playerId: bo.id, issuedById: null, reason: "For sent", units: 1, unitPriceKr: 10 } });
+    await signIn(anna);
+    const html = renderToStaticMarkup((await loadFineDetails(fine.id)) as ReactElement);
+    expect(html).toContain("Slettet bruger");
+    expect(html).not.toContain("Slet bøden");
+  });
+
   it("gives nothing for another team's fine, a deleted one or no id at all", async () => {
     const { team, treasurer, anna } = await makeSquad();
     const other = await makeSquad("Andre");

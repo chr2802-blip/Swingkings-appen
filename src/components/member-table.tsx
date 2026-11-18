@@ -9,6 +9,7 @@ import { MemberRights } from "@/components/member-rights";
 import { ActionButton } from "@/components/action-button";
 import { ActionMenu } from "@/components/action-menu";
 import { removeMember } from "@/app/actions/teams";
+import { ResetPasswordButton } from "@/components/reset-password-button";
 
 /**
  * The admin's view of the roster: a tick for Bøder, Admin and kontingent per member,
@@ -66,6 +67,7 @@ export function MemberTable({
               <MemberRights userId={member.userId} name={member.name} role={member.role} duesPaid={member.duesPaid} />
               <ActionMenu icon label={`Handlinger for ${member.name}`} title={member.name}>
                 <MemberDialog member={member} kampklarNames={kampklarNames} />
+                {member.userId !== userId && <ResetPasswordButton userId={member.userId} name={member.name} />}
                 {member.userId !== userId && (
                   <ActionButton
                     action={removeMember}

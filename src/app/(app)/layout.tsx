@@ -6,6 +6,7 @@ import { TeamMenu } from "@/components/team-menu";
 import { BackButton } from "@/components/back-button";
 import { Avatar } from "@/components/photo";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { playerHref } from "@/components/player-link";
 import { StripeBand } from "@/components/crest";
 import { ScrollBars } from "@/components/scroll-bars";
@@ -18,6 +19,8 @@ import { VisitingBanner } from "@/components/visiting-banner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  // Logged in with a temporary password from an admin: their own comes first.
+  if (user.mustChangePassword) redirect("/ny-adgangskode");
   const showAdmin = user.role === "SUPER_ADMIN";
   // The super admin looking into a team they are not on: on screen, but not one of them.
   const visiting = user.teamId !== null && user.teamRole === null;

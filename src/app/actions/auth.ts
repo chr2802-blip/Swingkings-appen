@@ -43,7 +43,8 @@ export async function login(_prev: FormState, formData: FormData): Promise<FormS
 
   await clearAttempts("login", email);
   await createSession(user.id, user.tokenVersion);
-  redirect(landing(formData));
+  // A temporary password from an admin is for choosing one's own, and nothing else.
+  redirect(user.mustChangePassword ? "/ny-adgangskode" : landing(formData));
 }
 
 export async function logout() {

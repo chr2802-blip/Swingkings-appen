@@ -175,18 +175,21 @@ model Team {
  * is on screen; what they may reach is answered from `memberships`.
  */
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String
-  passwordHash String
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  name               String
+  passwordHash       String
   /// Bumped when the password changes; a session cookie naming an older version is dead.
-  tokenVersion Int          @default(0)
-  role         PlatformRole @default(USER)
-  activeTeamId String?
-  photoId      String?
+  tokenVersion       Int          @default(0)
+  /// Set when an admin gave a temporary password (`resetMemberPassword`): the next login
+  /// must choose a new one before anything else (`/ny-adgangskode`).
+  mustChangePassword Boolean      @default(false)
+  role               PlatformRole @default(USER)
+  activeTeamId       String?
+  photoId            String?
   /// One of the demo team's made-up players; removed together with it, and nobody else is.
-  isDemo       Boolean      @default(false)
-  createdAt    DateTime     @default(now())
+  isDemo             Boolean      @default(false)
+  createdAt          DateTime     @default(now())
 
   activeTeam         Team?              @relation("ActiveTeam", fields: [activeTeamId], references: [id], onDelete: SetNull)
   photo              Photo?             @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
@@ -328,7 +331,8 @@ model Fine {
   note        String?
   units       Int
   unitPriceKr Int
-  issuedById  String
+  /// Who gave it. Null once the giver has deleted their account: the fine still stands.
+  issuedById  String?
   matchId     String?
   /// The challenge this fine came from: the loser's (positive) and the winner's (negative).
   challengeId String?
@@ -337,7 +341,7 @@ model Fine {
   team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   player    User       @relation("FinePlayer", fields: [playerId], references: [id], onDelete: Cascade)
   fineType  FineType?  @relation(fields: [fineTypeId], references: [id], onDelete: SetNull)
-  issuedBy  User       @relation("FineIssuedBy", fields: [issuedById], references: [id], onDelete: Cascade)
+  issuedBy  User?      @relation("FineIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
   match     Match?     @relation(fields: [matchId], references: [id], onDelete: SetNull)
   challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
 

@@ -38,7 +38,7 @@ export function canManageFines(user: SessionUser, teamId: string) {
 }
 
 /** Whoever gave a fine may take it back; otherwise it is the bødekasseformand's call. */
-export function canDeleteFine(user: SessionUser, teamId: string, fine: { issuedById: string }) {
+export function canDeleteFine(user: SessionUser, teamId: string, fine: { issuedById: string | null }) {
   return fine.issuedById === user.id || canManageFines(user, teamId);
 }
 

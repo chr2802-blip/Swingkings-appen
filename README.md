@@ -75,6 +75,11 @@ opretter et hold, kan de få et engangslink til holdets første person og dereft
 vedkommende til admin. Oprettelse er begrænset: højst 15 nye konti i timen fra samme adresse og
 30 i timen gennem samme link, ud over linkets eget maks.
 
+**Konto** — Appen sender ingen mails. Har nogen glemt sin adgangskode, giver en admin dem en
+midlertidig under *Medlemmer og roller* (⋯ → *Nulstil adgangskode*), og ved næste login vælger
+de selv en ny. Alle kan slette deres egen konto under Profil — dog ikke mens de skylder bøder,
+eller er eneste admin på et hold med andre på. Hvad appen gemmer står på `/privatliv`.
+
 ## Kom i gang lokalt
 
 ```bash

@@ -29,5 +29,6 @@ export const config = {
     "/spiller/:path*",
     "/admin/:path*",
     "/hent-appen",
+    "/ny-adgangskode",
   ],
 };
