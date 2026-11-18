@@ -9,7 +9,7 @@ import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/
 import { Avatar } from "@/components/photo";
 import { playerHref } from "@/components/player-link";
 import { SwipePages } from "@/components/swipe-pages";
-import { FineHistory } from "@/components/fine-history";
+import { FineHistory, historyItems } from "@/components/fine-history";
 import { FineCreateMenu } from "@/components/fine-create-menu";
 import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
 import { ChallengeDialog } from "@/components/challenge-dialog";
@@ -63,6 +63,9 @@ export async function FinesScreen({
   // What is waiting on the viewer goes first: it is the reason they opened the sheet.
   const waiting = pending.filter((c) => waitsOn(c, user.id));
   const others = pending.filter((c) => !waiting.includes(c));
+  // Challenges still waiting stand in the history too, among the fines.
+  const items = historyItems(history, pending);
+  const viewer = { viewerId: user.id, managesFines: manages, finePriceKr: board.finePriceKr };
   const card = (c: (typeof pending)[number]) => (
     <ChallengeCard key={c.id} challenge={c} viewerId={user.id} managesFines={manages} finePriceKr={board.finePriceKr} />
   );
@@ -138,7 +141,7 @@ export async function FinesScreen({
           }
         >
           <p className="mb-4 text-sm text-slate-500">
-            Meld resultatet her eller under +, en anden godkender, og taberen overtager indsatsen. Afgjorte udfordringer står i historikken.
+            Meld resultatet her eller under +, en anden godkender, og taberen overtager indsatsen. Alle udfordringer står også i historikken.
           </p>
           {/* Reporting one from here too, so the sheet is not a dead end; it lands in the sheet once sent. */}
           {!paying && (
@@ -179,10 +182,10 @@ export async function FinesScreen({
             href: "/boder/historik",
             title: "Historik",
             children:
-              history.length === 0 ? (
+              items.length === 0 ? (
                 <EmptyState icon="😇">Ingen bøder endnu. Det varer nok ikke længe.</EmptyState>
               ) : (
-                <FineHistory fines={history} />
+                <FineHistory items={items} viewer={viewer} />
               ),
           },
           {
