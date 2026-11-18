@@ -523,3 +523,37 @@ describe("fine data", () => {
     }
   });
 });
+
+describe("the board as a table", () => {
+  it("places everybody by what they owe and shows how they moved since a week ago", async () => {
+    const { team, anna, bo, admin, treasurer } = await makeSquad();
+    const fine = (playerId: string, units: number, daysAgo: number) =>
+      prisma.fine.create({
+        data: { teamId: team.id, playerId, reason: "For sent", units, unitPriceKr: 10, createdAt: new Date(Date.now() - daysAgo * 86_400_000) },
+      });
+    // A week ago Anna led; since then Bo has overtaken her.
+    await fine(anna.id, 3, 10);
+    await fine(bo.id, 1, 10);
+    await fine(bo.id, 5, 2);
+
+    const board = await fineBoard(team.id);
+    const row = (id: string) => board.standings.find((s) => s.userId === id)!;
+    expect(board.standings.map((s) => s.userId)).toEqual(board.balances.map((b) => b.userId));
+    expect(row(bo.id)).toMatchObject({ owesKr: 60, place: 1, move: 1 });
+    expect(row(anna.id)).toMatchObject({ owesKr: 30, place: 2, move: -1 });
+    // A clean sheet shares the last place, and has stood still.
+    expect(row(admin.id)).toMatchObject({ owesKr: 0, place: 3, move: 0 });
+    expect(row(treasurer.id)).toMatchObject({ place: 3 });
+    // The shirt number rides along for the jersey beside the name.
+    expect(board.people.get(anna.id)).toMatchObject({ name: "Anna", shirtNumber: null, onTeam: true });
+  });
+
+  it("reads only its own team's fines", async () => {
+    const ours = await makeSquad("Os");
+    const theirs = await makeSquad("Dem");
+    await prisma.fine.create({ data: { teamId: theirs.team.id, playerId: theirs.anna.id, reason: "x", units: 9, unitPriceKr: 10 } });
+    const board = await fineBoard(ours.team.id);
+    expect(board.standings.every((s) => s.owesKr === 0)).toBe(true);
+    expect(board.standings.some((s) => s.userId === theirs.anna.id)).toBe(false);
+  });
+});

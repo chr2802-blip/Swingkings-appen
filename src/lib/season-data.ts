@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { teamDb } from "./team-db";
 import { balances } from "./money";
+import { openTask } from "./tasks";
 import { readSummary, summarizeSeason, type SeasonSummary } from "./season";
 
 /**
@@ -53,7 +54,7 @@ async function gatherSummary(tx: Tx, teamId: string, now: Date): Promise<SeasonS
   const [fines, settled, doneTasks, activities] = await Promise.all([
     tx.fine.findMany({ where: { teamId }, select: { playerId: true, reason: true, units: true, unitPriceKr: true, challengeId: true } }),
     tx.challenge.findMany({ where: { teamId, status: "SETTLED" }, select: { winnerId: true } }),
-    tx.task.findMany({ where: { teamId, doneAt: { not: null } }, select: { id: true } }),
+    tx.task.findMany({ where: { teamId, NOT: openTask(now) }, select: { id: true } }),
     tx.match.count({ where: { teamId, startsAt: { lt: now }, cancelledAt: null } }),
   ]);
   // Assignees carry no teamId; they are reached through the team's own tasks, read above.
@@ -109,7 +110,7 @@ export async function startSeason(teamId: string, name: string, now: Date = new 
     await tx.notification.deleteMany({ where: { teamId, category: { in: ["FINES", "CHALLENGES"] } } });
     // Jobs and sign-ups go with their activity (onDelete: Cascade).
     await tx.match.deleteMany({ where: { teamId, startsAt: { lt: now } } });
-    await tx.task.deleteMany({ where: { teamId, matchId: null, doneAt: { not: null } } });
+    await tx.task.deleteMany({ where: { teamId, matchId: null, NOT: openTask(now) } });
     await tx.inviteLink.deleteMany({ where: { teamId } });
     await tx.teamMember.updateMany({ where: { teamId }, data: { duesPaidAt: null, finesPaidAt: null } });
     return { ok: true as const, seasonId: season.id };

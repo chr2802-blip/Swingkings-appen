@@ -23,7 +23,7 @@ export default async function SeasonsPage() {
           )
         }
       />
-      {seasons.length === 0 && <EmptyState icon="🏆">Ingen afsluttede sæsoner endnu.</EmptyState>}
+      {seasons.length === 0 && <EmptyState icon="🏆">Ingen afsluttede sæsoner endnu. Historien skrives lige nu.</EmptyState>}
       {seasons.map(({ id, name, startedAt, endedAt, summary }) => (
         <Card key={id} className="space-y-4">
           <div>

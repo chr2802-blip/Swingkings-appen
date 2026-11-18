@@ -26,6 +26,7 @@ import { challengeCardInclude } from "@/components/challenge-card";
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { markFinesPaid } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
+import { openTask } from "@/lib/tasks";
 import { FineHistory, historyItems } from "@/components/fine-history";
 import { LiveRefresh } from "@/components/live-refresh";
 import { FINES_CHANGED } from "@/lib/realtime-topic";
@@ -100,7 +101,7 @@ export async function PlayerScreen({
         include: challengeCardInclude,
       }),
       db.task.findMany({
-        where: { doneAt: null, assignees: { some: { userId: id } } },
+        where: { ...openTask(), assignees: { some: { userId: id } } },
         orderBy: [
           { dueAt: { sort: "asc", nulls: "last" } },
           { createdAt: "asc" },
@@ -108,8 +109,8 @@ export async function PlayerScreen({
         select: TASK_SELECT,
       }),
       db.task.findMany({
-        where: { doneAt: { not: null }, assignees: { some: { userId: id } } },
-        orderBy: { doneAt: "desc" },
+        where: { NOT: openTask(), assignees: { some: { userId: id } } },
+        orderBy: [{ match: { startsAt: "desc" } }, { dueAt: "desc" }, { createdAt: "desc" }],
         take: RECENT,
         select: TASK_SELECT,
       }),
@@ -163,7 +164,7 @@ export async function PlayerScreen({
                     <span id="latest-title">Seneste</span>
                   </SectionTitle>
                   {latest.length === 0 ? (
-                    <Empty>Ingen bøder eller udfordringer endnu.</Empty>
+                    <Empty>Ingen bøder eller udfordringer endnu. Ren tavle – indtil videre.</Empty>
                   ) : (
                     <FineHistory items={latest} viewer={viewer} />
                   )}
@@ -182,7 +183,7 @@ export async function PlayerScreen({
                       ))}
                     </List>
                   ) : (
-                    <Empty>Ingen opgaver lige nu.</Empty>
+                    <Empty>Ingen opgaver lige nu. Nyd det, mens det varer.</Empty>
                   )}
                 </section>
               </div>
@@ -210,7 +211,7 @@ export async function PlayerScreen({
                 : "Opgaver",
             children:
               tasks.length === 0 ? (
-                <Empty>Ingen opgaver.</Empty>
+                <Empty>Ingen opgaver. Ingen trøjevask, ingen frugt – endnu.</Empty>
               ) : (
                 <List>
                   {tasks.map((task) => (
@@ -316,67 +317,81 @@ function PlayerHeader({
     member && member.role !== "PLAYER" && ROLE_LABEL[member.role],
     !person.onTeam && "Ikke længere på holdet",
   ].filter((badge): badge is string => typeof badge === "string");
+  const place = board.standings.find((row) => row.userId === id)?.place;
   return (
     <div>
-      <div className="flex items-center gap-3">
-        <Avatar name={person.name} photoId={person.photoId} size="md" />
-        <div className="min-w-0 flex-1">
-          {/* The whole name, over two lines if need be: never cut short. */}
-          <h1 className="text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-            {person.name}
-          </h1>
-          {badges.length > 0 && (
-            <p className="truncate text-xs text-slate-500">
-              {badges.join(" · ")}
-            </p>
+      {/* The player's card, edge to edge under the header as the front page's banner: the
+          shirt number large behind them, their name, and their season on a card below. */}
+      <div className="player-card page-bleed">
+        <div className="relative mx-auto max-w-5xl overflow-hidden pt-6 pr-[max(1rem,env(safe-area-inset-right))] pb-14 pl-[max(1rem,env(safe-area-inset-left))]">
+          {member?.shirtNumber != null && (
+            <span
+              aria-hidden
+              className="font-score pointer-events-none absolute -top-2 right-[max(4.5rem,calc(env(safe-area-inset-right)+3.5rem))] text-[8.5rem] leading-none font-bold text-white/15 select-none"
+            >
+              {member.shirtNumber}
+            </span>
           )}
-          {member && (
-            <p className="mt-1 flex flex-wrap items-center gap-2">
-              {member.duesPaid ? (
-                <Badge tone="green">Kontingent betalt</Badge>
-              ) : (
-                <Badge tone="amber">Mangler kontingent</Badge>
+          <div className="relative flex items-center gap-4">
+            <Avatar
+              name={person.name}
+              photoId={person.photoId}
+              shirtNumber={member?.shirtNumber}
+              size="lg"
+              className="ring-4 ring-white/70"
+            />
+            <div className="min-w-0 flex-1">
+              {/* The whole name, over two lines if need be: never cut short. */}
+              <h1 className="text-2xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]">{person.name}</h1>
+              {badges.length > 0 && <p className="truncate text-xs text-white/80">{badges.join(" · ")}</p>}
+              {member && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-2">
+                  {member.duesPaid ? (
+                    <Badge tone="green">Kontingent betalt</Badge>
+                  ) : (
+                    <Badge tone="amber">Mangler kontingent</Badge>
+                  )}
+                  {self && !member.duesPaid && board.payLink && (
+                    <PayLink
+                      kind="dues"
+                      link={board.payLink}
+                      amountKr={board.duesKr}
+                      name={person.name}
+                      className="text-xs font-medium text-white underline underline-offset-2"
+                    >
+                      Betal kontingent
+                      {board.duesKr ? ` (${kr(board.duesKr)})` : ""} ›
+                    </PayLink>
+                  )}
+                </p>
               )}
-              {self && !member.duesPaid && board.payLink && (
-                <PayLink
-                  kind="dues"
-                  link={board.payLink}
-                  amountKr={board.duesKr}
-                  name={person.name}
-                  className="text-xs font-medium text-[var(--accent)]"
-                >
-                  Betal kontingent
-                  {board.duesKr ? ` (${kr(board.duesKr)})` : ""} ›
-                </PayLink>
-              )}
-            </p>
-          )}
+            </div>
+            {self && (
+              <Link
+                href="/profil"
+                aria-label="Rediger"
+                title="Rediger"
+                className="flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-full bg-white/15 text-white hover:bg-white/25"
+              >
+                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </Link>
+            )}
+          </div>
         </div>
-        {self && (
-          <Link
-            href="/profil"
-            aria-label="Rediger"
-            title="Rediger"
-            className="flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50"
-          >
-            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-          </Link>
-        )}
       </div>
-      <dl className="mt-3 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2 text-center shadow-sm">
+      {/* Their season, on a card lying over the foot of the band. */}
+      <dl className="relative -mt-10 grid grid-cols-4 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2.5 text-center shadow-sm">
         <Stat
           label={paid ? "betalt" : paying ? "skal betales" : "bøder i alt"}
           value={kr(account.owesKr)}
-          tone={paid || account.owesKr === 0 ? "text-emerald-700" : "text-red-600"}
+          tone={paid || account.owesKr === 0 ? "text-emerald-700" : "text-[var(--star)]"}
         />
-        <Stat
-          label={account.units === 1 ? "bøde" : "bøder"}
-          value={String(account.units)}
-        />
+        <Stat label={account.units === 1 ? "bøde" : "bøder"} value={String(account.units)} />
         <Stat label={openTasks === 1 ? "opgave" : "opgaver"} value={String(openTasks)} />
+        <Stat label="på tavlen" value={place ? `#${place}` : "–"} />
       </dl>
       {paying && paid && (
         <p className="mt-3 text-center text-sm font-medium text-emerald-700">✅ Bøderne er betalt</p>
@@ -429,9 +444,9 @@ function Stat({
   tone?: string;
 }) {
   return (
-    <div className="flex flex-col-reverse">
-      <dt className="text-[11px] text-slate-500">{label}</dt>
-      <dd className={`font-semibold ${tone}`}>{value}</dd>
+    <div className="flex min-w-0 flex-col-reverse">
+      <dt className="truncate text-[11px] text-slate-500">{label}</dt>
+      <dd className={`font-score text-xl leading-tight font-semibold ${tone}`}>{value}</dd>
     </div>
   );
 }

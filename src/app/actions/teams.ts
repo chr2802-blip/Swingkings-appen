@@ -16,6 +16,7 @@ import { discardReplaced, readPhotoChoice, removeStored } from "@/lib/photos";
 import { normalizeCalendarUrl } from "@/lib/ical";
 import { normalizeBoxLink } from "@/lib/pay";
 import { THEMES } from "@/lib/theme";
+import { openTask } from "@/lib/tasks";
 import { createDemoTeam, removeDemoTeam } from "@/lib/demo-team";
 
 const ROLES = ["ADMIN", "TREASURER", "PLAYER"] as const;
@@ -235,7 +236,7 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
   // Their open jobs on this team go back to nobody, rather than waiting on somebody gone.
   await prisma.$transaction([
     db.teamMember.deleteMany({ where: { userId } }),
-    prisma.taskAssignee.deleteMany({ where: { userId, task: { teamId: user.teamId, doneAt: null } } }),
+    prisma.taskAssignee.deleteMany({ where: { userId, task: { teamId: user.teamId, ...openTask() } } }),
   ]);
   revalidatePath("/hold", "layout");
   return ok();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { answerHandover, askInChat, handOverTask, offerTask, setTaskDone, updateTask, withdrawHandover } from "@/app/actions/tasks";
+import { answerHandover, askInChat, handOverTask, offerTask, updateTask, withdrawHandover } from "@/app/actions/tasks";
 import { formData, makeMatch, makeSquad, signIn } from "../helpers/factories";
 import { expectRedirectToLogin } from "../helpers/expect";
 
@@ -69,7 +69,7 @@ describe("offerTask", () => {
     expect(await offer(task.id, "")).toEqual({ ok: false, error: "Vælg hvem der skal overtage opgaven." });
 
     await prisma.task.update({ where: { id: task.id }, data: { doneAt: new Date() } });
-    expect(await offer(task.id, bo.id)).toEqual({ ok: false, error: "Opgaven er allerede udført." });
+    expect(await offer(task.id, bo.id)).toEqual({ ok: false, error: "Opgaven er overstået." });
     expect(await prisma.taskHandover.count({ where: { teamId: team.id } })).toBe(0);
   });
 
@@ -136,7 +136,7 @@ describe("answerHandover", () => {
     const { anna, bo, task, handover } = await asked();
     await prisma.task.update({ where: { id: task.id }, data: { doneAt: new Date() } });
     await signIn(bo);
-    expect(await answer(handover.id, "accept")).toEqual({ ok: false, error: "Opgaven er allerede udført." });
+    expect(await answer(handover.id, "accept")).toEqual({ ok: false, error: "Opgaven er overstået." });
 
     await prisma.task.update({ where: { id: task.id }, data: { doneAt: null } });
     // Taken off by hand, behind the request's back.
@@ -199,11 +199,24 @@ describe("withdrawing", () => {
     expect(await prisma.taskHandover.count({ where: { status: "PENDING" } })).toBe(0);
   });
 
+  it("refuses a job whose activity is over, though nobody ticked it off", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const played = await prisma.match.create({
+      data: { teamId: team.id, kind: "MATCH", title: "Kamp", opponent: "B.93", startsAt: new Date(Date.now() - 3 * 86_400_000) },
+    });
+    const task = await prisma.task.create({
+      data: { teamId: team.id, matchId: played.id, title: "Tøjvask", assignees: { create: { userId: anna.id } } },
+    });
+    await signIn(anna);
+    expect(await offer(task.id, bo.id)).toEqual({ ok: false, error: "Opgaven er overstået." });
+    expect(await prisma.taskHandover.count()).toBe(0);
+  });
+
   it("keeps a done job's requests as history", async () => {
     const { anna, bo, task } = await annasJob();
     await signIn(anna);
     await offer(task.id, bo.id);
-    await setTaskDone(undefined, formData({ id: task.id, done: "true" }));
+    await prisma.task.update({ where: { id: task.id }, data: { doneAt: new Date() } });
     expect(await prisma.taskHandover.count({ where: { taskId: task.id } })).toBe(1);
   });
 });
@@ -243,8 +256,8 @@ describe("askInChat", () => {
     await signIn(other.anna);
     expect(await ask(task.id)).toEqual({ ok: false, error: "Opgaven findes ikke." });
     await signIn(anna);
-    await setTaskDone(undefined, formData({ id: task.id, done: "true" }));
-    expect(await ask(task.id)).toEqual({ ok: false, error: "Opgaven er allerede udført." });
+    await prisma.task.update({ where: { id: task.id }, data: { doneAt: new Date() } });
+    expect(await ask(task.id)).toEqual({ ok: false, error: "Opgaven er overstået." });
     expect(await prisma.chatMessage.count()).toBe(0);
   });
 

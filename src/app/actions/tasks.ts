@@ -7,11 +7,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam, canFinishTask } from "@/lib/access";
+import { canAdministerTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { field, MAX_MESSAGE, optionalText, readForm, requiredText } from "@/lib/form";
 import { deadlineOn } from "@/lib/time";
-import { createDistributedTasks, taskUrl } from "@/lib/tasks";
+import { createDistributedTasks, isTaskOpen, taskUrl } from "@/lib/tasks";
 import { notify } from "@/lib/notifications";
 import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
@@ -154,26 +154,6 @@ export async function updateTask(_prev: ActionResult, formData: FormData): Promi
   return ok();
 }
 
-/**
- * Whoever is on the job marks it done (or undoes it); an admin may do it for anybody.
- * Nobody else: a job is not done because a bystander says so.
- */
-export async function setTaskDone(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  const user = await requireTeamUser();
-  const id = field(formData, "id");
-  const done = formData.get("done") === "true";
-  const db = teamDb(user.teamId);
-  const task = await db.task.findFirst({ where: { id }, select: { id: true, matchId: true, assignees: { select: { userId: true } } } });
-  if (!task) return fail("Opgaven findes ikke.");
-  if (!canFinishTask(user, user.teamId, task)) return fail("Kun dem, der har opgaven, kan markere den som udført.");
-  await db.task.updateMany({
-    where: { id },
-    data: done ? { doneAt: new Date(), doneById: user.id } : { doneAt: null, doneById: null },
-  });
-  refresh(task.id, task.matchId);
-  return ok();
-}
-
 export async function deleteTask(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const task = await editable(user, field(formData, "id"));
@@ -196,10 +176,18 @@ const offerSchema = z.object({
 async function ownPlace(user: Awaited<ReturnType<typeof requireTeamUser>>, id: string) {
   const task = await teamDb(user.teamId).task.findFirst({
     where: { id },
-    select: { id: true, title: true, matchId: true, doneAt: true, assignees: { select: { userId: true } } },
+    select: {
+      id: true,
+      title: true,
+      matchId: true,
+      doneAt: true,
+      dueAt: true,
+      match: { select: { startsAt: true } },
+      assignees: { select: { userId: true } },
+    },
   });
   if (!task) return { error: "Opgaven findes ikke." } as const;
-  if (task.doneAt) return { error: "Opgaven er allerede udført." } as const;
+  if (!isTaskOpen(task)) return { error: "Opgaven er overstået." } as const;
   if (!task.assignees.some((a) => a.userId === user.id)) return { error: "Du kan kun give en opgave videre, du selv har." } as const;
   return { task } as const;
 }
@@ -308,7 +296,7 @@ export async function answerHandover(_prev: ActionResult, formData: FormData): P
   const handover = await db.taskHandover.findFirst({
     where: { id },
     include: {
-      task: { select: { id: true, title: true, matchId: true, doneAt: true } },
+      task: { select: { id: true, title: true, matchId: true, doneAt: true, dueAt: true, match: { select: { startsAt: true } } } },
       from: { select: { name: true } },
     },
   });
@@ -318,7 +306,7 @@ export async function answerHandover(_prev: ActionResult, formData: FormData): P
   if (handover.status !== "PENDING") return fail("Forespørgslen er allerede besvaret.");
   // Nobody declines for the whole team; you just do not say yes.
   if (open && !accept) return fail("Forespørgslen er til hele holdet. Lad den være, hvis du ikke kan.");
-  if (accept && handover.task.doneAt) return fail("Opgaven er allerede udført.");
+  if (accept && !isTaskOpen(handover.task)) return fail("Opgaven er overstået.");
   if (accept && (await prisma.taskAssignee.findUnique({ where: { taskId_userId: { taskId: handover.taskId, userId: user.id } } }))) {
     return fail("Du har allerede opgaven.");
   }

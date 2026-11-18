@@ -126,8 +126,11 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   Standard jobs are added with `addTemplatesToActivity` (ticked ids, or `"auto"`), copied
   from an earlier activity with `copyTasksFromActivity` (`src/lib/tasks.ts`).
 - **Nobody takes a task themselves.** A place on one moves only by being handed over, or
-  by the creator/admin editing the task. Marking a task done (or undone) is for those on it
-  and `canAdministerTeam` (`canFinishTask`, `src/lib/access.ts`); everybody else sees the tick.
+  by the creator/admin editing the task.
+- **Nobody ticks a task off.** A task is done once its activity's day is over (Copenhagen
+  clock), one with no activity once its deadline's day is; `openTask()` / `isTaskOpen`
+  (`src/lib/tasks.ts`) is the one meaning of "open" — counts, reminders, handovers, the
+  season's summary. `Task.doneAt` is only what was ticked before, and still counts as done.
 - **Giving a task away** (`offerTask`, `askInChat`, `answerHandover`, `withdrawHandover`):
   somebody on a task asks one teammate, or the whole team in the chat (`askInChat`: a
   `TaskHandover` with `inChat` and `toId` null, plus a `ChatMessage` whose `taskId` draws a
@@ -173,6 +176,11 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   Pinned posts lead the first page of `feedPosts` and are not counted in its pages
   (`nextFeedCursor`). A single-choice poll is voted by pressing the answer; only a
   multiple-choice one has "Stem".
+- **Club logos** (`ClubLogo`, `src/lib/club-logos.ts`) are the super admin's, put in under
+  /admin and shared by every team — no `teamId`. A club is found by its folded name
+  (`clubKey`), also without a team number ("Hvidovre IF (2)"). Served from
+  `/api/club-logos/<id>` to anybody signed in; a new logo is a new row. The opponent's shows
+  on the front page's fixture poster, which is there on match day only.
 - **Pictures** are shrunk in the browser (`downscale.ts`), re-measured on arrival
   (`photo-file.ts`) and served from `/api/photos/<id>` behind the session. The bytes are in
   Postgres, or in a private Supabase Storage bucket when `SUPABASE_URL` and

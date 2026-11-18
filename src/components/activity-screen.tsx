@@ -25,6 +25,7 @@ import { ClampedText } from "@/components/clamped-text";
 import { deleteActivity } from "@/app/actions/activities";
 import { SignupChoice } from "@/components/signup-choice";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
+import { isTaskOpen } from "@/lib/tasks";
 import {
   activityName,
   activityTitle,
@@ -105,8 +106,9 @@ export async function ActivityScreen({
   const label = activityName(match);
   const fromKampKlar = match.source === "KAMPKLAR";
   const option = [{ id: match.id, label: `${label} · ${kickoffLabel(match.startsAt)}` }];
-  const myTasks = match.tasks.filter((t) => !t.doneAt && t.assignees.some((a) => a.user.id === user.id));
-  const openTasks = match.tasks.filter((t) => !t.doneAt).length;
+  const stillOpen = match.tasks.filter((t) => isTaskOpen({ ...t, match }));
+  const myTasks = stillOpen.filter((t) => t.assignees.some((a) => a.user.id === user.id));
+  const openTasks = stillOpen.length;
 
   const people = (list: { userId: string; name: string; photoId: string | null }[]): SignupPerson[] =>
     list.map((m) => ({ key: m.userId, name: m.name, userId: m.userId, photoId: m.photoId }));
@@ -254,7 +256,7 @@ export async function ActivityScreen({
                         <SignupChoice activityId={match.id} mine={mine} />
                       </div>
                     )}
-                    {going.length > 0 ? <SignupFaces people={going} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu.</p>}
+                    {going.length > 0 ? <SignupFaces people={going} shirts={new Map(roster.map((m) => [m.userId, m.shirtNumber]))} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu. Bliv den første på holdkortet.</p>}
                   </Card>
                 </section>
 
@@ -287,7 +289,7 @@ export async function ActivityScreen({
             title: openTasks > 0 ? `Opgaver (${openTasks})` : "Opgaver",
             children:
               match.tasks.length === 0 ? (
-                <EmptyState icon="🧺">Ingen opgaver endnu. Tilføj dem under Handlinger.</EmptyState>
+                <EmptyState icon="🧺">Ingen opgaver endnu. Tilføj dem med +.</EmptyState>
               ) : (
                 <Card padded={false}>
                   <ul className="divide-y divide-slate-100">
@@ -304,7 +306,7 @@ export async function ActivityScreen({
             // The history's rows, challenges still waiting among them: a tap opens it in full.
             children:
               history.length === 0 ? (
-                <EmptyState>Ingen bøder endnu.</EmptyState>
+                <EmptyState icon="😇">Ingen bøder endnu. Alle opførte sig pænt – eller ingen så det.</EmptyState>
               ) : (
                 <FineHistory items={history} viewer={{ viewerId: user.id, managesFines: manages, finePriceKr: board.finePriceKr }} />
               ),
@@ -316,13 +318,13 @@ export async function ActivityScreen({
 }
 
 /** Those signed up, as pictures with their first name under — a teammate's links to their page. */
-function SignupFaces({ people }: { people: SignupPerson[] }) {
+function SignupFaces({ people, shirts }: { people: SignupPerson[]; shirts: Map<string, number | null> }) {
   return (
     <ul className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6">
       {people.map((p) => {
         const face = (
           <>
-            <Avatar name={p.name} photoId={p.photoId} size="lg" />
+            <Avatar name={p.name} photoId={p.photoId} shirtNumber={p.userId ? shirts.get(p.userId) : null} size="lg" />
             <span className="w-full truncate text-center text-xs">{p.name.split(" ")[0]}</span>
           </>
         );

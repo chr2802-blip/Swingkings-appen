@@ -167,6 +167,9 @@ describe("the daily job", () => {
     await prisma.task.create({ data: { teamId: team.id, title: "Om en uge", dueAt: hours(24 * 7), assignees: { create: { userId: bo.id } } } });
     await prisma.task.create({ data: { teamId: team.id, title: "Færdig", dueAt: hours(5), doneAt: new Date(), assignees: { create: { userId: bo.id } } } });
     await prisma.task.create({ data: { teamId: team.id, title: "Ingen", dueAt: hours(5) } });
+    // A job on an activity that is over is done, though nobody ticked it off: no more reminders.
+    const played = await prisma.match.create({ data: { teamId: team.id, title: "Kamp", kind: "MATCH", startsAt: hours(-48) } });
+    await prisma.task.create({ data: { teamId: team.id, matchId: played.id, title: "Overstået", dueAt: hours(-48), assignees: { create: { userId: bo.id } } } });
 
     const response = await call("Bearer test-cron-secret");
     expect(response.status).toBe(200);

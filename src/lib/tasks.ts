@@ -2,10 +2,40 @@ import type { ActivityKind, Prisma, Venue } from "@prisma/client";
 import { prisma } from "./prisma";
 import { distribute, type Candidate } from "./distribution";
 import { notify as notifyTeam } from "./notifications";
-import { kickoffLabel } from "./time";
+import { kickoffLabel, startOfDayInZone } from "./time";
 
-/** "Still to do" as a where clause. Every query meaning that uses it. */
-export const OPEN_TASK = { doneAt: null } satisfies Prisma.TaskWhereInput;
+/**
+ * "Still to do" as a where clause; every query meaning that uses it. Nobody ticks a job
+ * off: it is done once its activity's day is over (on the team's clock, so the kit washed
+ * after the match is still a job that evening). A job with no activity is done once its
+ * deadline's day is over, and one with neither never is. Jobs ticked off back when that
+ * could be done (`doneAt`) stay done.
+ */
+export function openTask(now: Date = new Date()) {
+  const today = startOfDayInZone(now);
+  return {
+    doneAt: null,
+    AND: [
+      {
+        OR: [
+          { match: { startsAt: { gte: today } } },
+          { matchId: null, OR: [{ dueAt: null }, { dueAt: { gte: today } }] },
+        ],
+      },
+    ],
+  } satisfies Prisma.TaskWhereInput;
+}
+
+/** The same as `openTask`, for a job already read: `dueAt` and its activity's start. */
+export function isTaskOpen(
+  task: { doneAt: Date | null; dueAt: Date | null; match: { startsAt: Date } | null },
+  now: Date = new Date(),
+) {
+  if (task.doneAt) return false;
+  const today = startOfDayInZone(now);
+  if (task.match) return task.match.startsAt >= today;
+  return task.dueAt === null || task.dueAt >= today;
+}
 
 /** How far back a job counts towards somebody's share: one season and a bit. */
 const LOAD_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
@@ -199,7 +229,7 @@ export async function moveTaskDeadlines(teamId: string, matchId: string, from: D
   const shift = to.getTime() - from.getTime();
   if (shift === 0) return 0;
   const tasks = await prisma.task.findMany({
-    where: { teamId, matchId, ...OPEN_TASK, dueAt: { not: null } },
+    where: { teamId, matchId, doneAt: null, dueAt: { not: null } },
     select: { id: true, dueAt: true },
   });
   await prisma.$transaction(

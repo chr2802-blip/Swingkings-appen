@@ -31,7 +31,7 @@ export function PlayerSelect({
       choices={members.map((member) => ({
         value: member.userId,
         label: member.name,
-        leading: <Avatar name={member.name} photoId={member.photoId} size="xs" />,
+        leading: <Avatar name={member.name} photoId={member.photoId} shirtNumber={member.shirtNumber} size="xs" />,
         detail: member.shirtNumber != null ? `#${member.shirtNumber}` : undefined,
       }))}
     />

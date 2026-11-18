@@ -67,7 +67,7 @@ export default async function ActivitiesPage() {
         <ActivityDialog templates={templates} copyable={copyable} />
       </CreateAction>
       {upcoming.length === 0 ? (
-        <EmptyState icon="📅">Ingen kommende aktiviteter i kalenderen.</EmptyState>
+        <EmptyState icon="📅">Ingen kommende aktiviteter i kalenderen. Banen hviler.</EmptyState>
       ) : (
         <ActivityMonths rows={upcoming} />
       )}

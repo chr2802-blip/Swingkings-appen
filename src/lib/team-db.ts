@@ -31,6 +31,8 @@ const NO_TEAM_ID: Record<string, { refuse: true; because: string } | { refuse: f
   LoginAttempt: { refuse: false },
   PushSubscription: { refuse: false },
   PushPause: { refuse: false },
+  // A club's crest is the same on every team: the super admin's, shared by all.
+  ClubLogo: { refuse: false },
 };
 
 function decide(model: string): "scope" | "refuse" | "pass" {

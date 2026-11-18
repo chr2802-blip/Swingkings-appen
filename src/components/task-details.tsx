@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { TeamUser } from "@/lib/auth";
-import { canAdministerTeam, canFinishTask } from "@/lib/access";
+import { canAdministerTeam } from "@/lib/access";
+import { isTaskOpen } from "@/lib/tasks";
 import { activityTitle, KIND_ICON, KIND_LABEL } from "@/lib/activity";
 import { deadlineLabel, formatInZone, kickoffLabel, readInZone, relativeDay } from "@/lib/time";
 import { Badge } from "@/components/ui";
@@ -9,7 +10,7 @@ import { PlayerLink } from "@/components/player-link";
 import { ActionButton } from "@/components/action-button";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
 import { GiveAwayDialog } from "@/components/handover-dialog";
-import { answerHandover, deleteTask, setTaskDone, withdrawHandover } from "@/app/actions/tasks";
+import { answerHandover, deleteTask, withdrawHandover } from "@/app/actions/tasks";
 import type { TaskView } from "@/components/task-row";
 
 export type TaskMember = { userId: string; name: string; photoId: string | null; shirtNumber: number | null };
@@ -29,7 +30,7 @@ const HANDOVER_STATUS = {
  */
 export function TaskDetails({ task, user, members }: { task: TaskView; user: TeamUser; members: TaskMember[] }) {
   const pending = task.handovers.filter((h) => h.status === "PENDING");
-  const done = task.doneAt !== null;
+  const done = !isTaskOpen(task);
   const mine = task.assignees.some((a) => a.user.id === user.id);
   const askedMe = done ? undefined : pending.find((h) => h.toId === user.id);
   /** Asked in the chat by somebody on the job: anybody not on it may say yes. */
@@ -37,23 +38,27 @@ export function TaskDetails({ task, user, members }: { task: TaskView; user: Tea
   const myRequest = pending.find((h) => h.fromId === user.id);
   const admin = canAdministerTeam(user, user.teamId);
   const canEdit = task.createdById === user.id || admin;
-  const canFinish = canFinishTask(user, user.teamId, { assignees: task.assignees.map((a) => ({ userId: a.user.id })) });
   const canGiveAway = !done && mine && !myRequest;
   const due = task.dueAt ? deadlineLabel(task.dueAt) : null;
 
   const facts: [string, React.ReactNode][] = [];
   if (done) {
+    // Ticked off back when that could be done, it says when and by whom; otherwise its day is over.
     facts.push([
       "Udført",
-      <span key="done">
-        {readInZone(task.doneAt!, "d. MMM")}
-        {task.doneBy && (
-          <>
-            {" af "}
-            <PlayerLink userId={task.doneBy.id}>{task.doneBy.name}</PlayerLink>
-          </>
-        )}
-      </span>,
+      task.doneAt ? (
+        <span key="done">
+          {readInZone(task.doneAt, "d. MMM")}
+          {task.doneBy && (
+            <>
+              {" af "}
+              <PlayerLink userId={task.doneBy.id}>{task.doneBy.name}</PlayerLink>
+            </>
+          )}
+        </span>
+      ) : (
+        <span key="done">{task.match ? "Aktiviteten er overstået" : "Fristen er overstået"}</span>
+      ),
     ]);
   } else if (due) {
     facts.push([
@@ -138,7 +143,7 @@ export function TaskDetails({ task, user, members }: { task: TaskView; user: Tea
               return (
                 <li key={a.user.id} className="flex items-center gap-3 px-4 py-2.5">
                   <PlayerLink userId={a.user.id} className="shrink-0" aria-label={a.user.name}>
-                    <Avatar name={a.user.name} photoId={a.user.photoId} size="sm" />
+                    <Avatar name={a.user.name} photoId={a.user.photoId} shirtNumber={members.find((m) => m.userId === a.user.id)?.shirtNumber} size="sm" />
                   </PlayerLink>
                   <span className="min-w-0 flex-1 text-sm">
                     <PlayerLink userId={a.user.id} className="block truncate font-medium">
@@ -162,17 +167,9 @@ export function TaskDetails({ task, user, members }: { task: TaskView; user: Tea
         {myRequest && <p className="mt-2 text-xs text-slate-500">Du har opgaven, indtil nogen siger ja.</p>}
       </section>
 
-      {(canFinish || canGiveAway) && (
+      {canGiveAway && (
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2 [&>*]:flex-1">
-            {canFinish && (
-              <ActionButton
-                action={setTaskDone}
-                fields={{ id: task.id, done: String(!done) }}
-                label={done ? "Markér som ikke udført" : "Markér som udført ✓"}
-                variant={done ? "secondary" : "primary"}
-              />
-            )}
             {canGiveAway && <GiveAwayDialog taskId={task.id} members={members.filter((m) => !task.assignees.some((a) => a.user.id === m.userId))} />}
           </div>
           {canGiveAway && <p className="text-xs text-slate-500">Kan du ikke? Giv den videre til holdet eller en bestemt.</p>}
