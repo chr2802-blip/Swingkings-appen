@@ -3,9 +3,7 @@ import type { TeamUser } from "@/lib/auth";
 import { canManageFines, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
 import { fineBoard, fineHistory, matchOptions } from "@/lib/fine-data";
-import { fineUnits, kr } from "@/lib/money";
-import type { ChallengeStatus } from "@prisma/client";
-import { relativeDay } from "@/lib/time";
+import { kr } from "@/lib/money";
 import Link from "next/link";
 import {
   Badge,
@@ -15,7 +13,6 @@ import {
 } from "@/components/ui";
 import { PayLink } from "@/components/pay-link";
 import { afterPaying } from "@/lib/pay";
-import { DetailSheet } from "@/components/detail-sheet";
 import { Avatar } from "@/components/photo";
 import { playerHref } from "@/components/player-link";
 import { SwipePages } from "@/components/swipe-pages";
@@ -25,15 +22,11 @@ import { TaskDialog } from "@/components/task-dialog";
 import { CreateMenu } from "@/components/create-button";
 import { upcomingActivities } from "@/lib/activity-data";
 import { ActionButton } from "@/components/action-button";
-import {
-  ChallengeCard,
-  challengeCardInclude,
-  type ChallengeView,
-} from "@/components/challenge-card";
+import { challengeCardInclude } from "@/components/challenge-card";
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { markFinesPaid } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
-import { FineHistory, FineRow } from "@/components/fine-history";
+import { FineHistory, historyItems } from "@/components/fine-history";
 import { LiveRefresh } from "@/components/live-refresh";
 import { FINES_CHANGED } from "@/lib/realtime-topic";
 
@@ -124,29 +117,14 @@ export async function PlayerScreen({
   const challenges = [...openChallenges, ...pastChallenges];
   const tasks = [...openTasks, ...doneTasks];
   // A settled challenge also left a fine on each side; the challenge stands for both.
-  const latest = [
-    ...fines
-      .filter((fine) => !fine.challenge)
-      .map((fine) => ({ kind: "fine" as const, at: fine.createdAt, fine })),
-    ...challenges.map((challenge) => ({
-      kind: "challenge" as const,
-      at: challenge.createdAt,
-      challenge,
-    })),
-  ]
-    .sort((a, b) => b.at.getTime() - a.at.getTime())
-    .slice(0, LATEST);
+  const latest = historyItems(
+    fines.filter((fine) => !fine.challenge),
+    challenges,
+  ).slice(0, LATEST);
+  // The tab is the history: the fines, and the challenges still waiting among them.
+  const history = historyItems(fines, openChallenges);
+  const viewer = { viewerId: user.id, managesFines, finePriceKr: board.finePriceKr };
   const nextTasks = firstDaysTasks(openTasks);
-
-  const challengeRow = (challenge: ChallengeView) => (
-    <ChallengeRow
-      key={challenge.id}
-      challenge={challenge}
-      viewerId={user.id}
-      managesFines={managesFines}
-      finePriceKr={board.finePriceKr}
-    />
-  );
 
   return (
     <div className="space-y-6">
@@ -187,17 +165,7 @@ export async function PlayerScreen({
                   {latest.length === 0 ? (
                     <Empty>Ingen bøder eller udfordringer endnu.</Empty>
                   ) : (
-                    <Card padded={false}>
-                      <ul className="divide-y divide-slate-100">
-                        {latest.map((item) =>
-                          item.kind === "fine" ? (
-                            <FineRow key={item.fine.id} fine={item.fine} />
-                          ) : (
-                            challengeRow(item.challenge)
-                          ),
-                        )}
-                      </ul>
-                    </Card>
+                    <FineHistory items={latest} viewer={viewer} />
                   )}
                 </section>
 
@@ -223,27 +191,16 @@ export async function PlayerScreen({
           {
             href: playerTabHref(id, "/boder"),
             title: "Bøder og udfordringer",
-            // One list as in the history: fines given (star) and those a challenge moved
-            // (swords). A challenge still waiting has moved nothing yet, so it stands above.
-            children: (
-              <div className="space-y-8">
-                {openChallenges.length > 0 && (
-                  <section aria-labelledby="pending-title">
-                    <SectionTitle>
-                      <span id="pending-title">Venter på godkendelse</span>
-                    </SectionTitle>
-                    <List>{openChallenges.map(challengeRow)}</List>
-                  </section>
-                )}
-                {fines.length === 0 ? (
-                  <Empty>
-                    Ingen bøder eller udfordringer. Mønsterspiller! 😇
-                  </Empty>
-                ) : (
-                  <FineHistory fines={fines} />
-                )}
-              </div>
-            ),
+            // One list as in the history: fines given (star), those a challenge moved and
+            // the challenges still waiting (swords).
+            children:
+              history.length === 0 ? (
+                <Empty>
+                  Ingen bøder eller udfordringer. Mønsterspiller! 😇
+                </Empty>
+              ) : (
+                <FineHistory items={history} viewer={viewer} />
+              ),
           },
           {
             href: playerTabHref(id, "/opgaver"),
@@ -454,53 +411,6 @@ function PlayerHeader({
   );
 }
 
-/** A challenge as a short row; tapped, it opens in full. */
-function ChallengeRow({
-  challenge,
-  viewerId,
-  managesFines,
-  finePriceKr,
-}: {
-  challenge: ChallengeView;
-  viewerId: string;
-  managesFines: boolean;
-  finePriceKr: number;
-}) {
-  return (
-    <li>
-      <DetailSheet
-        title="Udfordring"
-        triggerClassName="press-card flex w-full items-center gap-3 px-4 py-2 text-left"
-        trigger={
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm">
-                <span className="font-medium">{challenge.winner.name} 🏆</span>{" "}
-                slog {challenge.loser.name}
-              </span>
-              <span className="block truncate text-xs text-slate-500">
-                “{challenge.description}” · {fineUnits(challenge.units)} ·{" "}
-                {relativeDay(challenge.createdAt)}
-              </span>
-            </span>
-            <Badge tone={CHALLENGE_TONE[challenge.status]}>
-              {CHALLENGE_SHORT[challenge.status]}
-            </Badge>
-          </>
-        }
-      >
-        <ChallengeCard
-          challenge={challenge}
-          viewerId={viewerId}
-          managesFines={managesFines}
-          finePriceKr={finePriceKr}
-        />
-      </DetailSheet>
-    </li>
-  );
-}
-
-
 function List({ children }: { children: React.ReactNode }) {
   return (
     <Card padded={false}>
@@ -534,11 +444,3 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-const CHALLENGE_SHORT: Record<ChallengeStatus, string> = {
-  PENDING: "Venter",
-  SETTLED: "Godkendt",
-};
-const CHALLENGE_TONE: Record<ChallengeStatus, "amber" | "green"> = {
-  PENDING: "amber",
-  SETTLED: "green",
-};

@@ -63,10 +63,13 @@ export function ChallengeCard({
       <div>
         <Badge tone={TONE[c.status]}>{CHALLENGE_STATUS_LABEL[c.status]}</Badge>
       </div>
-      <div className="flex items-center gap-2">
+      {/* One line each, so the whole names show on a phone. */}
+      <div className="space-y-1">
         <Side person={c.winner} won />
-        <span className="shrink-0 text-xs font-semibold text-slate-400">slog</span>
-        <Side person={c.loser} won={false} />
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-slate-400">slog</span>
+          <Side person={c.loser} won={false} />
+        </div>
       </div>
       <p className="font-medium">“{c.description}”</p>
       <p className="text-xs text-slate-500">
@@ -103,7 +106,7 @@ function Side({ person, won }: { person: Person; won: boolean }) {
   return (
     <PlayerLink userId={person.id} className="flex min-w-0 items-center gap-1.5">
       <Avatar name={person.name} photoId={person.photoId} size="xs" />
-      <span className={`truncate text-sm ${won ? "font-semibold" : ""}`}>
+      <span className={`min-w-0 break-words text-sm ${won ? "font-semibold" : ""}`}>
         {person.name}
         {won && " 🏆"}
       </span>

@@ -117,12 +117,11 @@ test("a player's page shows their latest fines and challenges and their next job
   await expect(page.getByText("bøder i alt")).toBeVisible();
   await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
 
-  // A challenge still waiting stands above the list on the same tab: a short row that
-  // opens in full, and a name there leads on.
+  // A challenge still waiting stands in the list on the same tab, among the fines: a row
+  // that opens in full, and a name there leads on.
   await page
     .getByRole("tabpanel", { name: "Bøder og udfordringer" })
-    .getByRole("region", { name: "Venter på godkendelse" })
-    .getByRole("button", { name: /Anna 🏆 slog Bo/ })
+    .getByRole("button", { name: /Anna 🏆 slog Bo.*Venter/ })
     .click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
   await sheet.getByRole("link", { name: /^Anna/ }).click();
@@ -152,12 +151,10 @@ test("a player's page opens straight on a tab", async ({ page, loginAs }) => {
   await expect(
     page.getByRole("tab", { name: "Bøder og udfordringer" }),
   ).toHaveAttribute("aria-selected", "true");
-  // With no challenge waiting, the tab says nothing of one.
+  // With no challenge, the tab shows the fine and nothing else.
   await expect(
-    page
-      .getByRole("tabpanel", { name: "Bøder og udfordringer" })
-      .getByRole("region", { name: "Venter på godkendelse" }),
-  ).toHaveCount(0);
+    page.getByRole("tabpanel", { name: "Bøder og udfordringer" }).getByRole("listitem"),
+  ).toHaveCount(1);
   await page.goto(`/spiller/${anna.id}/opgaver`);
   await expect(page.getByRole("tab", { name: "Opgaver" })).toHaveAttribute(
     "aria-selected",
@@ -434,20 +431,18 @@ test("Seneste shows the three newest fines and challenges; the tab merges them a
       .getByText("Ingen opgaver lige nu."),
   ).toBeVisible();
 
-  // The tab is one list as in the history: the fines given and the settled challenge's,
-  // newest first; the challenge still waiting stands above it.
+  // The tab is one list as in the history, newest first: the fines given, the settled
+  // challenge's, and the challenge still waiting in its place among them.
   await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
   const tab = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
-  await expect(
-    tab
-      .getByRole("region", { name: "Venter på godkendelse" })
-      .getByText(/Flest mål/),
-  ).toBeVisible();
-  const rows = tab.getByRole("list").last().getByRole("listitem");
-  await expect(rows).toHaveCount(5);
+  const rows = tab.getByRole("listitem");
+  await expect(rows).toHaveCount(6);
   await expect(rows.nth(0)).toContainText("Udfordring vundet");
   await expect(rows.nth(0)).toContainText("Udfordring");
-  await expect(rows.nth(4)).toContainText("Bøde nummer 6");
+  await expect(rows.nth(1)).toContainText("Bøde nummer 1");
+  await expect(rows.nth(2)).toContainText("Flest mål");
+  await expect(rows.nth(2)).toContainText("Venter");
+  await expect(rows.nth(5)).toContainText("Bøde nummer 6");
   await rows.nth(0).getByRole("button").click();
   await expect(
     page.getByRole("dialog", { name: "Udfordring" }).getByText(/Længst spark/),
