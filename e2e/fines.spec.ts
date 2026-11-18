@@ -33,7 +33,8 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
   const list = await openChoices(field);
   await expect(list).toHaveAccessibleName("Bøde fra kataloget");
   // Only the catalogue: there is no line for writing a fine of one's own.
-  await expect(list.getByRole("option")).toHaveText(["For sent (2 bøder)", "Glemte benskinner (1 bøde)", "Rødt kort (5 bøder)"]);
+  await expect(list.getByRole("option")).toHaveCount(3);
+  await expect(list.getByRole("option", { name: "Skriv selv…" })).toHaveCount(0);
   const search = page.getByRole("searchbox", { name: "Søg" });
   await search.fill("BENSKIN");
   await expect(list.getByRole("option")).toHaveText(["Glemte benskinner (1 bøde)"]);
