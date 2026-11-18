@@ -47,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             />
           </div>
           <NavLinks showAdmin={showAdmin} />
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
             {/* A visiting super admin is told nothing on the team, so has no bell there. */}
             {user.teamId && !visiting && <NotificationBell initialUnseen={unseen} />}
             {user.teamId && <ChatButton initialUnread={unread} />}

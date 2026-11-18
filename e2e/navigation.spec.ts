@@ -612,3 +612,14 @@ test("in a browser the edge is left to the phone's own back swipe", async ({
   await expect(page.getByTestId("page")).not.toHaveAttribute("data-dragging");
   await expect(page).toHaveURL(new RegExp(`/opgaver/${task.id}$`));
 });
+
+test("a long team name is cut short in the header, clear of the bell and the chat", async ({ page, loginAs }) => {
+  const { anna } = await squad("Swingkings Oldboys Søndagsholdet fra Frederiksberg");
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  const name = page.getByRole("banner").getByRole("button", { name: /Swingkings Oldboys/ });
+  const bell = page.getByRole("banner").getByLabel(/^Notifikationer/);
+  const nameBox = (await name.boundingBox())!;
+  const bellBox = (await bell.first().boundingBox())!;
+  expect(nameBox.x + nameBox.width).toBeLessThanOrEqual(bellBox.x);
+});

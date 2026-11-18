@@ -64,7 +64,7 @@ export function FormDialog({
   triggerVariant?: Variant;
   triggerClassName?: string;
   /** Shown beside the words when the button is a row in a drawer. */
-  triggerIcon?: string;
+  triggerIcon?: React.ReactNode;
   title: string;
   action: FormAction;
   submitLabel: string;

@@ -6,6 +6,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui";
 import { PlayerChecklist } from "@/components/player-checklist";
 import { giveFine } from "@/app/actions/fines";
 import { fineUnits, kr } from "@/lib/money";
+import { Star } from "@/components/crest";
 
 type FineTypeOption = { id: string; name: string; units: number };
 type Member = { userId: string; name: string; photoId: string | null; shirtNumber: number | null };
@@ -38,7 +39,7 @@ export function GiveFineDialog({
   const effective = units ? Number(units) : (chosen?.units ?? 0);
 
   return (
-    <FormDialog trigger={triggerLabel} triggerIcon="🟨" title="Giv bøde" action={giveFine} submitLabel="Giv bøde">
+    <FormDialog trigger={triggerLabel} triggerIcon={<Star className="h-5 w-5" />} title="Giv bøde" action={giveFine} submitLabel="Giv bøde">
       <Field label="Hvem?">
         <PlayerChecklist members={members} name="playerId" defaultChecked={defaultPlayerId ? [defaultPlayerId] : []} />
       </Field>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { decodeFeedCursor, feedPosts, nextFeedCursor, teamFeed } from "@/lib/feed";
 import { markFeedSeen } from "@/app/actions/social";
-import { makeSquad, signIn } from "../helpers/factories";
+import { makePoll, makeSquad, signIn } from "../helpers/factories";
 import { expectRedirectToLogin } from "../helpers/expect";
 
 describe("feedPosts", () => {
@@ -113,5 +113,53 @@ describe("loadFeedPosts", () => {
     const last = await loadFeedPosts(first.next, 2);
     expect(Array.isArray(last.posts) && last.posts.length).toBe(1);
     expect(last.next).toBeNull();
+  });
+});
+
+describe("searchFeed", () => {
+  it("finds the team's posts by their words, their author, their poll and their comments, newest first", async () => {
+    const { searchFeed } = await import("@/app/actions/feed");
+    const { team, anna, bo } = await makeSquad();
+    const at = (day: number) => new Date(Date.UTC(2026, 10, day, 12));
+    const words = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Husk BENSKINNER på lørdag", createdAt: at(1) } });
+    const commented = await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Kampen i går", createdAt: at(2) } });
+    await prisma.postComment.create({ data: { postId: commented.id, authorId: bo.id, body: "Mine benskinner er væk" } });
+    const pinned = await prisma.post.create({ data: { teamId: team.id, authorId: bo.id, body: "Fast info", createdAt: at(3), pinnedAt: at(3) } });
+    await prisma.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Noget helt andet", createdAt: at(4) } });
+    await signIn(anna);
+
+    const byWords = await searchFeed("  benskinner ");
+    expect(byWords.count).toBe(2);
+    expect(byWords.limited).toBe(false);
+    expect(Array.isArray(byWords.posts) && byWords.posts.map((p) => (p as { key: string }).key)).toEqual([commented.id, words.id]);
+    // The author's name finds their posts, pinned ones too, in the same list.
+    const byAuthor = await searchFeed("bo");
+    expect(Array.isArray(byAuthor.posts) && byAuthor.posts.map((p) => (p as { key: string }).key)).toEqual([pinned.id]);
+  });
+
+  it("finds a poll by its question and its answers", async () => {
+    const { searchFeed } = await import("@/app/actions/feed");
+    const { team, anna } = await makeSquad();
+    await makePoll(team.id, anna.id, { texts: ["Fredag", "Lørdag"] });
+    await signIn(anna);
+    expect((await searchFeed("der fest")).count).toBe(1);
+    expect((await searchFeed("LØRDAG")).count).toBe(1);
+  });
+
+  it("never finds another team's posts, and asks nothing for too little to search for", async () => {
+    const { searchFeed } = await import("@/app/actions/feed");
+    const { anna } = await makeSquad();
+    const other = await makeSquad("Rivalerne");
+    await prisma.post.create({ data: { teamId: other.team.id, authorId: other.anna.id, body: "Hemmelig taktik" } });
+    await signIn(anna);
+    expect((await searchFeed("taktik")).count).toBe(0);
+    expect(await searchFeed("t")).toEqual({ posts: null, count: 0, limited: false });
+    expect(await searchFeed(42)).toEqual({ posts: null, count: 0, limited: false });
+  });
+
+  it("is refused without a session", async () => {
+    const { searchFeed } = await import("@/app/actions/feed");
+    await makeSquad();
+    await expectRedirectToLogin(() => searchFeed("noget"));
   });
 });

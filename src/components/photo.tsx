@@ -22,7 +22,7 @@ export function Photo({
   return <img src={photoUrl(photoId, size)} alt={alt} loading="lazy" decoding="async" className={className} />;
 }
 
-const SIZES = { xs: "h-6 w-6 text-[10px]", sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-sm", lg: "h-16 w-16 text-lg" } as const;
+const SIZES = { xs: "h-6 w-6 text-[10px]", sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-sm", lg: "h-16 w-16 text-lg", xl: "h-28 w-28 text-3xl" } as const;
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);

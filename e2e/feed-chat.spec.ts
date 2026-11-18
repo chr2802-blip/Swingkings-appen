@@ -723,3 +723,51 @@ test("a comment and a chat message are reacted to, and the reaction stands after
   await expect(page.getByRole("button", { name: /^Svar på / })).toHaveCount(0);
   await expect.poll(() => db.chatMessage.count()).toBe(1);
 });
+
+test("a comment sent under a long thread is scrolled into view", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const post = await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Sejr 3-1!" } });
+  await db.postComment.createMany({
+    data: Array.from({ length: 25 }, (_, i) => ({ postId: post.id, authorId: anna.id, body: `Kommentar nummer ${i + 1}`, createdAt: new Date(Date.UTC(2026, 10, 1, 12, i)) })),
+  });
+
+  await loginAs(bo);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "25 kommentarer" }).click();
+  const drawer = page.getByRole("dialog", { name: "Kommentarer" });
+  await expect(drawer.getByText("Kommentar nummer 1", { exact: true })).toBeInViewport();
+  await drawer.getByRole("textbox", { name: "Kommentar", exact: true }).fill("Min nye kommentar");
+  await drawer.getByRole("button", { name: "Send" }).click();
+  await expect(drawer.getByText("Min nye kommentar")).toBeInViewport();
+});
+
+test("the feed is searched by its words, its writers and its comments, and closing the search brings it back", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const at = (day: number) => new Date(Date.UTC(2026, 10, day, 12));
+  await db.post.create({ data: { teamId: team.id, authorId: anna.id, body: "Husk benskinner på lørdag", createdAt: at(1) } });
+  const other = await db.post.create({ data: { teamId: team.id, authorId: bo.id, body: "Flot kamp i går", createdAt: at(2) } });
+  await db.postComment.create({ data: { postId: other.id, authorId: anna.id, body: "Og mine benskinner?" } });
+  await db.post.create({ data: { teamId: team.id, authorId: bo.id, body: "Grill efter træning", createdAt: at(3) } });
+
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  await page.getByRole("button", { name: "Søg i feedet" }).click();
+  const box = page.getByRole("searchbox", { name: "Søg i feedet" });
+  await expect(box).toBeFocused();
+  await box.fill("benskinner");
+  const found = page.getByRole("region", { name: "Søgeresultater" });
+  await expect(found.getByText("2 opslag med »benskinner«")).toBeVisible();
+  // The newest first: Bo's, found by Anna's comment on it, then Anna's own words.
+  await expect(found.getByText(/^(Flot kamp i går|Husk benskinner på lørdag|Grill efter træning)$/)).toHaveText([
+    "Flot kamp i går",
+    "Husk benskinner på lørdag",
+  ]);
+  await expect(page.getByText("Grill efter træning")).toBeHidden();
+
+  await box.fill("hockey");
+  await expect(found.getByText("Ingen opslag med »hockey«.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Luk" }).click();
+  await expect(box).toBeHidden();
+  await expect(page.getByText("Grill efter træning")).toBeVisible();
+});

@@ -2,13 +2,13 @@ import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
 import { teamRoster } from "./roster";
-import { FEED_PAGE } from "./feed-page";
+import { FEED_PAGE, FEED_SEARCH_LIMIT, readFeedSearch } from "./feed-page";
 import { isOpen, resultsHidden, tally } from "./polls";
 import { kickoffLabel, readInZone } from "./time";
 import type { PollViewData } from "@/components/poll-view";
 import { reactionRows } from "./reactions";
 
-export { FEED_PAGE };
+export { FEED_PAGE, FEED_SEARCH_LIMIT, readFeedSearch };
 
 const person = { select: { id: true, name: true, photoId: true } } as const;
 
@@ -51,10 +51,29 @@ export const MAX_PINNED_SHOWN = 20;
  * or what anybody chose — reaches the browser before the viewer has voted or the poll has
  * closed, so it cannot be read out of the page either.
  */
+/** A post matches a search by its words, its author, its poll or any comment on it. */
+function searchWhere(query: string): Prisma.PostWhereInput {
+  const contains = { contains: query, mode: "insensitive" } as const;
+  return {
+    OR: [
+      { body: contains },
+      { author: { name: contains } },
+      { poll: { question: contains } },
+      { poll: { options: { some: { text: contains } } } },
+      { comments: { some: { body: contains } } },
+    ],
+  };
+}
+
 export async function feedPosts(
   teamId: string,
   viewer: { id: string; canAdminister: boolean },
-  { take = FEED_PAGE, after = null, now = new Date() }: { take?: number; after?: FeedCursor | null; now?: Date } = {},
+  {
+    take = FEED_PAGE,
+    after = null,
+    search = null,
+    now = new Date(),
+  }: { take?: number; after?: FeedCursor | null; search?: string | null; now?: Date } = {},
 ) {
   const select = {
     id: true,
@@ -91,29 +110,41 @@ export async function feedPosts(
     },
   } satisfies Prisma.PostSelect;
   const db = teamDb(teamId);
-  // The pinned posts lead the first page, the latest pinned first; the pages after it are
-  // the rest, newest first, so the cursor never meets a pinned post.
-  // Both at once: neither waits on the other, and each is a round trip to the database.
-  const [pinned, paged] = await Promise.all([
-    after
-      ? []
-      : db.post.findMany({
-          where: { pinnedAt: { not: null } },
-          orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
-          take: MAX_PINNED_SHOWN,
-          select,
-        }),
-    db.post.findMany({
-      where: {
-        pinnedAt: null,
-        ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
-      },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take,
-      select,
-    }),
-  ]);
-  const posts = [...pinned, ...paged];
+  const posts = search
+    ? // A search is one list, newest first, pinned or not, with no pages after it.
+      await db.post.findMany({
+        where: searchWhere(search),
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: Math.min(take, FEED_SEARCH_LIMIT),
+        select,
+      })
+    : await firstOrLaterPage();
+
+  async function firstOrLaterPage() {
+    // The pinned posts lead the first page, the latest pinned first; the pages after it are
+    // the rest, newest first, so the cursor never meets a pinned post.
+    // Both at once: neither waits on the other, and each is a round trip to the database.
+    const [pinned, paged] = await Promise.all([
+      after
+        ? []
+        : db.post.findMany({
+            where: { pinnedAt: { not: null } },
+            orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
+            take: MAX_PINNED_SHOWN,
+            select,
+          }),
+      db.post.findMany({
+        where: {
+          pinnedAt: null,
+          ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take,
+        select,
+      }),
+    ]);
+    return [...pinned, ...paged];
+  }
 
   return posts.map(({ poll, ...post }) => ({
     ...post,
