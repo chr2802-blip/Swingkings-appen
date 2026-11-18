@@ -14,6 +14,8 @@ import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
+import { LiveRefresh } from "@/components/live-refresh";
+import { FEED_CHANGED, FINES_CHANGED } from "@/lib/realtime-topic";
 import { Crown } from "@/components/crest";
 import { HomeBanner } from "@/components/home-banner";
 import { playerTasksHref } from "@/components/player-link";
@@ -164,6 +166,8 @@ export default async function OverviewPage() {
 
       {/* No Suspense boundary round it: see tests/unit/no-suspense.test.ts. */}
       <TeamFeed user={user} />
+      {/* The feed and the fine box's board above read themselves again when a teammate changes them. */}
+      <LiveRefresh events={[FEED_CHANGED, FINES_CHANGED]} />
     </div>
   );
 }

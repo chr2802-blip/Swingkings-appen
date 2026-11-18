@@ -10,6 +10,8 @@ import { readForm, requiredText } from "@/lib/form";
 import { MAX_SEASON_NAME } from "@/lib/season";
 import { startSeason } from "@/lib/season-data";
 import { notify } from "@/lib/notifications";
+import { announce } from "@/lib/realtime";
+import { FINES_CHANGED } from "@/lib/realtime-topic";
 import { teamDb } from "@/lib/team-db";
 
 const seasonSchema = z.object({
@@ -43,6 +45,8 @@ export async function startNewSeason(_prev: ActionResult, formData: FormData): P
       tag: "season",
     },
   );
+  // Fines, challenges and the box's payment are gone: open phones read the fine box again.
+  announce(user.teamId, FINES_CHANGED);
   revalidatePath("/", "layout");
   redirect("/hold/saesoner");
 }

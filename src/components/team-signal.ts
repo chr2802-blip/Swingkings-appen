@@ -2,12 +2,12 @@
 
 /**
  * The phone's half of `src/lib/realtime.ts`: joins the team's private Realtime channel
- * and calls `onNudge` whenever the server announces `event`. `onLive` says whether the
+ * and calls `onNudge` whenever the server announces `event` (or any of several). `onLive` says whether the
  * channel is joined, which lets the caller slow its poll down — and speed it up again
  * the moment the socket drops. Nothing is loaded when Realtime is not configured, and
  * any failure leaves the caller polling as if none of this existed.
  */
-export function followTeamSignal(event: string, onNudge: () => void, onLive: (live: boolean) => void): () => void {
+export function followTeamSignal(event: string | readonly string[], onNudge: () => void, onLive: (live: boolean) => void): () => void {
   let stopped = false;
   let leave: (() => void) | null = null;
 
@@ -33,10 +33,11 @@ export function followTeamSignal(event: string, onNudge: () => void, onLive: (li
       client.disconnect();
       return;
     }
-    const channel = client
-      .channel(first.topic, { config: { private: true } })
-      .on("broadcast", { event }, () => onNudge())
-      .subscribe((status) => {
+    let channel = client.channel(first.topic, { config: { private: true } });
+    for (const name of typeof event === "string" ? [event] : event) {
+      channel = channel.on("broadcast", { event: name }, () => onNudge());
+    }
+    channel.subscribe((status) => {
         if (stopped) return;
         if (status === "SUBSCRIBED") {
           onLive(true);

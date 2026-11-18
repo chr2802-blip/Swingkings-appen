@@ -168,3 +168,10 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   challenge ones.
 - **Push and realtime are optional** and silent when unconfigured; the push from `notify`
   and `announce` run after the response via `after()`.
+- **Open pages stay current through Realtime nudges** (`src/lib/realtime-topic.ts`): the
+  chat (`CHAT_POSTED`), the bell (`NOTIFIED`), the feed (`FEED_CHANGED`) and the fine box
+  (`FINES_CHANGED`). A nudge carries nothing but its name. An action that changes the feed
+  or the fine box calls `announce` with its event (in `fines.ts` through `refresh(teamId)`);
+  a page that shows them renders `<LiveRefresh events={[…]} />`, which `router.refresh()`es
+  by the rules in `src/lib/live-refresh.ts`. `tests/integration/live-signals.test.ts` shows
+  which actions nudge — add a new one there.

@@ -34,6 +34,8 @@ import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { markFinesPaid } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
 import { FineHistory, FineRow } from "@/components/fine-history";
+import { LiveRefresh } from "@/components/live-refresh";
+import { FINES_CHANGED } from "@/lib/realtime-topic";
 
 /** How many settled challenges and finished jobs the page shows; the open ones are always all there. */
 const RECENT = 10;
@@ -148,6 +150,7 @@ export async function PlayerScreen({
 
   return (
     <div className="space-y-6">
+      <LiveRefresh events={[FINES_CHANGED]} />
       <PlayerHeader
         id={id}
         self={self}
