@@ -10,7 +10,7 @@ import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { readForm } from "@/lib/form";
 import { REACTION_KINDS, REACTION_TARGETS, type ReactionTarget } from "@/lib/reactions";
 import { announce } from "@/lib/realtime";
-import { CHAT_POSTED } from "@/lib/realtime-topic";
+import { CHAT_POSTED, FEED_CHANGED } from "@/lib/realtime-topic";
 
 const schema = z.object({
   target: z.enum(REACTION_TARGETS, { message: "Det kan man ikke reagere på." }),
@@ -79,6 +79,7 @@ export async function react(_prev: ActionResult, formData: FormData): Promise<Ac
   }
 
   if (target === "chat") announce(user.teamId, CHAT_POSTED);
+  if (target === "post" || target === "comment") announce(user.teamId, FEED_CHANGED);
   if (found.path) revalidatePath(found.path);
   return ok();
 }

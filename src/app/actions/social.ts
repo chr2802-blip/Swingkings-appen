@@ -16,7 +16,7 @@ import { cleanOptions, MAX_POLL_OPTIONS, MAX_POST_PHOTOS } from "@/lib/polls";
 import { parseLocalDateTime } from "@/lib/time";
 import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
-import { CHAT_POSTED } from "@/lib/realtime-topic";
+import { CHAT_POSTED, FEED_CHANGED } from "@/lib/realtime-topic";
 import { notify, recordComment } from "@/lib/notifications";
 import { notifyChatLater, notifyCommentLater } from "@/lib/grouped-push";
 import { mentionedIds } from "@/lib/mentions";
@@ -190,6 +190,7 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
           tag: "feed",
         },
   );
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -206,6 +207,7 @@ export async function deletePost(_prev: ActionResult, formData: FormData): Promi
   await db.post.deleteMany({ where: { id: post.id } });
   // The pictures belonged to this post and nothing else.
   await discardPhotos(user.teamId, post.photos.map((p) => p.photoId));
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -244,6 +246,7 @@ export async function editPost(_prev: ActionResult, formData: FormData): Promise
   ]);
   // The pictures taken off belonged to this post and nothing else.
   await discardPhotos(user.teamId, before.filter((id) => !photos.photoIds.includes(id)));
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -262,6 +265,7 @@ export async function pinPost(_prev: ActionResult, formData: FormData): Promise<
   if (pin !== (post.pinnedAt !== null)) {
     await db.post.updateMany({ where: { id: post.id }, data: { pinnedAt: pin ? new Date() : null } });
   }
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -278,6 +282,7 @@ export async function vote(_prev: ActionResult, formData: FormData): Promise<Act
     formData.getAll("optionId").map(String),
   );
   if (!result.ok) return fail(result.error);
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -293,6 +298,7 @@ export async function closePoll(_prev: ActionResult, formData: FormData): Promis
   if (!poll) return fail("Afstemningen findes ikke.");
   if (poll.post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din afstemning.");
   if (!poll.closedAt) await db.poll.updateMany({ where: { id: poll.id }, data: { closedAt: new Date() } });
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -324,6 +330,7 @@ export async function showPollResults(_prev: ActionResult, formData: FormData): 
       tag: "feed",
     });
   }
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -372,6 +379,7 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
     await recordComment(user.teamId, post.id, user.id);
     notifyCommentLater(post.id, user.id);
   }
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -384,6 +392,7 @@ export async function deleteComment(_prev: ActionResult, formData: FormData): Pr
   if (!comment) return ok();
   if (comment.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din kommentar.");
   await prisma.postComment.delete({ where: { id: comment.id } });
+  announce(user.teamId, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }

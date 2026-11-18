@@ -3,13 +3,14 @@ import { after } from "next/server";
 import { teamTopic } from "./realtime-topic";
 
 /**
- * The push half of the live chat, through Supabase Realtime's Broadcast.
+ * The push half of the live chat, bell, feed and fine box, through Supabase Realtime's
+ * Broadcast (the events are in `realtime-topic.ts`).
  *
  * Serverless functions cannot hold a socket open to a phone; Supabase can. A phone with
  * the chat open keeps one websocket to Realtime, and a write here tells Realtime about
  * itself with one HTTP request. **What is sent is a nudge and nothing else** — never the
  * message — and a phone that hears one asks `/api/chat` for what is new, exactly as its
- * timer would. A nudge lost, doubled or spoofed costs one question the poll would have
+ * timer would (a feed or fine-box page reads itself again: `LiveRefresh`). A nudge lost, doubled or spoofed costs one question the poll would have
  * asked anyway.
  *
  * Channels are private, one per team (`team:<teamId>`); a phone joins with a short-lived

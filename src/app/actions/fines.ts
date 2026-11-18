@@ -12,8 +12,12 @@ import { canMove } from "@/lib/challenges";
 import { PAYMENT_OPEN, settleChallenge } from "@/lib/fines";
 import { balances, fineUnits, kr } from "@/lib/money";
 import { notify, notifyEach } from "@/lib/notifications";
+import { announce } from "@/lib/realtime";
+import { FINES_CHANGED } from "@/lib/realtime-topic";
 
-function refresh() {
+/** Draws the pages that show the fine box anew — here, and on every teammate's open phone. */
+function refresh(teamId: string) {
+  announce(teamId, FINES_CHANGED);
   revalidatePath("/boder", "layout");
   revalidatePath("/oversigt");
   revalidatePath("/hold", "layout");
@@ -47,7 +51,7 @@ export async function saveFineType(_prev: ActionResult, formData: FormData): Pro
   } else {
     await db.fineType.create({ data: { ...form.fields, teamId: user.teamId } });
   }
-  refresh();
+  refresh(user.teamId);
   return ok();
 }
 
@@ -63,7 +67,7 @@ export async function removeFineType(_prev: ActionResult, formData: FormData): P
   const used = await db.fine.count({ where: { fineTypeId: id } });
   if (used > 0) await db.fineType.updateMany({ where: { id }, data: { archivedAt: new Date() } });
   else await db.fineType.deleteMany({ where: { id } });
-  refresh();
+  refresh(user.teamId);
   return ok();
 }
 
@@ -139,7 +143,7 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
       fineId: fine.id,
     })),
   );
-  refresh();
+  refresh(user.teamId);
   return ok(playerIds.length > 1 ? `${playerIds.length} bøder er givet.` : "Bøden er givet.");
 }
 
@@ -163,7 +167,7 @@ export async function deleteFine(_prev: ActionResult, formData: FormData): Promi
   } else {
     await db.fine.deleteMany({ where: { id } });
   }
-  refresh();
+  refresh(user.teamId);
   return ok();
 }
 
@@ -210,14 +214,14 @@ export async function setFinePayment(_prev: ActionResult, formData: FormData): P
           always: true,
         })),
     );
-    refresh();
+    refresh(user.teamId);
     return ok("Bødekassen er åben for betaling.");
   }
   if (await db.teamMember.count({ where: { finesPaidAt: { not: null } } })) {
     return fail("Nogen er allerede markeret som betalt. Bødekassen lukker, når den nye sæson starter.");
   }
   await prisma.team.updateMany({ where: { id: user.teamId }, data: { finePaymentOpenedAt: null } });
-  refresh();
+  refresh(user.teamId);
   return ok("Bødekassen er lukket for betaling igen.");
 }
 
@@ -246,7 +250,7 @@ export async function markFinesPaid(_prev: ActionResult, formData: FormData): Pr
       tag: "fine",
     });
   }
-  refresh();
+  refresh(user.teamId);
   return ok(paid ? "Markeret som betalt." : "Ikke længere markeret som betalt.");
 }
 
@@ -296,7 +300,7 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
     url: "/boder?udfordringer",
     tag: "challenge",
   });
-  refresh();
+  refresh(user.teamId);
   return ok("Udfordringen venter på godkendelse.");
 }
 
@@ -335,6 +339,6 @@ export async function moveChallenge(_prev: ActionResult, formData: FormData): Pr
       url: "/boder?udfordringer",
     });
   }
-  refresh();
+  refresh(user.teamId);
   return ok();
 }
