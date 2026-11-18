@@ -1,6 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, member, squad } from "./helpers/database";
-import { choose } from "./helpers/select";
+import { choose, chooseMany } from "./helpers/select";
 
 test("a coach renames the team, then changes the price of a fine on its own tab", async ({ page, loginAs }) => {
   const { team, admin } = await squad();
@@ -162,9 +162,7 @@ test("a coach sends a reminder to the players ticked, opening MobilePay with the
   await page.goto("/hold/besked");
   const tab = page.getByRole("tabpanel", { name: "Besked" });
   await choose(tab.getByLabel("Til", { exact: true }), "Udvalgte spillere");
-  const recipients = tab.getByRole("group", { name: "Modtagere" });
-  await recipients.getByLabel("Anna").check();
-  await recipients.getByLabel("Bo").check();
+  await chooseMany(tab.getByLabel("Modtagere"), ["Anna", "Bo"]);
   await choose(tab.getByLabel("Åbner", { exact: true }), "MobilePay: betal kontingent");
   await tab.getByLabel("Overskrift", { exact: true }).fill("Husk kontingent");
   await tab.getByRole("textbox", { name: "Besked" }).fill("Senest fredag.");

@@ -1,6 +1,7 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 import { hold, holdAndChoose } from "./helpers/hold";
+import { openChoices } from "./helpers/select";
 
 test("a post with words shows in the feed, and a teammate reacts and comments", async ({ page, loginAs }) => {
   const { anna, bo } = await squad();
@@ -463,11 +464,20 @@ test("a poll's answers are ticked on the roster, with several answers allowed an
   await dialog.getByRole("button", { name: "Tilføj afstemning" }).click();
   await dialog.getByLabel("Spørgsmål").fill("Hvem tager kage med?");
   await dialog.getByRole("button", { name: "Vælg fra holdlisten" }).click();
-  const roster = dialog.getByRole("group", { name: "Svarmuligheder" }).getByRole("checkbox");
+  // The roster is the app's own drop-down, with the whole team ticked to start with.
+  const players = dialog.getByRole("group", { name: "Svarmuligheder" }).getByLabel("Spillere");
+  const list = await openChoices(players);
+  const roster = list.getByRole("option");
   await expect(roster).toHaveCount(await db.teamMember.count({ where: { teamId: team.id } }));
-  await expect(roster.first()).toBeChecked();
-  await dialog.getByRole("checkbox", { name: /Træner Tom/ }).uncheck();
-  await dialog.getByRole("checkbox", { name: /Kasserer Kim/ }).uncheck();
+  await expect(roster.first()).toHaveAttribute("aria-selected", "true");
+  // "Fjern alle", then the two who are asked about.
+  await page.getByRole("button", { name: "Fjern alle" }).click();
+  await expect(list.getByRole("option", { selected: true })).toHaveCount(0);
+  await list.getByRole("option", { name: "Anna" }).click();
+  await list.getByRole("option", { name: "Bo" }).click();
+  await page.getByRole("button", { name: "Færdig (2 valgt)" }).click();
+  await expect(list).toHaveCount(0);
+  await expect(players).toHaveText(/Anna, Bo/);
   await dialog.getByLabel(/Flere svar/).check();
   await dialog.getByLabel(/Anonym/).check();
   await dialog.getByRole("button", { name: "Del" }).click();

@@ -5,7 +5,7 @@ import { Modal } from "@/components/modal";
 import { MenuTrigger } from "@/components/action-menu";
 import { DialogForm } from "@/components/form-dialog";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
-import { PlayerChecklist } from "@/components/player-checklist";
+import { PlayerSelect } from "@/components/player-select";
 import { TemplatePicker } from "@/components/template-picker";
 import { createTask } from "@/app/actions/tasks";
 import { addStandardTasks, copyTasks } from "@/app/actions/activities";
@@ -152,7 +152,9 @@ function NewTaskFields({
         </Field>
       )}
       {assign === "pick" && (
-        <PlayerChecklist members={members} name="assigneeId" defaultChecked={defaultAssigneeId ? [defaultAssigneeId] : []} />
+        <Field label="Hvem?" htmlFor="assigneeId">
+          <PlayerSelect id="assigneeId" members={members} name="assigneeId" defaultSelected={defaultAssigneeId ? [defaultAssigneeId] : []} />
+        </Field>
       )}
       <Field label="Beskrivelse (valgfri)" htmlFor="description">
         <Textarea id="description" name="description" rows={3} maxLength={2000} />

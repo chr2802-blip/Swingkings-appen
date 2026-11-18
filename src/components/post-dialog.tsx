@@ -6,7 +6,7 @@ import { DialogForm } from "@/components/form-dialog";
 import { Button, Field, Input, Textarea } from "@/components/ui";
 import { MenuTrigger } from "@/components/action-menu";
 import { MultiPhotoField } from "@/components/multi-photo-field";
-import { PlayerChecklist } from "@/components/player-checklist";
+import { PlayerSelect } from "@/components/player-select";
 import { createPost } from "@/app/actions/social";
 import { MAX_POLL_OPTIONS, MAX_POST_PHOTOS } from "@/lib/polls";
 
@@ -95,7 +95,9 @@ function PostFields({ members }: { members: Member[] }) {
             ) : (
               <>
                 <input type="hidden" name="pollPickPlayers" value="on" />
-                <PlayerChecklist members={members} name="pollPlayerId" defaultChecked={members.map((m) => m.userId)} />
+                <Field label="Spillere" htmlFor="pollPlayerId">
+                  <PlayerSelect id="pollPlayerId" members={members} name="pollPlayerId" defaultSelected={members.map((m) => m.userId)} />
+                </Field>
               </>
             )}
           </fieldset>

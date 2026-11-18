@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { FormDialog } from "@/components/form-dialog";
 import { Field, Textarea } from "@/components/ui";
-import { MultiSelect, Select } from "@/components/select";
-import { Avatar } from "@/components/photo";
+import { Select } from "@/components/select";
+import { PlayerSelect } from "@/components/player-select";
 import { giveFine } from "@/app/actions/fines";
 import { fineUnits, kr } from "@/lib/money";
 import { Star } from "@/components/crest";
@@ -40,18 +40,7 @@ export function GiveFineDialog({
   return (
     <FormDialog trigger={triggerLabel} triggerIcon={<Star className="h-5 w-5" />} title="Giv bøde" action={giveFine} submitLabel="Giv bøde">
       <Field label="Hvem?" htmlFor="playerId">
-        <MultiSelect
-          id="playerId"
-          name="playerId"
-          placeholder="Vælg spillere…"
-          defaultValues={defaultPlayerId ? [defaultPlayerId] : []}
-          choices={members.map((member) => ({
-            value: member.userId,
-            label: member.name,
-            leading: <Avatar name={member.name} photoId={member.photoId} size="xs" />,
-            detail: member.shirtNumber != null ? `#${member.shirtNumber}` : undefined,
-          }))}
-        />
+        <PlayerSelect id="playerId" name="playerId" members={members} defaultSelected={defaultPlayerId ? [defaultPlayerId] : []} />
       </Field>
       {fineTypes.length > 0 ? (
         <Field

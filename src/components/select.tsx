@@ -168,6 +168,7 @@ function Picker({
   multiple = false,
   onDone,
   doneLabel,
+  onAll,
 }: {
   listId: string;
   title: string;
@@ -178,6 +179,8 @@ function Picker({
   multiple?: boolean;
   onDone?: () => void;
   doneLabel?: string;
+  /** The multiple drop-down's "Vælg alle"/"Fjern alle": everything ticked, or nothing. */
+  onAll?: (all: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
   const shown = searchChoices(choices, query);
@@ -272,11 +275,20 @@ function Picker({
         {shown.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-500">Ingen match</p>}
       </div>
       {multiple && (
-        <div className="shrink-0 border-t border-slate-100 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex shrink-0 gap-2 border-t border-slate-100 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {onAll && (
+            <button
+              type="button"
+              onClick={() => onAll(!choices.every((choice) => isSelected(choice.value)))}
+              className="press-button shrink-0 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+            >
+              {choices.every((choice) => isSelected(choice.value)) ? "Fjern alle" : "Vælg alle"}
+            </button>
+          )}
           <button
             type="button"
             onClick={onDone}
-            className="press-button w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
+            className="press-button min-w-0 flex-1 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
           >
             {doneLabel ?? "Færdig"}
           </button>
@@ -385,6 +397,7 @@ export function MultiSelect({
           onChoose={toggle}
           multiple
           onDone={close}
+          onAll={(all) => setValues(all ? choices.map((choice) => choice.value) : [])}
           doneLabel={chosen.length > 0 ? `Færdig (${chosen.length} valgt)` : "Færdig"}
         />
       </Modal>

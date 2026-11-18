@@ -248,7 +248,7 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await choose(activity, /FC Naboen/);
   await task.getByLabel("Opgave", { exact: true }).fill("Vaske trøjer");
   await expect(task.getByLabel("Hvem skal gøre det?")).toHaveText("Jeg vælger selv");
-  await expect(task.getByRole("checkbox", { name: /Bo$/ })).toBeChecked();
+  await expect(task.getByLabel("Hvem?")).toHaveText(/^Bo/);
   await task.getByRole("button", { name: "Opret opgave" }).click();
   await expect(task).toBeHidden();
   await expect(

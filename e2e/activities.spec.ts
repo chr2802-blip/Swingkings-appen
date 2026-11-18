@@ -1,7 +1,7 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 import { hold, holdAndChoose } from "./helpers/hold";
-import { choose } from "./helpers/select";
+import { choose, chooseMany } from "./helpers/select";
 
 /** The jobs' tab: a job of your own is also named on the details. */
 const jobsTab = (page: import("@playwright/test").Page) => page.getByRole("tabpanel", { name: /^Opgaver/ });
@@ -318,7 +318,7 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Opgave").fill("Købe nye bolde");
   await choose(dialog.getByLabel("Hvem skal gøre det?"), "Jeg vælger selv");
-  await dialog.getByRole("checkbox", { name: "Bo" }).check();
+  await chooseMany(dialog.getByLabel("Hvem?"), ["Bo"]);
   await dialog.getByRole("button", { name: "Opret opgave" }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole("tab", { name: /^Opgaver/ }).click();
