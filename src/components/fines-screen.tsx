@@ -234,7 +234,7 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
                   <Movement move={row.move} />
                 </span>
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <Avatar name={person.name} photoId={person.photoId} shirtNumber={person.shirtNumber} size="sm" />
+                  <Avatar name={person.name} photoId={person.photoId} size="sm" />
                   <span className="flex min-w-0 items-center gap-1.5 font-medium">
                     <span className="truncate">{person.name}</span>
                     {kings.includes(row.userId) && (

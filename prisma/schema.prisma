@@ -961,3 +961,21 @@ model ActivityComment {
   @@index([authorId])
   @@index([parentId])
 }
+
+/**
+ * A club's crest, put in by the super admin and shown on every team: the opponent's on the
+ * match-day poster. Not a team's row — a club is the same club whoever plays it — so it
+ * carries no `teamId` and is read with `prisma` directly. Found by `key`, the club's name
+ * folded (`clubKey`, src/lib/club-logos.ts). The bytes are small (a crest, not a photo),
+ * so they live in the row; a new logo for the same club is a new row, so its address changes.
+ */
+model ClubLogo {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  contentType String
+  width       Int
+  height      Int
+  bytes       Bytes
+  createdAt   DateTime @default(now())
+}

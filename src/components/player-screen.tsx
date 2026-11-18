@@ -33,6 +33,7 @@ import {
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { markFinesPaid } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
+import { openTask } from "@/lib/tasks";
 import { FineHistory, FineRow } from "@/components/fine-history";
 import { LiveRefresh } from "@/components/live-refresh";
 import { FINES_CHANGED } from "@/lib/realtime-topic";
@@ -107,7 +108,7 @@ export async function PlayerScreen({
         include: challengeCardInclude,
       }),
       db.task.findMany({
-        where: { doneAt: null, assignees: { some: { userId: id } } },
+        where: { ...openTask(), assignees: { some: { userId: id } } },
         orderBy: [
           { dueAt: { sort: "asc", nulls: "last" } },
           { createdAt: "asc" },
@@ -115,8 +116,8 @@ export async function PlayerScreen({
         select: TASK_SELECT,
       }),
       db.task.findMany({
-        where: { doneAt: { not: null }, assignees: { some: { userId: id } } },
-        orderBy: { doneAt: "desc" },
+        where: { NOT: openTask(), assignees: { some: { userId: id } } },
+        orderBy: [{ match: { startsAt: "desc" } }, { dueAt: "desc" }, { createdAt: "desc" }],
         take: RECENT,
         select: TASK_SELECT,
       }),
@@ -359,24 +360,25 @@ function PlayerHeader({
   const place = board.standings.find((row) => row.userId === id)?.place;
   return (
     <div>
-      {/* The player's card: the shirt number large behind them, their name, and their season below. */}
-      <div className="overflow-hidden rounded-3xl border border-[var(--accent-line)] bg-white shadow-sm">
-        <div className="player-card relative px-4 pt-4 pb-4">
+      {/* The player's card, edge to edge under the header as the front page's banner: the
+          shirt number large behind them, their name, and their season on a card below. */}
+      <div className="player-card page-bleed">
+        <div className="relative mx-auto max-w-5xl overflow-hidden pt-6 pr-[max(1rem,env(safe-area-inset-right))] pb-14 pl-[max(1rem,env(safe-area-inset-left))]">
           {member?.shirtNumber != null && (
             <span
               aria-hidden
-              className="font-score pointer-events-none absolute -top-3 right-14 text-[7.5rem] leading-none font-bold text-white/15 select-none"
+              className="font-score pointer-events-none absolute -top-2 right-[max(4.5rem,calc(env(safe-area-inset-right)+3.5rem))] text-[8.5rem] leading-none font-bold text-white/15 select-none"
             >
               {member.shirtNumber}
             </span>
           )}
-          <div className="relative flex items-center gap-3">
+          <div className="relative flex items-center gap-4">
             <Avatar
               name={person.name}
               photoId={person.photoId}
               shirtNumber={member?.shirtNumber}
               size="lg"
-              className="bg-white ring-4 ring-white/70"
+              className="ring-4 ring-white/70"
             />
             <div className="min-w-0 flex-1">
               {/* The whole name, over two lines if need be: never cut short. */}
@@ -419,17 +421,18 @@ function PlayerHeader({
             )}
           </div>
         </div>
-        <dl className="grid grid-cols-4 divide-x divide-slate-100 py-2.5 text-center">
-          <Stat
-            label={paid ? "betalt" : paying ? "skal betales" : "bøder i alt"}
-            value={kr(account.owesKr)}
-            tone={paid || account.owesKr === 0 ? "text-emerald-700" : "text-[var(--star)]"}
-          />
-          <Stat label={account.units === 1 ? "bøde" : "bøder"} value={String(account.units)} />
-          <Stat label={openTasks === 1 ? "opgave" : "opgaver"} value={String(openTasks)} />
-          <Stat label="på tavlen" value={place ? `#${place}` : "–"} />
-        </dl>
       </div>
+      {/* Their season, on a card lying over the foot of the band. */}
+      <dl className="relative -mt-10 grid grid-cols-4 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2.5 text-center shadow-sm">
+        <Stat
+          label={paid ? "betalt" : paying ? "skal betales" : "bøder i alt"}
+          value={kr(account.owesKr)}
+          tone={paid || account.owesKr === 0 ? "text-emerald-700" : "text-[var(--star)]"}
+        />
+        <Stat label={account.units === 1 ? "bøde" : "bøder"} value={String(account.units)} />
+        <Stat label={openTasks === 1 ? "opgave" : "opgaver"} value={String(openTasks)} />
+        <Stat label="på tavlen" value={place ? `#${place}` : "–"} />
+      </dl>
       {paying && paid && (
         <p className="mt-3 text-center text-sm font-medium text-emerald-700">✅ Bøderne er betalt</p>
       )}
@@ -479,9 +482,14 @@ function ChallengeRow({
     <li>
       <DetailSheet
         title="Udfordring"
-        triggerClassName="press-card flex w-full items-center gap-3 px-4 py-2 text-left"
+        triggerClassName="press-card flex w-full items-center gap-3 px-4 py-3 text-left"
         trigger={
           <>
+            {/* Swords, as a challenge's fines have in the history beside the fines' star. */}
+            <span className="w-3.5 text-center text-sm">
+              <span aria-hidden>⚔️</span>
+              <span className="sr-only">Udfordring:</span>
+            </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm">
                 <span className="font-medium">{challenge.winner.name} 🏆</span>{" "}

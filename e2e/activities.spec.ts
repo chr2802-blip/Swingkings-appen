@@ -323,14 +323,13 @@ test("a player puts a job on an activity for a teammate, who marks it done", asy
   await expect(dialog).toBeHidden();
   await page.getByRole("tab", { name: /^Opgaver/ }).click();
   await expect(jobsTab(page).getByText("Købe nye bolde")).toBeVisible();
-  // Anna is not on it: she sees the tick, but cannot press it.
-  await expect(jobsTab(page).getByRole("img", { name: "Ikke udført" })).toBeVisible();
-  await expect(jobsTab(page).getByRole("button", { name: "Markér som udført" })).toHaveCount(0);
-
+  // Nobody ticks a job off — not Anna, and not Bo who is on it: it is done once the activity is over.
+  await expect(page.getByRole("button", { name: /Markér som/ })).toHaveCount(0);
   await loginAs(bo);
   await page.goto(`/aktiviteter/${match.id}/opgaver`);
-  await page.getByRole("button", { name: "Markér som udført" }).click();
-  await expect.poll(async () => (await db.task.findFirst({ where: { title: "Købe nye bolde" } }))?.doneById).toBe(bo.id);
+  await jobsTab(page).getByRole("button", { name: /^Købe nye bolde/ }).click();
+  await expect(page.getByRole("dialog", { name: "Købe nye bolde" }).getByRole("button", { name: "Giv videre" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Markér som/ })).toHaveCount(0);
 });
 
 test("one \"Ny opgave\" puts standard jobs on an activity and copies jobs from an earlier one", async ({ page, loginAs }) => {
@@ -396,8 +395,8 @@ test("a job opens in a sheet that says what it belongs to; nobody puts themselve
   await expect(sheet.getByRole("link", { name: /Afslutningsfest/ })).toBeVisible();
   await expect(sheet.getByText("📍 Klubhuset")).toBeVisible();
   await expect(sheet.getByText("Gerne chokolade")).toBeVisible();
-  // Nobody can put themselves on a job; only those on it finish or give it away.
-  for (const name of ["Jeg tager den", "Markér som udført ✓", "Giv videre", "Ret opgave"]) {
+  // Nobody can put themselves on a job; only those on it give it away.
+  for (const name of ["Jeg tager den", "Giv videre", "Ret opgave"]) {
     await expect(sheet.getByRole("button", { name })).toHaveCount(0);
   }
   await sheet.getByRole("link", { name: /Afslutningsfest/ }).click();
@@ -442,7 +441,7 @@ test("a player gives a job away in the chat, and a teammate follows the link and
   await expect(page).toHaveURL(new RegExp(`/aktiviteter/${match.id}/opgaver\\?opgave=${task.id}$`));
   const opened = page.getByRole("dialog", { name: "Kage til kampen" });
   await opened.getByRole("button", { name: "Jeg tager den" }).click();
-  await expect(opened.getByRole("button", { name: "Markér som udført ✓" })).toBeVisible();
+  await expect(opened.getByRole("button", { name: "Giv videre" })).toBeVisible();
   await expect(opened.getByRole("button", { name: "Jeg tager den" })).toHaveCount(0);
   await opened.getByText("Historik (1)").click();
   await expect(opened.getByText("Anna → Bo (via chatten)")).toBeVisible();

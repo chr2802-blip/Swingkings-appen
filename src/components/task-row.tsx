@@ -1,16 +1,13 @@
 import type { Prisma } from "@prisma/client";
 import type { TeamUser } from "@/lib/auth";
-import { canFinishTask } from "@/lib/access";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { Badge } from "@/components/ui";
-import { ActionButton } from "@/components/action-button";
 import { DetailSheet } from "@/components/detail-sheet";
 import { TaskDetails, type TaskMember } from "@/components/task-details";
-import { setTaskDone } from "@/app/actions/tasks";
 import { deadlineLabel } from "@/lib/time";
 import { activityName, KIND_ICON } from "@/lib/activity";
-import { OPEN_TASK_PARAM } from "@/lib/tasks";
+import { isTaskOpen, OPEN_TASK_PARAM } from "@/lib/tasks";
 
 /** Everything a job's row and its sheet draw: read once with the list, so a tap never waits. */
 export const TASK_SELECT = {
@@ -47,9 +44,10 @@ export const TASK_SELECT = {
 export type TaskView = Prisma.TaskGetPayload<{ select: typeof TASK_SELECT }>;
 
 /**
- * One job: what, when, for which activity, who — and its tick. A tap opens the job in a
- * sheet with everything about it (`TaskDetails`). Only those on the job (or an admin) can
- * press the tick; everybody else just sees it. A job somebody wants to give away says so.
+ * One job: what, when, for which activity, and who. A tap opens the job in a sheet with
+ * everything about it (`TaskDetails`). Nobody ticks a job off: once its activity's day is
+ * over it is done (`isTaskOpen`), and the row is greyed. A job somebody wants to give away
+ * says so.
  */
 export function TaskRow({
   task,
@@ -66,40 +64,10 @@ export function TaskRow({
   openTaskId?: string;
 }) {
   const due = task.dueAt ? deadlineLabel(task.dueAt) : null;
-  const done = task.doneAt !== null;
-  const canTick = canFinishTask(user, user.teamId, { assignees: task.assignees.map((a) => ({ userId: a.user.id })) });
+  const done = !isTaskOpen(task);
   const seeking = !done && task.handovers.some((h) => h.status === "PENDING");
-  const tick = (
-    <span
-      className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${
-        done ? "animate-pop border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent"
-      }`}
-    >
-      <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3">
-        <path d="m5 12 5 5 9-10" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </span>
-  );
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      {canTick ? (
-        <ActionButton
-          action={setTaskDone}
-          fields={{ id: task.id, done: String(!done) }}
-          variant="ghost"
-          className="p-0!"
-          label={
-            <>
-              {tick}
-              <span className="sr-only">{done ? "Markér som ikke udført" : "Markér som udført"}</span>
-            </>
-          }
-        />
-      ) : (
-        <span role="img" aria-label={done ? "Udført" : "Ikke udført"} className="opacity-60">
-          {tick}
-        </span>
-      )}
+    <li className={`flex items-center gap-3 px-4 py-3 ${done ? "opacity-60" : ""}`}>
       <DetailSheet
         title={task.title}
         initialOpen={openTaskId === task.id}
@@ -107,7 +75,7 @@ export function TaskRow({
         triggerClassName="press-card -my-1 min-w-0 flex-1 rounded-lg py-1 text-left"
         trigger={
           <>
-            <span className={`block truncate font-medium ${done ? "text-slate-400 line-through" : ""}`}>{task.title}</span>
+            <span className="block truncate font-medium">{task.title}</span>
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
               {due && !done && <span className={due.overdue ? "font-medium text-amber-700" : ""}>{due.text}</span>}
               {showMatch && task.match && (

@@ -4,7 +4,7 @@ import { presentsCronSecret } from "@/lib/cron-secret";
 import { clearOldNotifications, pushNotifications, recordNotifications } from "@/lib/notifications";
 import { syncTeamCalendar } from "@/lib/kampklar";
 import { clearOldPushPauses } from "@/lib/grouped-push";
-import { OPEN_TASK, taskUrl } from "@/lib/tasks";
+import { openTask, taskUrl } from "@/lib/tasks";
 import { deadlineLabel, endOfDayInZone } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const cutoff = new Date(now.getTime() - 20 * 60 * 60 * 1000);
   const due = await prisma.task.findMany({
     where: {
-      ...OPEN_TASK,
+      ...openTask(now),
       dueAt: { lte: tomorrowEvening },
       OR: [{ lastNotifiedAt: null }, { lastNotifiedAt: { lt: cutoff } }],
       assignees: { some: {} },

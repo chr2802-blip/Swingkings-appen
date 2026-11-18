@@ -1,46 +1,46 @@
 import Image from "next/image";
 import Link from "next/link";
-import { crestColours, crestInitials, fixtureSides, venueLabel } from "@/lib/fixture";
+import { crestColours, crestInitials, fixtureSides, meetingTime, venueLabel } from "@/lib/fixture";
 import { countdown, readInZone } from "@/lib/time";
 
 /**
- * The next match on the front page, written as a fixture: the home side on the left, the
- * kick-off between the two crests, and how long there is to go. On the day itself it says
- * KAMPDAG in the crest's gold. Ours is the club's crest; the opponent's is drawn from
- * their name (`src/lib/fixture.ts`).
+ * The day's match on the front page, shown on match day only, written as a fixture: the
+ * home side on the left, the kick-off between the two crests, and when to meet. Ours is
+ * the club's crest; the opponent's is the one the super admin put in (`clubLogos`), else
+ * a shield drawn from their name (`src/lib/fixture.ts`).
  */
 export function FixtureCard({
   match,
   teamName,
+  opponentLogo,
 }: {
-  match: { id: string; opponent: string; isHome: boolean | null; startsAt: Date; location: string | null };
+  match: { id: string; opponent: string; isHome: boolean | null; startsAt: Date; location: string | null; note: string | null };
   teamName: string;
+  /** The opponent's crest's address, when there is one. */
+  opponentLogo?: string | null;
 }) {
   const sides = fixtureSides(teamName, match.opponent, match.isHome);
   const left = countdown(match.startsAt);
   const venue = venueLabel(match.isHome);
+  const meet = meetingTime(match.note);
   return (
     <Link
       href={`/aktiviteter/${match.id}`}
-      aria-label={`Næste kamp: ${sides[0]!.name} mod ${sides[1]!.name}, ${left.text.toLowerCase()} kl. ${readInZone(match.startsAt, "HH:mm")}`}
+      aria-label={`Kampdag: ${sides[0]!.name} mod ${sides[1]!.name} kl. ${readInZone(match.startsAt, "HH:mm")}${meet ? `, mødetid ${meet}` : ""}`}
       className="fixture-poster press-card block overflow-hidden rounded-2xl shadow-sm"
     >
       <div className="flex items-center justify-between gap-2 px-4 pt-3 text-[11px] font-semibold tracking-[0.18em] uppercase">
-        {left.matchday ? (
-          <span className="flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-2 py-0.5 text-slate-900">
-            <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--star)]" />
-            Kampdag
-          </span>
-        ) : (
-          <span className="opacity-80">Næste kamp</span>
-        )}
+        <span className="flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-2 py-0.5 text-slate-900">
+          <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--star)]" />
+          {left.matchday ? "Kampdag" : left.text}
+        </span>
         {venue && <span className="rounded-full border border-white/40 px-2 py-0.5">{venue}</span>}
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 pt-3 pb-2">
         {sides.map((side, index) => (
           <div key={side.name} className={`flex min-w-0 flex-col items-center gap-1.5 ${index === 1 ? "order-3" : ""}`}>
-            {side.us ? <OurCrest /> : <OpponentCrest name={side.name} />}
+            {side.us ? <OurCrest /> : opponentLogo ? <ClubCrest src={opponentLogo} /> : <OpponentCrest name={side.name} />}
             <span className="font-display w-full truncate text-center text-sm leading-tight">{side.name}</span>
           </div>
         ))}
@@ -51,11 +51,17 @@ export function FixtureCard({
       </div>
 
       <div className="flex items-center justify-between gap-3 bg-black/15 px-4 py-2 text-xs">
-        <span className="font-score text-base tracking-wide uppercase">{left.text}</span>
+        <span className="font-score text-base tracking-wide uppercase">{meet ? `Mødetid ${meet}` : left.text}</span>
         {match.location && <span className="min-w-0 truncate opacity-85">📍 {match.location}</span>}
       </div>
     </Link>
   );
+}
+
+/** A club's own crest, as the super admin put it in: kept whole, never cropped. */
+function ClubCrest({ src }: { src: string }) {
+  // eslint-disable-next-line @next/next/no-img-element -- served from a session-checked route.
+  return <img src={src} alt="" className="h-14 w-14 object-contain drop-shadow-md" />;
 }
 
 function OurCrest() {

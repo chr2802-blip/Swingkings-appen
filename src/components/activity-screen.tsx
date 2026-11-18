@@ -25,6 +25,7 @@ import { ClampedText } from "@/components/clamped-text";
 import { deleteActivity } from "@/app/actions/activities";
 import { SignupChoice } from "@/components/signup-choice";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
+import { isTaskOpen } from "@/lib/tasks";
 import {
   activityName,
   activityTitle,
@@ -103,8 +104,9 @@ export async function ActivityScreen({
   const label = activityName(match);
   const fromKampKlar = match.source === "KAMPKLAR";
   const option = [{ id: match.id, label: `${label} · ${kickoffLabel(match.startsAt)}` }];
-  const myTasks = match.tasks.filter((t) => !t.doneAt && t.assignees.some((a) => a.user.id === user.id));
-  const openTasks = match.tasks.filter((t) => !t.doneAt).length;
+  const stillOpen = match.tasks.filter((t) => isTaskOpen({ ...t, match }));
+  const myTasks = stillOpen.filter((t) => t.assignees.some((a) => a.user.id === user.id));
+  const openTasks = stillOpen.length;
 
   const people = (list: { userId: string; name: string; photoId: string | null }[]): SignupPerson[] =>
     list.map((m) => ({ key: m.userId, name: m.name, userId: m.userId, photoId: m.photoId }));
@@ -283,18 +285,15 @@ export async function ActivityScreen({
             title: openTasks > 0 ? `Opgaver (${openTasks})` : "Opgaver",
             children:
               match.tasks.length === 0 ? (
-                <EmptyState icon="🧺">Ingen opgaver endnu. Taktiktavlen er tom – tilføj dem med +.</EmptyState>
+                <EmptyState icon="🧺">Ingen opgaver endnu. Tilføj dem med +.</EmptyState>
               ) : (
-                <div className="space-y-3">
-                  <TaskBoard done={match.tasks.length - openTasks} total={match.tasks.length} />
-                  <Card padded={false}>
-                    <ul className="divide-y divide-slate-100">
-                      {match.tasks.map((task) => (
-                        <TaskRow key={task.id} task={task} user={user} members={roster} showMatch={false} openTaskId={openTaskId} />
-                      ))}
-                    </ul>
-                  </Card>
-                </div>
+                <Card padded={false}>
+                  <ul className="divide-y divide-slate-100">
+                    {match.tasks.map((task) => (
+                      <TaskRow key={task.id} task={task} user={user} members={roster} showMatch={false} openTaskId={openTaskId} />
+                    ))}
+                  </ul>
+                </Card>
               ),
           },
           {
@@ -319,25 +318,6 @@ export async function ActivityScreen({
           },
         ]}
       />
-    </div>
-  );
-}
-
-/**
- * The jobs' tactics board: how many of them are done, chalked on green, above the list.
- * Decorative but not hidden: "2 af 3 opgaver klaret" is worth hearing.
- */
-function TaskBoard({ done, total }: { done: number; total: number }) {
-  const all = done === total;
-  return (
-    <div className="chalkboard overflow-hidden rounded-2xl px-4 py-3">
-      <p className="font-score text-[11px] tracking-[0.25em] text-[var(--chalk-soft)] uppercase">Taktiktavlen</p>
-      <p className="font-display text-lg">
-        {all ? "Alle opgaver er klaret 💪" : `${done} af ${total} ${total === 1 ? "opgave" : "opgaver"} klaret`}
-      </p>
-      <div aria-hidden className="mt-2 h-1.5 w-[calc(100%-4.5rem)] rounded-full bg-white/15">
-        <div className="h-full rounded-full bg-[var(--chalk)]" style={{ width: `${Math.round((done / total) * 100)}%` }} />
-      </div>
     </div>
   );
 }

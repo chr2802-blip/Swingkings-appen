@@ -7,7 +7,7 @@ import Image from "next/image";
 import { fineBoard, monthKings } from "@/lib/fine-data";
 import { waitsOn } from "@/lib/challenges";
 import { kr } from "@/lib/money";
-import { OPEN_TASK } from "@/lib/tasks";
+import { openTask } from "@/lib/tasks";
 import { LISTED_ACTIVITY } from "@/lib/activity-data";
 import { activityName } from "@/lib/activity";
 import { countdown, greeting, readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
@@ -20,6 +20,7 @@ import { Crown } from "@/components/crest";
 import { HomeBanner } from "@/components/home-banner";
 import { playerTasksHref } from "@/components/player-link";
 import { FixtureCard } from "@/components/fixture-card";
+import { clubLogos } from "@/lib/club-logos";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
@@ -39,9 +40,9 @@ export default async function OverviewPage() {
     db.match.findFirst({
       where: { ...LISTED_ACTIVITY, kind: "MATCH", opponent: { not: null }, cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
       orderBy: { startsAt: "asc" },
-      select: { id: true, opponent: true, startsAt: true, isHome: true, location: true },
+      select: { id: true, opponent: true, startsAt: true, isHome: true, location: true, note: true },
     }),
-    db.task.count({ where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } } }),
+    db.task.count({ where: { ...openTask(), assignees: { some: { userId: user.id } } } }),
     db.challenge.findMany({ where: { status: "PENDING" }, select: { status: true, reportedById: true } }),
     db.poll.count({
       where: {
@@ -56,11 +57,14 @@ export default async function OverviewPage() {
       }),
     ),
     db.taskHandover.findMany({
-      where: { toId: user.id, status: "PENDING", task: { doneAt: null } },
+      where: { toId: user.id, status: "PENDING", task: openTask() },
       orderBy: { createdAt: "asc" },
       select: { taskId: true },
     }),
   ]);
+  // The poster is for match day only; any other day the next match is a tile like the rest.
+  const matchday = nextFixture?.opponent && countdown(nextFixture.startsAt).matchday ? { ...nextFixture, opponent: nextFixture.opponent } : null;
+  const opponentLogo = matchday ? (await clubLogos([matchday.opponent])).get(matchday.opponent) : null;
   const mine = board.balances.find((row) => row.userId === user.id);
   const waitingOnMe = openChallenges.filter((c) => waitsOn(c, user.id)).length;
   const owes = Math.max(0, mine?.owesKr ?? 0);
@@ -91,7 +95,7 @@ export default async function OverviewPage() {
     ...waiting,
     ...(myTaskCount > 0 ? [{ kind: "tasks" as const }] : []),
     // The poster below says the next match already; a tile for it would say it twice.
-    ...(nextMatch && nextMatch.id === nextFixture?.id ? [] : [{ kind: "next" as const }]),
+    ...(nextMatch && nextMatch.id === matchday?.id ? [] : [{ kind: "next" as const }]),
     { kind: "king" as const },
   ].slice(0, 2);
   /** Short enough for a third of a phone: "I dag", "I morgen", else the weekday and date. */
@@ -107,7 +111,7 @@ export default async function OverviewPage() {
       <HomeBanner>
         <div className="mx-auto max-w-5xl pt-5 pr-[max(1rem,env(safe-area-inset-right))] pb-6 pl-[max(1rem,env(safe-area-inset-left))]">
           <div className="flex items-center justify-between gap-3 sm:max-w-xl">
-            <h1 className="truncate text-2xl">{greeting(firstName, { matchday: nextFixture ? countdown(nextFixture.startsAt).matchday : false })}</h1>
+            <h1 className="truncate text-2xl">{greeting(firstName, { matchday: Boolean(matchday) })}</h1>
             <Image src="/logo.png" alt="" width={512} height={512} className="h-12 w-12 shrink-0 rotate-12 drop-shadow-md" />
           </div>
 
@@ -167,9 +171,9 @@ export default async function OverviewPage() {
             )}
           </div>
 
-          {nextFixture?.opponent && (
+          {matchday && (
             <div className="mt-3 sm:max-w-xl">
-              <FixtureCard match={{ ...nextFixture, opponent: nextFixture.opponent }} teamName={user.teamName} />
+              <FixtureCard match={matchday} teamName={user.teamName} opponentLogo={opponentLogo} />
             </div>
           )}
         </div>

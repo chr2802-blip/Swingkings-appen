@@ -122,7 +122,8 @@ test("a player's page shows their latest fines and challenges and their next job
   await page
     .getByRole("tabpanel", { name: "Bøder og udfordringer" })
     .getByRole("region", { name: "Venter på godkendelse" })
-    .getByRole("button", { name: /Anna 🏆 slog Bo/ })
+    // Marked as a challenge with the swords, as in the history.
+    .getByRole("button", { name: /^Udfordring: Anna 🏆 slog Bo/ })
     .click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
   await sheet.getByRole("link", { name: /^Anna/ }).click();

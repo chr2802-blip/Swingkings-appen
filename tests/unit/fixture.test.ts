@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CREST_COLOURS, crestColours, crestInitials, fixtureSides, venueLabel } from "@/lib/fixture";
+import { CREST_COLOURS, crestColours, crestInitials, fixtureSides, meetingTime, venueLabel } from "@/lib/fixture";
 
 describe("fixture poster", () => {
   it("makes a crest's letters from a club's name", () => {
@@ -28,6 +28,16 @@ describe("fixture poster", () => {
     expect(fixtureSides("Swingkings", "B.93", true).map((s) => s.name)).toEqual(["Swingkings", "B.93"]);
     expect(fixtureSides("Swingkings", "B.93", false).map((s) => s.name)).toEqual(["B.93", "Swingkings"]);
     expect(fixtureSides("Swingkings", "B.93", null).map((s) => s.us)).toEqual([true, false]);
+  });
+
+  it("reads the meeting time from the activity's note", () => {
+    expect(meetingTime("Mødetid 13:45")).toBe("13:45");
+    expect(meetingTime("Husk støvler.\nMødetid: kl. 9.30 ved klubhuset")).toBe("09:30");
+    expect(meetingTime("MØDETID 11:00 – vi kører samlet")).toBe("11:00");
+    expect(meetingTime("Moedetid: 18:15")).toBe("18:15");
+    expect(meetingTime("Mødested: Klubhuset")).toBeNull();
+    expect(meetingTime("Mødetid 25:00")).toBeNull();
+    expect(meetingTime(null)).toBeNull();
   });
 
   it("says home or away only when it is known", () => {

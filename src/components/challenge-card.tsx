@@ -60,7 +60,10 @@ export function ChallengeCard({
   return (
     // `card:<id>`: a challenge just reported pulses here (`FreshPulse`); its bare id is its fines'.
     <Card className="space-y-3" data-fresh={`card:${c.id}`}>
-      <div>
+      <div className="flex items-center gap-2">
+        <span aria-hidden className="text-sm">
+          ⚔️
+        </span>
         <Badge tone={TONE[c.status]}>{CHALLENGE_STATUS_LABEL[c.status]}</Badge>
       </div>
       <div className="flex items-center gap-2">

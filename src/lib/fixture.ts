@@ -50,6 +50,18 @@ export function fixtureSides(teamName: string, opponent: string, isHome: boolean
   return isHome === false ? [them, us] : [us, them];
 }
 
+/**
+ * When to meet, as the activity's note says it: "Mødetid 13:45", "Mødetid: kl. 9.30" →
+ * "13:45", "09:30". Null when the note does not say, or says a time that is not one.
+ */
+export function meetingTime(note: string | null | undefined) {
+  const found = /m(?:ø|oe)detid\s*:?\s*(?:kl\.?\s*)?(\d{1,2})[.:](\d{2})\b/i.exec(note ?? "");
+  if (!found) return null;
+  const [hour, minute] = [Number(found[1]), Number(found[2])];
+  if (hour > 23 || minute > 59) return null;
+  return `${String(hour).padStart(2, "0")}:${found[2]}`;
+}
+
 /** The small word over the poster: where it is played. */
 export function venueLabel(isHome: boolean | null) {
   return isHome === true ? "Hjemme" : isHome === false ? "Ude" : null;

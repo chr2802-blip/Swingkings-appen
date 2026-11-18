@@ -605,6 +605,12 @@ h1,
  * The front page's banner hangs from the header's stripe band, as wide as the screen, and
  * rolls down out of it on arrival and back up into it on leaving (`HomeBanner`).
  */
+/* A band from edge to edge right under the header, as the front page's banner: a player's card. */
+.page-bleed {
+  margin-top: -1.5rem;
+  margin-inline: calc(50% - 50vw);
+}
+
 .home-banner {
   margin-top: -1.5rem;
   margin-inline: calc(50% - 50vw);
