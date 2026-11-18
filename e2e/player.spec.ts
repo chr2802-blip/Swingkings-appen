@@ -1,6 +1,6 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
-import { choose, openChoices } from "./helpers/select";
+import { choose, chooseMany, openChoices } from "./helpers/select";
 
 test("a player's page shows their latest fines and challenges and their next job, and no way to edit somebody else", async ({
   page,
@@ -205,6 +205,7 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
     data: { teamId: team.id, kind: "OTHER", title: "Gammel fest", startsAt: new Date(Date.now() - 3 * 86_400_000) },
   });
   await db.fineType.create({ data: { teamId: team.id, name: "Glemt trøje", units: 1 } });
+  await db.fineType.create({ data: { teamId: team.id, name: "For sent", units: 2 } });
   await loginAs(anna);
   await page.goto(`/spiller/${bo.id}`);
   // The fine is no longer a button beside the name.
@@ -217,14 +218,17 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   const fine = page.getByRole("dialog", { name: "Giv bøde" });
   // Opened from Bo's page, the fine is for Bo.
   await expect(fine.getByLabel("Hvem?")).toHaveText(/^Bo/);
-  await choose(fine.getByLabel("Bøde fra kataloget"), "Glemt trøje (1 bøde)");
+  // From a player's page, several fines from the catalogue go in one go.
+  await chooseMany(fine.getByLabel("Bøder fra kataloget"), ["Glemt trøje (1 bøde)", "For sent (2 bøder)"]);
+  await expect(fine.getByText("3 bøder á 10 kr — i alt 30 kr pr. spiller.")).toBeVisible();
   await fine.getByRole("button", { name: "Giv bøde" }).click();
   await expect(fine).toBeHidden();
-  await expect.poll(() => db.fine.count({ where: { teamId: team.id, playerId: bo.id } })).toBe(1);
-  // Given, the fine box's history opens with the new fine pulsing.
-  await expect(page).toHaveURL(/\/boder\/historik$/);
-  await expect(page.getByRole("tabpanel", { name: "Historik" }).locator("li").filter({ hasText: "Glemt trøje" })).toHaveClass(/fresh-pulse/);
-  await page.goto(`/spiller/${bo.id}`);
+  await expect.poll(() => db.fine.count({ where: { teamId: team.id, playerId: bo.id } })).toBe(2);
+  // Given, the page stays on Bo: his own fines slide in, with both new ones pulsing.
+  await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/boder$`));
+  const list = page.getByRole("tabpanel", { name: "Bøder og udfordringer" });
+  await expect(list.locator("li").filter({ hasText: "Glemt trøje" })).toHaveClass(/fresh-pulse/);
+  await expect(list.locator("li").filter({ hasText: "For sent" })).toHaveClass(/fresh-pulse/);
 
   await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Meld udfordring" }).click();

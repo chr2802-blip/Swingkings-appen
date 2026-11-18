@@ -302,6 +302,9 @@ function PlayerCreateMenu({
           finePriceKr={board.finePriceKr}
           matches={matches}
           defaultPlayerId={onTeam ? id : undefined}
+          // Several fines to this player at once, and they pulse in the player's own list.
+          severalFines
+          showIn={onTeam ? playerTabHref(id, "/boder") : undefined}
         />
       )}
       {!paying && (
