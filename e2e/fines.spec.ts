@@ -1,7 +1,15 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
-import type { Page } from "@playwright/test";
-import { choose, openChoices } from "./helpers/select";
+import type { Locator, Page } from "@playwright/test";
+import { choose, chooseMany, openChoices } from "./helpers/select";
+
+/** A row or card just made pulses once it is in view (`FreshPulse`). */
+async function expectPulse(target: Locator) {
+  await expect(target).toHaveClass(/fresh-pulse/);
+}
+
+/** The fine box's history, as the tab a person sees. */
+const history = (page: Page) => page.getByRole("tabpanel", { name: "Historik" });
 
 /** The fine box's "+": a drawer of what can be made there, and then one of them. */
 async function create(page: Page, name: string) {
@@ -28,11 +36,13 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
   const field = dialog.getByLabel("Bøde fra kataloget");
   // Not the browser's own <select>, but the app's, with a search field.
   await expect(field).toHaveRole("combobox");
-  await expect(field).toHaveText("Skriv selv…");
+  await expect(field).toHaveText("Vælg bøde…");
 
   const list = await openChoices(field);
   await expect(list).toHaveAccessibleName("Bøde fra kataloget");
-  await expect(list.getByRole("option")).toHaveCount(4);
+  // Only the catalogue: there is no line for writing a fine of one's own.
+  await expect(list.getByRole("option")).toHaveCount(3);
+  await expect(list.getByRole("option", { name: "Skriv selv…" })).toHaveCount(0);
   const search = page.getByRole("searchbox", { name: "Søg" });
   await search.fill("BENSKIN");
   await expect(list.getByRole("option")).toHaveText(["Glemte benskinner (1 bøde)"]);
@@ -44,7 +54,7 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
   await page.keyboard.press("Escape");
   await expect(list).toHaveCount(0);
   await expect(dialog).toBeVisible();
-  await expect(field).toHaveText("Skriv selv…");
+  await expect(field).toHaveText("Vælg bøde…");
 
   // The keyboard: type, then Enter takes the first that answers.
   await openChoices(field);
@@ -52,9 +62,11 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
   await search.press("Enter");
   await expect(field).toHaveText("Rødt kort (5 bøder)");
   await expect(field).toHaveAttribute("aria-expanded", "false");
+  // What it costs is the catalogue's: shown, never asked.
+  await expect(dialog.getByText("5 bøder á 10 kr — i alt 50 kr pr. spiller.")).toBeVisible();
   await expect(dialog.getByLabel("Hvad er bøden for?")).toHaveCount(0);
-  await expect(dialog.getByText("I alt 50 kr pr. spiller.")).toBeVisible();
-  await dialog.getByRole("checkbox", { name: "Anna" }).check();
+  await expect(dialog.getByLabel("Antal bøder")).toHaveCount(0);
+  await chooseMany(dialog.getByLabel("Hvem?"), ["Anna"]);
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => db.fine.count({ where: { playerId: anna.id, units: 5, reason: "Rødt kort" } })).toBe(1);
@@ -88,13 +100,33 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
 
   await create(page, "Giv bøde");
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
-  await dialog.getByRole("checkbox", { name: "Anna" }).check();
-  await dialog.getByRole("checkbox", { name: "Bo" }).check();
+  const who = dialog.getByLabel("Hvem?");
+  // The app's own drop-down, as the catalogue is: one field, a drawer of players with a search.
+  await expect(who).toHaveRole("combobox");
+  await expect(who).toHaveText("Vælg spillere…");
+  const list = await openChoices(who);
+  await page.getByRole("searchbox", { name: "Søg" }).fill("an");
+  await expect(list.getByRole("option")).toHaveText([/Anna/]);
+  await list.getByRole("option", { name: /Anna/ }).click();
+  await page.getByRole("searchbox", { name: "Søg" }).fill("");
+  await list.getByRole("option", { name: /Bo/ }).click();
+  await page.getByRole("button", { name: "Færdig (2 valgt)" }).click();
+  await expect(list).toHaveCount(0);
+  await expect(who).toHaveText(/Anna, Bo/);
   await choose(dialog.getByLabel("Bøde fra kataloget"), "For sent (2 bøder)", { search: "sent" });
-  await expect(dialog.getByText("I alt 20 kr pr. spiller.")).toBeVisible();
+  await expect(dialog.getByText("2 bøder á 10 kr — i alt 20 kr pr. spiller.")).toBeVisible();
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
 
+  // The history slides in, and the two new fines pulse in it.
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await expect(page.getByRole("tab", { name: "Historik" })).toHaveAttribute("aria-selected", "true");
+  const given = history(page).locator("li").filter({ hasText: "For sent" });
+  await expect(given).toHaveCount(2);
+  await expectPulse(given.filter({ hasText: "Anna" }));
+  await expectPulse(given.filter({ hasText: "Bo" }));
+
+  await page.getByRole("tab", { name: "Bødetavlen" }).click();
   await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
   expect(
     await db.fine.count({
@@ -127,18 +159,33 @@ test("a refused fine keeps the dialog open and says why", async ({
 });
 
 test("a player gives a teammate a fine", async ({ page, loginAs }) => {
-  const { anna, bo } = await squad();
+  const { team, anna, bo } = await squad();
+  await db.fineType.create({ data: { teamId: team.id, name: "Glemte benskinner", units: 1 } });
   await loginAs(anna);
   await page.goto("/boder");
   await create(page, "Giv bøde");
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
-  await dialog.getByRole("checkbox", { name: "Bo" }).check();
-  await dialog.getByLabel("Hvad er bøden for?").fill("Glemte benskinner");
+  await chooseMany(dialog.getByLabel("Hvem?"), [/Bo/]);
+  await choose(dialog.getByLabel("Bøde fra kataloget"), "Glemte benskinner (1 bøde)");
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
   expect(await db.fine.findFirst({ where: { playerId: bo.id } })).toMatchObject(
     { issuedById: anna.id, reason: "Glemte benskinner" },
   );
+});
+
+test("with an empty catalogue there is no fine to give, and the dialog says so", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/boder");
+  await create(page, "Giv bøde");
+  const dialog = page.getByRole("dialog", { name: "Giv bøde" });
+  await expect(dialog.getByText(/Kataloget er tomt/)).toBeVisible();
+  await expect(dialog.getByLabel("Bøde fra kataloget")).toHaveCount(0);
+  await chooseMany(dialog.getByLabel("Hvem?"), [/Bo/]);
+  await dialog.getByRole("button", { name: "Giv bøde" }).click();
+  await expect(dialog.getByText("Vælg en bøde fra kataloget.")).toBeVisible();
+  expect(await db.fine.count()).toBe(0);
 });
 
 test("a player sees the catalogue but cannot change it", async ({
@@ -267,11 +314,10 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
   await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
   await expect(dialog).toBeHidden();
 
-  // The reporter sees it waiting in the sheet, but may not approve it.
-  await page
-    .getByRole("button", { name: /Udfordringer.*1 venter på godkendelse/ })
-    .click();
+  // Reported, the challenges' sheet opens by itself with the new one pulsing in it;
+  // the reporter sees it waiting, but may not approve it.
   const sheet = page.getByRole("dialog", { name: "Udfordringer" });
+  await expectPulse(sheet.locator("[data-fresh]").filter({ hasText: "Flest mål på træning" }));
   await expect(
     sheet.getByText("Venter på at en anden på holdet godkender."),
   ).toBeVisible();
@@ -287,15 +333,17 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
     sheet.getByRole("heading", { name: "Venter på din godkendelse" }),
   ).toBeVisible();
   await sheet.getByRole("button", { name: "Godkend" }).click();
-  // The sheet stays open, but holds only what waits: the settled one has left it.
-  await expect(sheet.getByText("Ingen udfordringer venter.")).toBeVisible();
-  await expect(sheet.getByText(/flyttet fra Anna til Bo/)).toHaveCount(0);
-  await sheet.getByRole("button", { name: "Luk" }).click();
-  // Closed, it does not open again on a reload, and with none waiting the overview says nothing of challenges.
-  await expect(page).toHaveURL(/\/boder$/);
-  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(
-    0,
-  );
+  // Approved, the sheet gets out of the way and the history slides in, with the two
+  // fines the challenge moved pulsing.
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  const moved = history(page).locator("li").filter({ hasText: "udfordring" });
+  await expect(moved).toHaveCount(2);
+  await expectPulse(moved.first());
+  await expectPulse(moved.last());
+  // With none waiting the overview says nothing of challenges.
+  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Bødetavlen" }).click();
   await expect(page.getByRole("link", { name: /Bo .*30 kr/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
   expect(
@@ -355,8 +403,9 @@ test("a challenge is reported from inside the challenges' sheet and lands in it"
   await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
   await expect(dialog).toBeHidden();
 
-  // The sheet is still open behind it, and now holds the new one too, waiting on somebody else.
+  // The sheet is still open behind it, and now holds the new one too, pulsing, waiting on somebody else.
   await expect(sheet.getByText("“Straffesparkskonkurrence”")).toBeVisible();
+  await expectPulse(sheet.locator("[data-fresh]").filter({ hasText: "Straffesparkskonkurrence" }));
   await expect(sheet.getByText("“Flest mål”")).toBeVisible();
   expect(
     await db.challenge.count({

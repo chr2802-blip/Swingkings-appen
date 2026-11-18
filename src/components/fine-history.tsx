@@ -16,7 +16,8 @@ export type HistoryFine = Awaited<ReturnType<typeof fineHistory>>[number];
  */
 export function FineRow({ fine }: { fine: HistoryFine }) {
   return (
-    <li>
+    // `data-fresh`: a fine just given, or one a challenge just moved, pulses here (`FreshPulse`).
+    <li data-fresh={[fine.id, fine.challengeId].filter(Boolean).join(" ")}>
       <FineSheet
         fineId={fine.id}
         title={fine.challengeId ? "Udfordring" : "Bøde"}

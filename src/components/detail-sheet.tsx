@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { SHEET_EVENT } from "@/components/fresh";
 import { Modal, ModalBody } from "@/components/modal";
 
 /**
@@ -41,6 +42,21 @@ export function DetailSheet({
       }
     }
   };
+  // A press elsewhere asks for this sheet (a challenge reported: here it is), or for the
+  // page under it (a fine given: the history), and then this one gets out of the way.
+  useEffect(() => {
+    const ask = (event: Event) => {
+      const param = (event as CustomEvent<{ param?: string | null }>).detail?.param;
+      if (clearParam && param === clearParam) {
+        event.preventDefault();
+        setOpen(true);
+      } else {
+        setOpen(false);
+      }
+    };
+    window.addEventListener(SHEET_EVENT, ask);
+    return () => window.removeEventListener(SHEET_EVENT, ask);
+  }, [clearParam]);
   return (
     <>
       {!hidden && (

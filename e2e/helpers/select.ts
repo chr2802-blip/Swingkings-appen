@@ -24,3 +24,17 @@ export async function openChoices(field: Locator): Promise<Locator> {
   await expect(list).toBeVisible();
   return list;
 }
+
+/** Ticks each of `options` in a multiple-choice drop-down, then closes it with "Færdig". */
+export async function chooseMany(field: Locator, options: (string | RegExp)[]) {
+  const list = await openChoices(field);
+  await expect(list).toHaveAttribute("aria-multiselectable", "true");
+  for (const option of options) {
+    const row = list.getByRole("option", { name: option, exact: typeof option === "string" });
+    await row.click();
+    await expect(row).toHaveAttribute("aria-selected", "true");
+  }
+  await field.page().getByRole("button", { name: /^Færdig/ }).click();
+  await expect(list).toHaveCount(0);
+  await expect(field).toHaveAttribute("aria-expanded", "false");
+}

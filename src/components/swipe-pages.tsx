@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { flushSync } from "react-dom";
 import { usePathname } from "next/navigation";
 import { stayOnPage } from "./page-transition";
+import { TURN_EVENT } from "./fresh";
 
 export type SwipePage = {
   /** Where this page lives; the address bar follows the swipe, so a reload stays put. */
@@ -170,6 +171,19 @@ export function SwipePages({
     },
     [open, pages.length, settle],
   );
+
+  // Asked from outside to turn to a page by its address (a fine given: the history slides in).
+  useEffect(() => {
+    const turn = (event: Event) => {
+      const href = (event as CustomEvent<{ href?: string }>).detail?.href;
+      const index = pages.findIndex((page) => page.href === href);
+      if (index === -1) return;
+      event.preventDefault();
+      goTo(index);
+    };
+    window.addEventListener(TURN_EVENT, turn);
+    return () => window.removeEventListener(TURN_EVENT, turn);
+  }, [goTo, pages]);
 
   useEffect(() => {
     const el = scroller.current;

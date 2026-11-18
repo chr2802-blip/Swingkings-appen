@@ -321,6 +321,42 @@ h1,
   }
 }
 
+/* Something just made — a fine given, a challenge reported — pulses where it is listed, three
+   times and then never again (`FreshPulse`, src/components/fresh.tsx). A soft, neutral wash
+   with rounded corners, drawn behind the content: a row's sits just inside the card it is
+   in, a card's follows the card's own corners. */
+@keyframes fresh-pulse {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.fresh-pulse {
+  position: relative;
+  isolation: isolate;
+}
+
+.fresh-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  z-index: -1;
+  border-radius: 0.75rem;
+  background-color: color-mix(in srgb, var(--color-slate-500) 14%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  animation: fresh-pulse 900ms ease-in-out 3;
+}
+
+.fresh-pulse[data-fresh^="card:"]::after {
+  inset: 0;
+  border-radius: inherit;
+}
+
 @keyframes pop {
   0% {
     scale: 1;

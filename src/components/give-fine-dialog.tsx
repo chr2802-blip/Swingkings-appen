@@ -2,19 +2,21 @@
 
 import { useState } from "react";
 import { FormDialog } from "@/components/form-dialog";
-import { Field, Input, Select, Textarea } from "@/components/ui";
-import { PlayerChecklist } from "@/components/player-checklist";
+import { Field, Textarea } from "@/components/ui";
+import { Select } from "@/components/select";
+import { PlayerSelect } from "@/components/player-select";
 import { giveFine } from "@/app/actions/fines";
 import { fineUnits, kr } from "@/lib/money";
 import { Star } from "@/components/crest";
+import { useShowFresh } from "@/components/fresh";
 
 type FineTypeOption = { id: string; name: string; units: number };
 type Member = { userId: string; name: string; photoId: string | null; shirtNumber: number | null };
 
 /**
- * Giving a fine: who (one or several), what for (from the catalogue, or written freely),
- * and how many fines. Picking from the catalogue fills in its price, which can still be
- * changed for this one time.
+ * Giving a fine: who (one or several, from the drop-down) and what for — always a fine
+ * from the catalogue, at the number of fines the catalogue says. Nothing is written
+ * freely and no price is chosen here: the catalogue is the treasurer's.
  */
 export function GiveFineDialog({
   members,
@@ -34,47 +36,40 @@ export function GiveFineDialog({
   triggerLabel?: string;
 }) {
   const [typeId, setTypeId] = useState("");
-  const [units, setUnits] = useState("");
   const chosen = fineTypes.find((type) => type.id === typeId);
-  const effective = units ? Number(units) : (chosen?.units ?? 0);
+  const show = useShowFresh();
 
   return (
-    <FormDialog trigger={triggerLabel} triggerIcon={<Star className="h-5 w-5" />} title="Giv bøde" action={giveFine} submitLabel="Giv bøde">
-      <Field label="Hvem?">
-        <PlayerChecklist members={members} name="playerId" defaultChecked={defaultPlayerId ? [defaultPlayerId] : []} />
+    <FormDialog trigger={triggerLabel} triggerIcon={<Star className="h-5 w-5" />} title="Giv bøde" action={giveFine}
+      submitLabel="Giv bøde"
+      // Given, the fines are shown where they are listed: the history slides in, and they pulse.
+      onDone={(result) => void show(result, "history")}
+    >
+      <Field label="Hvem?" htmlFor="playerId">
+        <PlayerSelect id="playerId" name="playerId" members={members} defaultSelected={defaultPlayerId ? [defaultPlayerId] : []} />
       </Field>
-      <Field label="Bøde fra kataloget" htmlFor="fineTypeId">
-        <Select id="fineTypeId" name="fineTypeId" value={typeId} onValueChange={setTypeId}>
-          <option value="">Skriv selv…</option>
-          {fineTypes.map((type) => (
-            <option key={type.id} value={type.id}>
-              {type.name} ({fineUnits(type.units)})
+      {fineTypes.length > 0 ? (
+        <Field
+          label="Bøde fra kataloget"
+          htmlFor="fineTypeId"
+          hint={chosen ? `${fineUnits(chosen.units)} á ${kr(finePriceKr)} — i alt ${kr(chosen.units * finePriceKr)} pr. spiller.` : undefined}
+        >
+          <Select id="fineTypeId" name="fineTypeId" value={typeId} onValueChange={setTypeId} required>
+            <option value="" disabled>
+              Vælg bøde…
             </option>
-          ))}
-        </Select>
-      </Field>
-      {!chosen && (
-        <Field label="Hvad er bøden for?" htmlFor="reason">
-          <Input id="reason" name="reason" placeholder="Fx glemte benskinner" maxLength={200} />
+            {fineTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name} ({fineUnits(type.units)})
+              </option>
+            ))}
+          </Select>
         </Field>
+      ) : (
+        <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+          Kataloget er tomt. Bødekasseformanden lægger bøderne i kataloget under Bøder → Katalog.
+        </p>
       )}
-      <Field
-        label="Antal bøder"
-        htmlFor="units"
-        hint={`1 bøde = ${kr(finePriceKr)}.${effective > 0 ? ` I alt ${kr(effective * finePriceKr)} pr. spiller.` : ""}`}
-      >
-        <Input
-          id="units"
-          name="units"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={100}
-          placeholder={chosen ? String(chosen.units) : "1"}
-          value={units}
-          onChange={(e) => setUnits(e.target.value)}
-        />
-      </Field>
       {matches.length > 0 && (
         <Field label="Kamp (valgfri)" htmlFor="matchId">
           <Select id="matchId" name="matchId" defaultValue={defaultMatchId ?? ""}>

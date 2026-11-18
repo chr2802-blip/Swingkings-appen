@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { useFormAction } from "@/components/use-form-action";
-import { PlayerChecklist } from "@/components/player-checklist";
+import { PlayerSelect } from "@/components/player-select";
 import { sendTeamNotice } from "@/app/actions/notifications";
 import { MAX_NOTICE_BODY, MAX_NOTICE_TITLE, NOTICE_DESTINATIONS, type NoticeDestination } from "@/lib/team-notice";
 
@@ -50,10 +50,11 @@ export function TeamNoticeForm({
         </Select>
       </Field>
       {to === "valgte" && (
-        <fieldset className="sm:col-span-2">
-          <legend className="mb-1.5 text-sm font-medium">Modtagere</legend>
-          <PlayerChecklist members={members} name="recipientId" />
-        </fieldset>
+        <div className="sm:col-span-2">
+          <Field label="Modtagere" htmlFor="recipientId">
+            <PlayerSelect id="recipientId" members={members} name="recipientId" />
+          </Field>
+        </div>
       )}
       {destination === "link" && (
         <div className="sm:col-span-2">

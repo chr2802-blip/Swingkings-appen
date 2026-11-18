@@ -94,3 +94,21 @@ export function holdHistoryEntry(close: () => void): () => void {
     schedule();
   };
 }
+
+/**
+ * Resolves once every sheet has closed and its history entry is gone — so a navigation sent
+ * after a sheet closes is not undone by that sheet's own `history.back()` arriving after
+ * it. A sheet closed from inside a server action's transition lets go only when the
+ * transition commits, which is after the action has returned: hence waiting, not checking.
+ */
+export function sheetsSettled(timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve) => {
+    const check = () => {
+      const busy = scheduled || unwinding || sheets.length > 0 || entry !== null;
+      if (!busy || Date.now() > deadline) resolve();
+      else setTimeout(check, 16);
+    };
+    setTimeout(check, 0);
+  });
+}

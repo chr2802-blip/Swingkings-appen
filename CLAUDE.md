@@ -70,6 +70,20 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   "the team on screen" alone.
 - **Every action** that reads input takes `(prev, formData)` and returns `ActionResult`;
   records referenced by id are looked up through `teamDb`, so another team's id is "not found".
+- **A fine is always from the catalogue** (`giveFine` requires `fineTypeId`): its name and
+  number of fines are the `FineType`'s, never written freely or chosen by the giver, and a
+  `reason`/`units` in the form is not read.
+- **Players are chosen with `PlayerSelect`** (`src/components/player-select.tsx`) everywhere
+  a form picks people — a fine, a job's assignees, a notice's recipients, a poll's roster.
+  It is the app's own `MultiSelect` (`src/components/select.tsx`, the multi-choice twin of
+  `Select`), posted as one `name` field per player; in e2e, `chooseMany` drives it.
+- **What a press made is shown arriving** (`src/components/fresh.tsx`): `giveFine`,
+  `createChallenge` and an approving `moveChallenge` return the ids in `ActionResult.created`,
+  and the dialog's `onDone` hands them to `useShowFresh`. Fines (given, or moved by an
+  approval) go to the history — the `SwipePages` slides there on the fine box, anywhere
+  else it is opened — and a reported challenge opens the challenges' sheet; `FreshPulse`
+  pulses each row (`data-fresh`) once it is in view. The page moves only after
+  `sheetsSettled()`, or the closing sheet's `history.back()` lands after it and undoes it.
 - **Money**: a `Fine` copies `units` and `unitPriceKr` when given — never recompute from the
   current catalogue or price. A fine stands all season and is never cleared one by one: a
   player owes the sum of their fines (`balances` in `src/lib/money.ts`), never below zero.

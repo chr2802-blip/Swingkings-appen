@@ -75,9 +75,10 @@ describe("giveFine", () => {
     await signIn(treasurer);
 
     const result = await giveFine(undefined, formData({ playerId: [anna.id, bo.id, anna.id], fineTypeId: type.id }));
-    expect(result).toEqual({ ok: true, note: "2 bøder er givet." });
     const fines = await prisma.fine.findMany({ where: { teamId: team.id } });
     expect(fines).toHaveLength(2);
+    // The ids of the fines made, so the page can show them arriving.
+    expect(result).toEqual({ ok: true, note: "2 bøder er givet.", created: expect.arrayContaining(fines.map((f) => f.id)) });
     for (const fine of fines) expect(fine).toMatchObject({ reason: "For sent", units: 2, unitPriceKr: 20, fineTypeId: type.id, issuedById: treasurer.id });
 
     // A later price change never rewrites what is owed.
@@ -86,43 +87,52 @@ describe("giveFine", () => {
     expect(board.balances.find((b) => b.userId === anna.id)).toMatchObject({ owesKr: 40, units: 2 });
   });
 
-  it("takes a freely written fine, one unless told otherwise, and overrides a type's units", async () => {
+  it("takes the name and the number of fines from the catalogue, never from the form", async () => {
     const { team, treasurer, anna } = await makeSquad();
     const type = await prisma.fineType.create({ data: { teamId: team.id, name: "Rødt kort", units: 10 } });
     const match = await makeMatch(team.id);
     await signIn(treasurer);
-    expect(await giveFine(undefined, formData({ playerId: anna.id, reason: "Glemt støvler" }))).toEqual({ ok: true, note: "Bøden er givet." });
-    await giveFine(undefined, formData({ playerId: anna.id, fineTypeId: type.id, units: "4", matchId: match.id, note: "Diskussion" }));
-    const fines = await prisma.fine.findMany({ where: { playerId: anna.id }, orderBy: { createdAt: "asc" } });
-    expect(fines.map((f) => [f.reason, f.units])).toEqual([
-      ["Glemt støvler", 1],
-      ["Rødt kort", 4],
-    ]);
-    expect(fines[1]).toMatchObject({ matchId: match.id, note: "Diskussion" });
+    // A form that still carries a reason or a number of its own is not believed.
+    const result = await giveFine(
+      undefined,
+      formData({ playerId: anna.id, fineTypeId: type.id, reason: "Noget andet", units: "1", matchId: match.id, note: "Diskussion" }),
+    );
+    expect(result).toMatchObject({ ok: true, note: "Bøden er givet." });
+    expect(await prisma.fine.findFirstOrThrow({ where: { playerId: anna.id } })).toMatchObject({
+      reason: "Rødt kort",
+      units: 10,
+      fineTypeId: type.id,
+      matchId: match.id,
+      note: "Diskussion",
+    });
   });
 
   it("refuses what it cannot give", async () => {
     const { team, treasurer, anna } = await makeSquad();
     const other = await makeSquad("Andre");
+    const type = await prisma.fineType.create({ data: { teamId: team.id, name: "For sent", units: 1 } });
     const archived = await prisma.fineType.create({ data: { teamId: team.id, name: "Gammel", units: 1, archivedAt: new Date() } });
+    const theirType = await prisma.fineType.create({ data: { teamId: other.team.id, name: "Deres", units: 1 } });
     const theirMatch = await makeMatch(other.team.id);
     await signIn(treasurer);
     const give = (fields: Record<string, string | string[]>) => giveFine(undefined, formData(fields));
 
-    expect(await give({ reason: "x" })).toEqual({ ok: false, error: "Vælg mindst én spiller." });
-    expect(await give({ playerId: other.anna.id, reason: "x" })).toEqual({ ok: false, error: "En af spillerne er ikke på holdet." });
-    expect(await give({ playerId: anna.id })).toEqual({ ok: false, error: "Vælg en bøde fra kataloget eller skriv hvad den er for." });
+    expect(await give({ fineTypeId: type.id })).toEqual({ ok: false, error: "Vælg mindst én spiller." });
+    expect(await give({ playerId: other.anna.id, fineTypeId: type.id })).toEqual({ ok: false, error: "En af spillerne er ikke på holdet." });
+    // Nothing written freely: without a fine from the catalogue there is no fine.
+    expect(await give({ playerId: anna.id, reason: "Glemt støvler" })).toEqual({ ok: false, error: "Vælg en bøde fra kataloget." });
+    expect(await give({ playerId: anna.id, reason: "x", units: "3" })).toEqual({ ok: false, error: "Vælg en bøde fra kataloget." });
     expect(await give({ playerId: anna.id, fineTypeId: archived.id })).toEqual({ ok: false, error: "Bøden findes ikke i kataloget længere." });
-    expect((await give({ playerId: anna.id, reason: "x", units: "0" }))?.ok).toBe(false);
-    expect((await give({ playerId: anna.id, reason: "x", units: "1.5" }))?.ok).toBe(false);
-    expect(await give({ playerId: anna.id, reason: "x", matchId: theirMatch.id })).toEqual({ ok: false, error: "Kampen findes ikke." });
+    expect(await give({ playerId: anna.id, fineTypeId: theirType.id })).toEqual({ ok: false, error: "Bøden findes ikke i kataloget længere." });
+    expect(await give({ playerId: anna.id, fineTypeId: type.id, matchId: theirMatch.id })).toEqual({ ok: false, error: "Kampen findes ikke." });
     expect(await prisma.fine.count()).toBe(0);
   });
 
   it("is for everybody on the team, a player included", async () => {
-    const { anna, bo } = await makeSquad();
+    const { team, anna, bo } = await makeSquad();
+    const type = await prisma.fineType.create({ data: { teamId: team.id, name: "Kom for sent", units: 1 } });
     await signIn(anna);
-    expect(await giveFine(undefined, formData({ playerId: bo.id, reason: "Kom for sent" }))).toEqual({ ok: true, note: "Bøden er givet." });
+    expect(await giveFine(undefined, formData({ playerId: bo.id, fineTypeId: type.id }))).toMatchObject({ ok: true, note: "Bøden er givet." });
     expect(await prisma.fine.findFirstOrThrow()).toMatchObject({ playerId: bo.id, issuedById: anna.id });
   });
 });
@@ -295,11 +305,9 @@ describe("challenges", () => {
       await prisma.fine.create({ data: { teamId: squad.team.id, playerId: player.id, reason: "x", units: 5, unitPriceKr: 10, issuedById: squad.admin.id } });
     }
     await signIn(squad.anna);
-    expect(await createChallenge(undefined, formData({ opponentId: squad.bo.id, outcome, description: "Første mål", units: String(units) }))).toEqual({
-      ok: true,
-      note: "Udfordringen venter på godkendelse.",
-    });
+    const reported = await createChallenge(undefined, formData({ opponentId: squad.bo.id, outcome, description: "Første mål", units: String(units) }));
     const row = await prisma.challenge.findFirstOrThrow({ where: { teamId: squad.team.id } });
+    expect(reported).toEqual({ ok: true, note: "Udfordringen venter på godkendelse.", created: [row.id] });
     const move = async (as: { id: string }, m: string) => {
       await signIn(as);
       return moveChallenge(undefined, formData({ id: row.id, move: m }));
@@ -316,7 +324,7 @@ describe("challenges", () => {
     expect(await owes(anna.id)).toBe(5);
 
     // Not only the opponent: anybody else on the team may approve.
-    expect(await move(treasurer, "approve")).toEqual({ ok: true });
+    expect(await move(treasurer, "approve")).toEqual({ ok: true, created: [row.id] });
     expect(await state()).toMatchObject({ status: "SETTLED", approvedById: treasurer.id });
     expect(await owes(anna.id)).toBe(2);
     expect(await owes(bo.id)).toBe(8);
@@ -326,7 +334,7 @@ describe("challenges", () => {
   it("can be reported by the loser, and approved by the winner", async () => {
     const { anna, bo, row, move, owes } = await challenge(2, "lost");
     expect(row).toMatchObject({ winnerId: bo.id, loserId: anna.id });
-    expect(await move(bo, "approve")).toEqual({ ok: true });
+    expect(await move(bo, "approve")).toEqual({ ok: true, created: [row.id] });
     expect(await owes(bo.id)).toBe(3);
     expect(await owes(anna.id)).toBe(7);
   });
@@ -352,7 +360,7 @@ describe("challenges", () => {
     expect(await send({ units: "3" })).toEqual({ ok: false, error: "Du har kun 2 bøder — indsatsen kan højst være det." });
     expect(await send({ outcome: "lost" })).toEqual({ ok: false, error: "Bo har ingen bøder at udfordre sig ud af." });
     expect(await send({ outcome: "maybe" })).toEqual({ ok: false, error: "Vælg hvem der vandt." });
-    expect(await send({ units: "2" })).toEqual({ ok: true, note: "Udfordringen venter på godkendelse." });
+    expect(await send({ units: "2" })).toMatchObject({ ok: true, note: "Udfordringen venter på godkendelse." });
   });
 
   it("refuses challenging yourself, a stranger, another team's match and challenge, and nonsense moves", async () => {
@@ -457,7 +465,8 @@ describe("fine data", () => {
     await createChallenge(undefined, formData({ opponentId: bo.id, outcome: "won", description: "Flest mål", units: "2" }));
     const challenge = await prisma.challenge.findFirstOrThrow({ where: { teamId: team.id } });
     await signIn(admin);
-    expect(await moveChallenge(undefined, formData({ id: challenge.id, move: "approve" }))).toEqual({ ok: true });
+    // Approved, it names the challenge, whose id both of its fines carry.
+    expect(await moveChallenge(undefined, formData({ id: challenge.id, move: "approve" }))).toEqual({ ok: true, created: [challenge.id] });
 
     const fines = await fineHistory(team.id, { take: 10 });
     const plain = fines.find((f) => f.reason === "For sent")!;

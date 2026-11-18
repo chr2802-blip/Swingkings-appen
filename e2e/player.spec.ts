@@ -204,6 +204,7 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await db.match.create({
     data: { teamId: team.id, kind: "OTHER", title: "Gammel fest", startsAt: new Date(Date.now() - 3 * 86_400_000) },
   });
+  await db.fineType.create({ data: { teamId: team.id, name: "Glemt trøje", units: 1 } });
   await loginAs(anna);
   await page.goto(`/spiller/${bo.id}`);
   // The fine is no longer a button beside the name.
@@ -214,12 +215,16 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Giv bøde" }).click();
   const fine = page.getByRole("dialog", { name: "Giv bøde" });
-  await expect(fine.getByRole("checkbox", { name: /Bo$/ })).toBeChecked();
-  await expect(fine.getByRole("checkbox", { name: /Anna$/ })).not.toBeChecked();
-  await fine.getByLabel("Hvad er bøden for?").fill("Glemt trøje");
+  // Opened from Bo's page, the fine is for Bo.
+  await expect(fine.getByLabel("Hvem?")).toHaveText(/^Bo/);
+  await choose(fine.getByLabel("Bøde fra kataloget"), "Glemt trøje (1 bøde)");
   await fine.getByRole("button", { name: "Giv bøde" }).click();
   await expect(fine).toBeHidden();
   await expect.poll(() => db.fine.count({ where: { teamId: team.id, playerId: bo.id } })).toBe(1);
+  // Given, the fine box's history opens with the new fine pulsing.
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await expect(page.getByRole("tabpanel", { name: "Historik" }).locator("li").filter({ hasText: "Glemt trøje" })).toHaveClass(/fresh-pulse/);
+  await page.goto(`/spiller/${bo.id}`);
 
   await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Meld udfordring" }).click();
@@ -233,6 +238,12 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await expect
     .poll(() => db.challenge.count({ where: { teamId: team.id, winnerId: bo.id, loserId: anna.id } }))
     .toBe(1);
+  // Reported, the fine box opens with the challenges' sheet and the new one pulsing in it.
+  await expect(page).toHaveURL(/\/boder\?udfordringer$/);
+  await expect(
+    page.getByRole("dialog", { name: "Udfordringer" }).locator("[data-fresh]").filter({ hasText: "Flest straffe" }),
+  ).toHaveClass(/fresh-pulse/);
+  await page.goto(`/spiller/${bo.id}`);
 
   await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Opret opgave" }).click();
@@ -247,7 +258,7 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await choose(activity, /FC Naboen/);
   await task.getByLabel("Opgave", { exact: true }).fill("Vaske trøjer");
   await expect(task.getByLabel("Hvem skal gøre det?")).toHaveText("Jeg vælger selv");
-  await expect(task.getByRole("checkbox", { name: /Bo$/ })).toBeChecked();
+  await expect(task.getByLabel("Hvem?")).toHaveText(/^Bo/);
   await task.getByRole("button", { name: "Opret opgave" }).click();
   await expect(task).toBeHidden();
   await expect(

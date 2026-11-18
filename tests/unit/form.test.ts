@@ -50,6 +50,10 @@ describe("action results", () => {
     expect(ok()).toEqual({ ok: true });
     expect(ok("")).toEqual({ ok: true });
     expect(ok("Gemt")).toEqual({ ok: true, note: "Gemt" });
+    // What a press made travels with it, and is left out when it made nothing.
+    expect(ok("Gemt", ["a", "b"])).toEqual({ ok: true, note: "Gemt", created: ["a", "b"] });
+    expect(ok(undefined, ["a"])).toEqual({ ok: true, created: ["a"] });
+    expect(ok("Gemt", [])).toEqual({ ok: true, note: "Gemt" });
     expect(fail("Nej")).toEqual({ ok: false, error: "Nej" });
     expect(parsed({ a: 1 })).toEqual({ ok: true, fields: { a: 1 } });
     expect(invalid("Nej")).toEqual({ ok: false, error: "Nej" });
