@@ -6,3 +6,6 @@ export function possessive(name: string): string {
   const trimmed = name.trim();
   return /[sxz]$/i.test(trimmed) ? `${trimmed}'` : `${trimmed}s`;
 }
+
+/** Shown where somebody who has deleted their account once stood, e.g. as the giver of a fine. */
+export const DELETED_USER = "Slettet bruger";

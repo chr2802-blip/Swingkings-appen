@@ -12,6 +12,7 @@ function person(role: MemberRole | null, platform: PlatformRole = "USER"): Sessi
     name: "Mig",
     role: platform,
     photoId: null,
+    mustChangePassword: false,
     teams: role ? [{ id: TEAM, name: "Swingkings", photoId: null, theme: "SWINGKINGS", role }] : [],
     teamId: TEAM,
     teamName: "Swingkings",

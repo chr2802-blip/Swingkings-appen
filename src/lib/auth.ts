@@ -73,6 +73,8 @@ export type SessionUser = {
   name: string;
   role: PlatformRole;
   photoId: string | null;
+  /** An admin gave them a temporary password: they choose their own before anything else. */
+  mustChangePassword: boolean;
   /** Every team this person is on. This is what says where they may go. */
   teams: Membership[];
   /** The team on screen, drawn from `teams` (or any team, for a super admin). */
@@ -128,6 +130,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     name: user.name,
     role: user.role,
     photoId: user.photoId,
+    mustChangePassword: user.mustChangePassword,
     teams,
     teamId: active?.id ?? null,
     teamName: active?.name ?? null,

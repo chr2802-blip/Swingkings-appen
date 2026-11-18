@@ -129,6 +129,16 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   only by `redeemInviteLink`, whose guarded update (`uses < maxUses`) makes the account in
   the same transaction. New accounts are also limited by `takeAttempt("signup")` (per
   address) and `takeAttempt("join-link")` (per link).
+- **Accounts** (`src/lib/account.ts`): the app sends no mail, so a forgotten password is
+  reset by an admin (`resetMemberPassword`, "Nulstil adgangskode" in the member menu): a
+  temporary password shown once, every session ended, and `User.mustChangePassword` sends
+  the next login to `/ny-adgangskode` (`setNewPassword`) — the app layout redirects there
+  until it is done. The admin must administer every team the member is on, and only the
+  super admin resets the super admin. Anybody deletes their own account under Profil
+  (`deleteMyAccount`, password again), refused by `deletionBlocker` for the super admin,
+  a team's last admin while others are on it, and fines owed and not marked paid (on any
+  team, left or not). Their own content and pictures go; fines they gave stand with
+  `issuedById` null ("Slettet bruger"). `/privatliv` says what is kept — keep it true.
 - **Dates go through `src/lib/time.ts`** (Europe/Copenhagen). Tests run with `TZ=UTC`.
 - **Polls** live on a feed post. Rules are `src/lib/polls.ts`; writing a vote is `castVote`
   (`src/lib/voting.ts`); what reaches the browser is built by `pollView` (`src/lib/feed.ts`).

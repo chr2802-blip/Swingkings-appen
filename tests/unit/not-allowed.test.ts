@@ -11,6 +11,7 @@ function user(teams: [string, MemberRole][], role: "USER" | "SUPER_ADMIN" = "USE
     name: "U",
     role,
     photoId: null,
+    mustChangePassword: false,
     teams: teams.map(([id, teamRole]) => ({ id, name: id, photoId: null, theme: "SWINGKINGS", role: teamRole })),
     teamId: teams[0]?.[0] ?? null,
     teamName: null,

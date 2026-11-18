@@ -3,7 +3,8 @@ import { requireUser } from "@/lib/auth";
 import { Bolt } from "@/components/crest";
 import { ButtonLink, Card, PageHeader, SectionTitle } from "@/components/ui";
 import { playerHref } from "@/components/player-link";
-import { ProfileForm, PasswordForm } from "@/components/profile-forms";
+import Link from "next/link";
+import { DeleteAccountForm, ProfileForm, PasswordForm } from "@/components/profile-forms";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallSection } from "@/components/install-app";
 import { LogoutButton } from "@/components/logout-button";
@@ -39,6 +40,19 @@ export default async function ProfilePage() {
         <SectionTitle>Adgangskode</SectionTitle>
         <Card>
           <PasswordForm />
+        </Card>
+      </section>
+      <section>
+        <SectionTitle>Konto</SectionTitle>
+        <Card className="space-y-3 text-sm text-slate-600">
+          <p>
+            Sådan bruger vi dine oplysninger:{" "}
+            <Link href="/privatliv" className="underline">
+              Privatliv
+            </Link>
+            .
+          </p>
+          <DeleteAccountForm />
         </Card>
       </section>
       <LogoutButton className="text-sm text-slate-500 underline" />

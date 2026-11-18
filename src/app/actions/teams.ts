@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
-import { requireSuperAdmin, requireTeamUser, requireUser } from "@/lib/auth";
-import { assertTeamAdmin, canAccessTeam } from "@/lib/access";
+import { hashPassword, requireSuperAdmin, requireTeamUser, requireUser } from "@/lib/auth";
+import { assertTeamAdmin, canAccessTeam, canAdministerTeam } from "@/lib/access";
+import { generateTemporaryPassword } from "@/lib/account";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { field, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { generateLinkToken, hashLinkToken, joinPath } from "@/lib/invite-links";
@@ -238,6 +239,42 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
   ]);
   revalidatePath("/hold", "layout");
   return ok();
+}
+
+/**
+ * A member who has forgotten their password gets a temporary one from an admin, who hands
+ * it on in person or in a message: the app sends no mail. Every session of theirs ends,
+ * and the next login must choose a new password (`mustChangePassword`) before anything
+ * else. The temporary password is said once, in `note`, and stored only as a hash.
+ *
+ * An account is not one team's, so the admin must be an admin on every team the member is
+ * on: otherwise the admin of one team could step into another team's chat and fines.
+ * Nobody but the super admin resets the super admin, and one's own goes through Profil.
+ */
+export async function resetMemberPassword(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const user = await requireTeamUser();
+  assertTeamAdmin(user, user.teamId);
+  const userId = field(formData, "userId");
+  if (userId === user.id) return fail("Skift din egen adgangskode under Profil.");
+  const member = await teamDb(user.teamId).teamMember.findFirst({ where: { userId } });
+  if (!member) return fail("Personen er ikke på holdet.");
+
+  // Every team they are on is asked, which crosses teams on purpose.
+  const target = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { name: true, role: true, memberships: { select: { teamId: true } } },
+  });
+  if (target.role === "SUPER_ADMIN" && user.role !== "SUPER_ADMIN") return fail("Super admins adgangskode kan ikke nulstilles her.");
+  if (!target.memberships.every((m) => canAdministerTeam(user, m.teamId))) {
+    return fail(`${target.name} er også på et hold, du ikke er admin på. Bed super admin om at nulstille den.`);
+  }
+
+  const password = generateTemporaryPassword();
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await hashPassword(password), mustChangePassword: true, tokenVersion: { increment: 1 } },
+  });
+  return ok(password);
 }
 
 const createTeamSchema = z.object({

@@ -63,6 +63,11 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
           Til login
         </Link>
       </p>
+      <p className="mt-4 text-center text-xs">
+        <Link href="/privatliv" className="text-slate-500 underline">
+          Sådan bruger vi dine oplysninger
+        </Link>
+      </p>
     </main>
   );
 }
