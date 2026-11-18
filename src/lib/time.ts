@@ -93,6 +93,31 @@ export function relativeDay(target: Date, now: Date = new Date()) {
   return readInZone(target, "d. MMM");
 }
 
+/**
+ * How long until kick-off, as the fixture poster on the front page says it: "I dag" on the
+ * day itself (`matchday`), "I morgen", "Om 3 dage" up to two weeks, then "Om 3 uger".
+ * Calendar days on the team's clock, so a match at 00:30 is tomorrow even at 23:59.
+ */
+export function countdown(target: Date, now: Date = new Date()) {
+  const days = calendarDaysBetween(target, now);
+  if (days <= 0) return { text: "I dag", matchday: true };
+  if (days === 1) return { text: "I morgen", matchday: false };
+  if (days < 14) return { text: `Om ${days} dage`, matchday: false };
+  return { text: `Om ${Math.floor(days / 7)} uger`, matchday: false };
+}
+
+/**
+ * The front page's hello, by the hour on the team's clock — and on a match day, the match
+ * day: "Kampdag, Oliver ⚽".
+ */
+export function greeting(firstName: string, { matchday = false, now = new Date() }: { matchday?: boolean; now?: Date } = {}) {
+  if (matchday) return `Kampdag, ${firstName} ⚽`;
+  const hour = Number(readInZone(now, "H"));
+  if (hour >= 5 && hour < 10) return `Godmorgen, ${firstName} ☕`;
+  if (hour >= 18 || hour < 5) return `Godaften, ${firstName} 🌙`;
+  return `Hej ${firstName} 👋`;
+}
+
 /** A deadline as a person reads it, with whether it has passed. */
 export function deadlineLabel(dueAt: Date, now: Date = new Date()) {
   const days = calendarDaysBetween(dueAt, now);

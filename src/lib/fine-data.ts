@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { teamDb } from "./team-db";
 import { balances, fineKings } from "./money";
+import { standings, STANDINGS_WEEK_MS } from "./standings";
 import { teamRoster } from "./roster";
 import { kickoffLabel, startOfMonthInZone } from "./time";
 
@@ -15,18 +16,26 @@ export async function fineBoard(teamId: string) {
     prisma.team.findUniqueOrThrow({ where: { id: teamId }, select: { finePriceKr: true, mobilePayLink: true, duesKr: true, finePaymentOpenedAt: true } }),
     teamRoster(teamId),
     db.fineType.findMany({ where: { archivedAt: null }, orderBy: [{ units: "asc" }, { name: "asc" }] }),
-    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true } }),
+    db.fine.findMany({ select: { playerId: true, units: true, unitPriceKr: true, createdAt: true } }),
   ]);
   const board = balances(
     roster.map((m) => m.userId),
     fines,
   );
+  // The table as it stood a week ago, for the arrows beside each place.
+  const weekAgo = new Date(Date.now() - STANDINGS_WEEK_MS);
+  const before = balances(
+    roster.map((m) => m.userId),
+    fines.filter((fine) => fine.createdAt < weekAgo),
+  );
   // Somebody who has left the team still owes what they owe, and still needs a name.
-  const people = new Map(roster.map((m) => [m.userId, { name: m.name, photoId: m.photoId, onTeam: true }]));
+  const people = new Map<string, { name: string; photoId: string | null; shirtNumber: number | null; onTeam: boolean }>(
+    roster.map((m) => [m.userId, { name: m.name, photoId: m.photoId, shirtNumber: m.shirtNumber, onTeam: true }]),
+  );
   const gone = board.map((row) => row.userId).filter((id) => !people.has(id));
   if (gone.length) {
     const users = await prisma.user.findMany({ where: { id: { in: gone } }, select: { id: true, name: true, photoId: true } });
-    for (const u of users) people.set(u.id, { name: u.name, photoId: u.photoId, onTeam: false });
+    for (const u of users) people.set(u.id, { name: u.name, photoId: u.photoId, shirtNumber: null, onTeam: false });
   }
   const paid = new Set(roster.filter((m) => m.finesPaid).map((m) => m.userId));
   // What is still to come into the box: everybody's fines, less those who have paid.
@@ -40,6 +49,8 @@ export async function fineBoard(teamId: string) {
     roster,
     fineTypes,
     balances: board,
+    /** `balances` in the same order, each with its place in the table and its move since a week ago. */
+    standings: standings(board, before),
     paid,
     totalKr,
     missingKr,

@@ -10,7 +10,7 @@ import { kr } from "@/lib/money";
 import { OPEN_TASK } from "@/lib/tasks";
 import { LISTED_ACTIVITY } from "@/lib/activity-data";
 import { activityName } from "@/lib/activity";
-import { readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
+import { countdown, greeting, readInZone, relativeDay, startOfDayInZone } from "@/lib/time";
 import { NotificationSetup } from "@/components/notification-setup";
 import { InstallCard } from "@/components/install-app";
 import { TeamFeed } from "@/components/team-feed";
@@ -19,6 +19,7 @@ import { FEED_CHANGED, FINES_CHANGED } from "@/lib/realtime-topic";
 import { Crown } from "@/components/crest";
 import { HomeBanner } from "@/components/home-banner";
 import { playerTasksHref } from "@/components/player-link";
+import { FixtureCard } from "@/components/fixture-card";
 
 export default async function OverviewPage() {
   const user = await requireTeamUser();
@@ -26,13 +27,19 @@ export default async function OverviewPage() {
   // The feed at the bottom is rendered only once all this is read; start its reads now, so
   // they run alongside instead of after (`TeamFeed` picks up the same request-cached call).
   void teamFeed(user.teamId, user.id, canAdministerTeam(user, user.teamId));
-  const [board, kings, nextMatch, myTaskCount, openChallenges, pollsWaiting, newPosts, handoversToMe] = await Promise.all([
+  const [board, kings, nextMatch, nextFixture, myTaskCount, openChallenges, pollsWaiting, newPosts, handoversToMe] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     db.match.findFirst({
       where: { ...LISTED_ACTIVITY, cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
       orderBy: { startsAt: "asc" },
       select: { id: true, kind: true, title: true, opponent: true, startsAt: true, isHome: true },
+    }),
+    // The next match against somebody, for the poster under the tiles.
+    db.match.findFirst({
+      where: { ...LISTED_ACTIVITY, kind: "MATCH", opponent: { not: null }, cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
+      orderBy: { startsAt: "asc" },
+      select: { id: true, opponent: true, startsAt: true, isHome: true, location: true },
     }),
     db.task.count({ where: { ...OPEN_TASK, assignees: { some: { userId: user.id } } } }),
     db.challenge.findMany({ where: { status: "PENDING" }, select: { status: true, reportedById: true } }),
@@ -83,7 +90,8 @@ export default async function OverviewPage() {
   const tiles: Tile[] = [
     ...waiting,
     ...(myTaskCount > 0 ? [{ kind: "tasks" as const }] : []),
-    { kind: "next" as const },
+    // The poster below says the next match already; a tile for it would say it twice.
+    ...(nextMatch && nextMatch.id === nextFixture?.id ? [] : [{ kind: "next" as const }]),
     { kind: "king" as const },
   ].slice(0, 2);
   /** Short enough for a third of a phone: "I dag", "I morgen", else the weekday and date. */
@@ -99,16 +107,16 @@ export default async function OverviewPage() {
       <HomeBanner>
         <div className="mx-auto max-w-5xl pt-5 pr-[max(1rem,env(safe-area-inset-right))] pb-6 pl-[max(1rem,env(safe-area-inset-left))]">
           <div className="flex items-center justify-between gap-3 sm:max-w-xl">
-            <h1 className="truncate text-2xl">Hej {firstName} 👋</h1>
+            <h1 className="truncate text-2xl">{greeting(firstName, { matchday: nextFixture ? countdown(nextFixture.startsAt).matchday : false })}</h1>
             <Image src="/logo.png" alt="" width={512} height={512} className="h-12 w-12 shrink-0 rotate-12 drop-shadow-md" />
           </div>
 
           <div className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-[var(--accent-line)] bg-slate-100 shadow-sm sm:max-w-xl">
             <Link href="/boder" className="press-card min-w-0 bg-white px-3 py-3">
               <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Bødekonto</p>
-              <p className={`text-2xl leading-tight font-semibold ${owes > 0 && !finesPaid ? "text-red-600" : "text-emerald-700"}`}>{kr(owes)}</p>
+              <p className={`font-score text-3xl leading-tight font-semibold ${owes > 0 && !finesPaid ? "text-[var(--star)]" : "text-emerald-700"}`}>{kr(owes)}</p>
               <p className="truncate text-xs text-slate-500">
-                {finesPaid ? "betalt" : owes === 0 ? "ren tavle" : board.paymentOpenedAt ? "skal betales nu" : "i bøder"}
+                {finesPaid ? "betalt – tak!" : owes === 0 ? "ren tavle" : board.paymentOpenedAt ? "skal betales nu" : "i bøder"}
               </p>
             </Link>
             {tiles.map((tile) =>
@@ -117,7 +125,7 @@ export default async function OverviewPage() {
                   <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                     {nextMatch?.kind === "MATCH" ? "Næste kamp" : "Næste aktivitet"}
                   </p>
-                  <p className="truncate text-2xl leading-tight font-semibold text-[var(--accent-text)]">
+                  <p className="font-score truncate text-3xl leading-tight font-semibold text-[var(--accent-text)]">
                     {nextDay ? nextDay.charAt(0).toUpperCase() + nextDay.slice(1) : "Ingen"}
                   </p>
                   <p className="truncate text-xs text-slate-500">
@@ -135,7 +143,7 @@ export default async function OverviewPage() {
                   <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                     {myTaskCount === 1 ? "Opgave" : "Opgaver"}
                   </p>
-                  <p className={`text-2xl leading-tight font-semibold ${myTaskCount > 0 ? "text-amber-600" : "text-emerald-700"}`}>{myTaskCount}</p>
+                  <p className={`font-score text-3xl leading-tight font-semibold ${myTaskCount > 0 ? "text-amber-600" : "text-emerald-700"}`}>{myTaskCount}</p>
                   <p className="truncate text-xs text-slate-500">{myTaskCount > 0 ? "til dig" : "ingen lige nu"}</p>
                 </Link>
               ) : tile.kind === "king" ? (
@@ -146,18 +154,24 @@ export default async function OverviewPage() {
                   </p>
                   {/* Smaller than the other tiles' figures, so a name fits a third of a phone; the
                       line height keeps the tile as tall as its neighbours. */}
-                  <p className="font-display truncate text-lg leading-[1.875rem]">{kingNames.length > 0 ? kingNames.join(" & ") : "Ledig"}</p>
+                  <p className="font-display truncate text-lg leading-[2.25rem]">{kingNames.length > 0 ? kingNames.join(" & ") : "Ledig"}</p>
                   <p className="truncate text-xs text-slate-500">{kingNames.length > 0 ? `${kr(kings.kr)} i ${month}` : `ingen bøder i ${month}`}</p>
                 </Link>
               ) : (
                 <Link key={tile.title} href={tile.href} className="press-card min-w-0 bg-white px-3 py-3">
                   <p className="truncate text-[11px] font-semibold tracking-wider text-slate-500 uppercase">{tile.title}</p>
-                  <p className="text-2xl leading-tight font-semibold text-amber-600">{tile.count}</p>
+                  <p className="font-score text-3xl leading-tight font-semibold text-amber-600">{tile.count}</p>
                   <p className="truncate text-xs text-slate-500">{tile.note}</p>
                 </Link>
               ),
             )}
           </div>
+
+          {nextFixture?.opponent && (
+            <div className="mt-3 sm:max-w-xl">
+              <FixtureCard match={{ ...nextFixture, opponent: nextFixture.opponent }} teamName={user.teamName} />
+            </div>
+          )}
         </div>
       </HomeBanner>
 

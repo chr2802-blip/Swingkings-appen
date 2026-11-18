@@ -250,7 +250,7 @@ export async function ActivityScreen({
                         <SignupChoice activityId={match.id} mine={mine} />
                       </div>
                     )}
-                    {going.length > 0 ? <SignupFaces people={going} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu.</p>}
+                    {going.length > 0 ? <SignupFaces people={going} shirts={new Map(roster.map((m) => [m.userId, m.shirtNumber]))} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu. Bliv den første på holdkortet.</p>}
                   </Card>
                 </section>
 
@@ -283,15 +283,18 @@ export async function ActivityScreen({
             title: openTasks > 0 ? `Opgaver (${openTasks})` : "Opgaver",
             children:
               match.tasks.length === 0 ? (
-                <EmptyState icon="🧺">Ingen opgaver endnu. Tilføj dem under Handlinger.</EmptyState>
+                <EmptyState icon="🧺">Ingen opgaver endnu. Taktiktavlen er tom – tilføj dem med +.</EmptyState>
               ) : (
-                <Card padded={false}>
-                  <ul className="divide-y divide-slate-100">
-                    {match.tasks.map((task) => (
-                      <TaskRow key={task.id} task={task} user={user} members={roster} showMatch={false} openTaskId={openTaskId} />
-                    ))}
-                  </ul>
-                </Card>
+                <div className="space-y-3">
+                  <TaskBoard done={match.tasks.length - openTasks} total={match.tasks.length} />
+                  <Card padded={false}>
+                    <ul className="divide-y divide-slate-100">
+                      {match.tasks.map((task) => (
+                        <TaskRow key={task.id} task={task} user={user} members={roster} showMatch={false} openTaskId={openTaskId} />
+                      ))}
+                    </ul>
+                  </Card>
+                </div>
               ),
           },
           {
@@ -300,7 +303,7 @@ export async function ActivityScreen({
             children: (
               <div>
                 {/* The history's rows: a tap opens the fine with everything about it. */}
-                {fines.length === 0 ? <EmptyState>Ingen bøder endnu.</EmptyState> : <FineHistory fines={fines} />}
+                {fines.length === 0 ? <EmptyState icon="😇">Ingen bøder endnu. Alle opførte sig pænt – eller ingen så det.</EmptyState> : <FineHistory fines={fines} />}
                 {match.challenges.length > 0 && (
                   <section className="mt-8">
                     <SectionTitle>Udfordringer</SectionTitle>
@@ -320,14 +323,33 @@ export async function ActivityScreen({
   );
 }
 
+/**
+ * The jobs' tactics board: how many of them are done, chalked on green, above the list.
+ * Decorative but not hidden: "2 af 3 opgaver klaret" is worth hearing.
+ */
+function TaskBoard({ done, total }: { done: number; total: number }) {
+  const all = done === total;
+  return (
+    <div className="chalkboard overflow-hidden rounded-2xl px-4 py-3">
+      <p className="font-score text-[11px] tracking-[0.25em] text-[var(--chalk-soft)] uppercase">Taktiktavlen</p>
+      <p className="font-display text-lg">
+        {all ? "Alle opgaver er klaret 💪" : `${done} af ${total} ${total === 1 ? "opgave" : "opgaver"} klaret`}
+      </p>
+      <div aria-hidden className="mt-2 h-1.5 w-[calc(100%-4.5rem)] rounded-full bg-white/15">
+        <div className="h-full rounded-full bg-[var(--chalk)]" style={{ width: `${Math.round((done / total) * 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 /** Those signed up, as pictures with their first name under — a teammate's links to their page. */
-function SignupFaces({ people }: { people: SignupPerson[] }) {
+function SignupFaces({ people, shirts }: { people: SignupPerson[]; shirts: Map<string, number | null> }) {
   return (
     <ul className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-6">
       {people.map((p) => {
         const face = (
           <>
-            <Avatar name={p.name} photoId={p.photoId} size="lg" />
+            <Avatar name={p.name} photoId={p.photoId} shirtNumber={p.userId ? shirts.get(p.userId) : null} size="lg" />
             <span className="w-full truncate text-center text-xs">{p.name.split(" ")[0]}</span>
           </>
         );

@@ -126,7 +126,7 @@ export function TaskRow({
       <div className="flex -space-x-1.5">
         {task.assignees.slice(0, 3).map((a) => (
           <PlayerLink key={a.user.id} userId={a.user.id} title={a.user.name} aria-label={a.user.name} className="rounded-full ring-2 ring-white">
-            <Avatar name={a.user.name} photoId={a.user.photoId} size="sm" />
+            <Avatar name={a.user.name} photoId={a.user.photoId} shirtNumber={members.find((m) => m.userId === a.user.id)?.shirtNumber} size="sm" />
           </PlayerLink>
         ))}
       </div>

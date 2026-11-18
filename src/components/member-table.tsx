@@ -55,7 +55,7 @@ export function MemberTable({
             <li key={member.userId} className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2.5 pl-4 pr-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <span className="hidden sm:contents">
-                  <Avatar name={member.name} photoId={member.photoId} size="sm" />
+                  <Avatar name={member.name} photoId={member.photoId} shirtNumber={member.shirtNumber} size="sm" />
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">

@@ -163,7 +163,7 @@ test("a player's page opens straight on a tab", async ({ page, loginAs }) => {
     "aria-selected",
     "true",
   );
-  await expect(page.getByText("Ingen opgaver.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ingen opgaver. Ingen trøjevask, ingen frugt – endnu.", { exact: true })).toBeVisible();
 });
 
 test("your own page is your profile: the tab bar's Profil opens it, and Rediger leads to the settings", async ({

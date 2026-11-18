@@ -110,7 +110,8 @@ export function SectionTitle({ children, action }: { children: React.ReactNode; 
 
 export function EmptyState({ icon, children }: { icon?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+    // On the pitch's chalk lines: an empty page is an empty pitch, not a blank form.
+    <div className="pitch-lines rounded-3xl border border-dashed border-slate-300 bg-white/60 px-6 py-10 text-center text-sm text-slate-500">
       {icon && (
         <div
           aria-hidden="true"

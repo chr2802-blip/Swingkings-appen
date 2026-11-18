@@ -138,7 +138,7 @@ export function TaskDetails({ task, user, members }: { task: TaskView; user: Tea
               return (
                 <li key={a.user.id} className="flex items-center gap-3 px-4 py-2.5">
                   <PlayerLink userId={a.user.id} className="shrink-0" aria-label={a.user.name}>
-                    <Avatar name={a.user.name} photoId={a.user.photoId} size="sm" />
+                    <Avatar name={a.user.name} photoId={a.user.photoId} shirtNumber={members.find((m) => m.userId === a.user.id)?.shirtNumber} size="sm" />
                   </PlayerLink>
                   <span className="min-w-0 flex-1 text-sm">
                     <PlayerLink userId={a.user.id} className="block truncate font-medium">

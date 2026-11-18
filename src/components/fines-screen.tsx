@@ -97,12 +97,12 @@ export async function FinesScreen({
               <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Dine bøder</p>
               {board.paid.has(user.id) ? (
                 <>
-                  <p className="text-3xl font-semibold text-emerald-700">Betalt</p>
+                  <p className="font-score text-4xl font-semibold text-emerald-700">Betalt</p>
                   <p className="text-xs text-slate-500">{kr(mine.owesKr)} · tak! 🙌</p>
                 </>
               ) : (
                 <>
-                  <p className={`text-3xl font-semibold ${mine.owesKr > 0 ? "text-red-600" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
+                  <p className={`font-score text-4xl font-semibold ${mine.owesKr > 0 ? "text-[var(--star)]" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
                   <p className="text-xs text-slate-500">
                     {mine.owesKr === 0 ? "Ren tavle 🙌" : paying ? "Betal nu ›" : `${fineUnits(mine.units)} · se dem ›`}
                   </p>
@@ -112,7 +112,7 @@ export async function FinesScreen({
           )}
           <div className="px-4 py-3">
             <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">I kassen</p>
-            <p className="text-3xl font-semibold">{kr(board.totalKr)}</p>
+            <p className="font-score text-4xl font-semibold">{kr(board.totalKr)}</p>
             <p className="text-xs text-slate-500">
               {!paying ? "betales ved sæsonslut" : board.missingKr > 0 ? `${kr(board.missingKr)} mangler` : "alle har betalt"}
             </p>
@@ -196,43 +196,68 @@ export async function FinesScreen({
   );
 }
 
+/**
+ * The board as a league table: place, the player, how many fines and what they come to.
+ * Beside the place an arrow says how far they have moved since a week ago (`standings`).
+ * Who owes the same shares the place.
+ */
 function BoardPage({ userId, board, kings }: { userId: string; board: Board; kings: string[] }) {
   return (
-    <Card padded={false}>
+    <Card padded={false} className="overflow-hidden">
+      <div
+        aria-hidden
+        className="grid grid-cols-[2.75rem_1fr_3.25rem_4.5rem_0.5rem] items-center gap-2 border-b border-slate-200 bg-slate-50 py-2 pr-3 pl-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase"
+      >
+        <span className="text-center">#</span>
+        <span>Spiller</span>
+        <span className="text-right">Bøder</span>
+        <span className="text-right">Kr</span>
+        <span />
+      </div>
       <ol className="divide-y divide-slate-100">
-        {board.balances.map((row, index) => {
+        {board.standings.map((row) => {
           const person = board.people.get(row.userId);
           if (!person) return null;
           const isMe = row.userId === userId;
+          const paid = board.paid.has(row.userId);
           return (
             <li key={row.userId}>
               <Link
                 href={playerHref(row.userId)}
                 aria-current={isMe ? "true" : undefined}
-                className={`press-card flex items-center gap-3 px-4 py-2.5 ${
-                  isMe ? "border-l-4 border-[var(--gold)] bg-[var(--gold-tint)] pl-3" : ""
+                className={`press-card grid grid-cols-[2.75rem_1fr_3.25rem_4.5rem_0.5rem] items-center gap-2 py-2.5 pr-3 pl-2 ${
+                  isMe ? "bg-[var(--gold-tint)] shadow-[inset_4px_0_0_var(--gold)]" : ""
                 }`}
               >
-                <span className="w-5 text-right text-sm text-slate-400">{index + 1}</span>
-                <Avatar name={person.name} photoId={person.photoId} size="sm" />
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 font-medium">
-                  <span className="truncate">{person.name}</span>
-                  {kings.includes(row.userId) && (
-                    <span title="Månedens bødekonge" className="flex items-center">
-                      <Crown className="h-4 w-4" />
-                      <span className="sr-only">(månedens bødekonge)</span>
-                    </span>
-                  )}
-                  {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
-                  {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
+                <span className="flex items-center justify-center gap-0.5">
+                  <span className="font-score w-5 text-right text-lg leading-none font-semibold text-slate-700">{row.place}</span>
+                  <Movement move={row.move} />
                 </span>
-                {board.paid.has(row.userId) ? (
-                  <Badge tone="green">Betalt</Badge>
-                ) : row.owesKr > 0 ? (
-                  <Badge tone="red">{kr(row.owesKr)}</Badge>
-                ) : (
-                  <Badge tone="green">ren tavle</Badge>
-                )}
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Avatar name={person.name} photoId={person.photoId} shirtNumber={person.shirtNumber} size="sm" />
+                  <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                    <span className="truncate">{person.name}</span>
+                    {kings.includes(row.userId) && (
+                      <span title="Månedens bødekonge" className="flex items-center">
+                        <Crown className="h-4 w-4" />
+                        <span className="sr-only">(månedens bødekonge)</span>
+                      </span>
+                    )}
+                    {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
+                    {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
+                  </span>
+                </span>
+                <span className="font-score text-right text-base text-slate-500">{row.units}</span>
+                <span className="text-right">
+                  {paid ? (
+                    <Badge tone="green">Betalt</Badge>
+                  ) : row.owesKr > 0 ? (
+                    <span className="font-score text-lg font-semibold whitespace-nowrap text-[var(--star)]">{kr(row.owesKr)}</span>
+                  ) : (
+                    <Badge tone="green">ren tavle</Badge>
+                  )}
+                </span>
+                {/* Opens the player's page, and says so at its end as the history's rows do. */}
                 <span aria-hidden className="text-slate-300">
                   ›
                 </span>
@@ -242,6 +267,25 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
         })}
       </ol>
     </Card>
+  );
+}
+
+/** ▲ up the table, ▼ down, a dot for standing still; nothing for somebody new on it. */
+function Movement({ move }: { move: number | null }) {
+  if (move === null) return <span className="w-3" />;
+  if (move === 0)
+    return (
+      <span className="w-3 text-center text-[10px] text-slate-300" title="Samme plads som for en uge siden">
+        •<span className="sr-only">(samme plads som for en uge siden)</span>
+      </span>
+    );
+  const up = move > 0;
+  const said = `${up ? "op" : "ned"} ${Math.abs(move)} ${Math.abs(move) === 1 ? "plads" : "pladser"} siden sidste uge`;
+  return (
+    <span className={`w-3 text-center text-[10px] ${up ? "text-[var(--star)]" : "text-emerald-600"}`} title={said}>
+      {up ? "▲" : "▼"}
+      <span className="sr-only">({said})</span>
+    </span>
   );
 }
 

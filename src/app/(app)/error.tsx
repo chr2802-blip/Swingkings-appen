@@ -16,7 +16,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
   }
   return (
     <EmptyState icon="🤕">
-      <p className="mb-4">Noget gik galt. Prøv igen.</p>
+      <p className="mb-4">Noget gik galt – bolden røg over hegnet. Prøv igen.</p>
       <Button onClick={reset}>Prøv igen</Button>
     </EmptyState>
   );

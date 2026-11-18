@@ -17,6 +17,17 @@ const heading = localFont({
   display: "swap",
 });
 
+/**
+ * Figures — kroner, counts, a position in the table — in a narrow, upright face like a
+ * scoreboard's (`.font-score`). Oswald, SIL Open Font License; vendored for the same reason.
+ */
+const score = localFont({
+  src: "./fonts/oswald-variable.woff2",
+  weight: "400 700",
+  variable: "--font-score",
+  display: "swap",
+});
+
 async function currentTheme() {
   return (await getCurrentUser())?.teamTheme ?? DEFAULT_THEME;
 }
@@ -50,7 +61,7 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const theme = await currentTheme();
   return (
-    <html lang="da" data-theme={theme} className={heading.variable}>
+    <html lang="da" data-theme={theme} className={`${heading.variable} ${score.variable}`}>
       <body className="min-h-screen text-slate-900 antialiased">
         {/* Before React: Chrome's install prompt can arrive before anything hydrates. */}
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_INSTALL_PROMPT }} />
