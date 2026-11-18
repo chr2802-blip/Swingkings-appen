@@ -70,6 +70,10 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   "the team on screen" alone.
 - **Every action** that reads input takes `(prev, formData)` and returns `ActionResult`;
   records referenced by id are looked up through `teamDb`, so another team's id is "not found".
+- **A fine is always from the catalogue** (`giveFine` requires `fineTypeId`): its name and
+  number of fines are the `FineType`'s, never written freely or chosen by the giver, and a
+  `reason`/`units` in the form is not read. Who gets it is the app's own `MultiSelect`
+  (`src/components/select.tsx`), the multi-choice twin of `Select`.
 - **Money**: a `Fine` copies `units` and `unitPriceKr` when given — never recompute from the
   current catalogue or price. A fine stands all season and is never cleared one by one: a
   player owes the sum of their fines (`balances` in `src/lib/money.ts`), never below zero.

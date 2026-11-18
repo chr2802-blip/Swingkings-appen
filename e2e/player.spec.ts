@@ -204,6 +204,7 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await db.match.create({
     data: { teamId: team.id, kind: "OTHER", title: "Gammel fest", startsAt: new Date(Date.now() - 3 * 86_400_000) },
   });
+  await db.fineType.create({ data: { teamId: team.id, name: "Glemt trøje", units: 1 } });
   await loginAs(anna);
   await page.goto(`/spiller/${bo.id}`);
   // The fine is no longer a button beside the name.
@@ -214,9 +215,9 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await page.getByRole("button", { name: "Opret" }).click();
   await menu.getByRole("button", { name: "Giv bøde" }).click();
   const fine = page.getByRole("dialog", { name: "Giv bøde" });
-  await expect(fine.getByRole("checkbox", { name: /Bo$/ })).toBeChecked();
-  await expect(fine.getByRole("checkbox", { name: /Anna$/ })).not.toBeChecked();
-  await fine.getByLabel("Hvad er bøden for?").fill("Glemt trøje");
+  // Opened from Bo's page, the fine is for Bo.
+  await expect(fine.getByLabel("Hvem?")).toHaveText(/^Bo/);
+  await choose(fine.getByLabel("Bøde fra kataloget"), "Glemt trøje (1 bøde)");
   await fine.getByRole("button", { name: "Giv bøde" }).click();
   await expect(fine).toBeHidden();
   await expect.poll(() => db.fine.count({ where: { teamId: team.id, playerId: bo.id } })).toBe(1);

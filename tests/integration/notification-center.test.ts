@@ -108,8 +108,9 @@ describe("notify", () => {
 describe("what a notification is about", () => {
   it("a fine's notification goes when the fine is deleted", async () => {
     const { team, admin, anna } = await makeSquad();
+    const type = await prisma.fineType.create({ data: { teamId: team.id, name: "Glemt støvler", units: 1 } });
     await signIn(admin);
-    await giveFine(undefined, formData({ playerId: anna.id, reason: "Glemt støvler" }));
+    await giveFine(undefined, formData({ playerId: anna.id, fineTypeId: type.id }));
     const [row] = await rowsFor(anna.id);
     expect(row).toMatchObject({ category: "FINES", title: "Du har fået en bøde 💸", url: "/boder" });
     const fine = await prisma.fine.findFirstOrThrow({ where: { teamId: team.id } });

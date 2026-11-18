@@ -75,15 +75,14 @@ export async function removeFineType(_prev: ActionResult, formData: FormData): P
 
 const fineSchema = z.object({
   fineTypeId: optionalId,
-  reason: z.string().trim().max(200).optional(),
-  units: z.string().trim().optional(),
   note: optionalText,
   matchId: optionalId,
 });
 
 /**
- * Gives one fine to one or more players at once — the whole back four were late. Either
- * from the catalogue (its name and number of fines, unless overridden) or written freely.
+ * Gives one fine to one or more players at once — the whole back four were late. Always
+ * from the catalogue: its name and its number of fines, never written freely or priced
+ * by whoever gives it. A `reason` or `units` in the form is not read.
  */
 export async function giveFine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   // Anybody on the team may give a fine; taking one back is `deleteFine`'s question.
@@ -98,19 +97,12 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
   const members = await db.teamMember.findMany({ where: { userId: { in: playerIds } }, select: { userId: true } });
   if (members.length !== playerIds.length) return fail("En af spillerne er ikke på holdet.");
 
-  let reason = form.fields.reason ?? "";
-  // Written freely with no number, a fine is one fine.
-  let units = form.fields.units ? Number(form.fields.units) : 1;
-  let fineTypeId: string | null = null;
-  if (form.fields.fineTypeId) {
-    const type = await db.fineType.findFirst({ where: { id: form.fields.fineTypeId, archivedAt: null } });
-    if (!type) return fail("Bøden findes ikke i kataloget længere.");
-    fineTypeId = type.id;
-    reason ||= type.name;
-    if (!form.fields.units) units = type.units;
-  }
-  if (!reason) return fail("Vælg en bøde fra kataloget eller skriv hvad den er for.");
-  if (!Number.isInteger(units) || units < 1 || units > 100) return fail("Antal bøder skal være et helt tal mellem 1 og 100.");
+  if (!form.fields.fineTypeId) return fail("Vælg en bøde fra kataloget.");
+  const type = await db.fineType.findFirst({ where: { id: form.fields.fineTypeId, archivedAt: null } });
+  if (!type) return fail("Bøden findes ikke i kataloget længere.");
+  const fineTypeId = type.id;
+  const reason = type.name;
+  const units = type.units;
 
   if (form.fields.matchId && !(await db.match.findFirst({ where: { id: form.fields.matchId }, select: { id: true } }))) {
     return fail("Kampen findes ikke.");

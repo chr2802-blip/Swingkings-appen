@@ -1,7 +1,7 @@
 import { test, expect } from "./helpers/fixtures";
 import { db, squad } from "./helpers/database";
 import type { Page } from "@playwright/test";
-import { choose, openChoices } from "./helpers/select";
+import { choose, chooseMany, openChoices } from "./helpers/select";
 
 /** The fine box's "+": a drawer of what can be made there, and then one of them. */
 async function create(page: Page, name: string) {
@@ -28,11 +28,12 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
   const field = dialog.getByLabel("Bøde fra kataloget");
   // Not the browser's own <select>, but the app's, with a search field.
   await expect(field).toHaveRole("combobox");
-  await expect(field).toHaveText("Skriv selv…");
+  await expect(field).toHaveText("Vælg bøde…");
 
   const list = await openChoices(field);
   await expect(list).toHaveAccessibleName("Bøde fra kataloget");
-  await expect(list.getByRole("option")).toHaveCount(4);
+  // Only the catalogue: there is no line for writing a fine of one's own.
+  await expect(list.getByRole("option")).toHaveText(["For sent (2 bøder)", "Glemte benskinner (1 bøde)", "Rødt kort (5 bøder)"]);
   const search = page.getByRole("searchbox", { name: "Søg" });
   await search.fill("BENSKIN");
   await expect(list.getByRole("option")).toHaveText(["Glemte benskinner (1 bøde)"]);
@@ -44,7 +45,7 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
   await page.keyboard.press("Escape");
   await expect(list).toHaveCount(0);
   await expect(dialog).toBeVisible();
-  await expect(field).toHaveText("Skriv selv…");
+  await expect(field).toHaveText("Vælg bøde…");
 
   // The keyboard: type, then Enter takes the first that answers.
   await openChoices(field);
@@ -52,9 +53,11 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
   await search.press("Enter");
   await expect(field).toHaveText("Rødt kort (5 bøder)");
   await expect(field).toHaveAttribute("aria-expanded", "false");
+  // What it costs is the catalogue's: shown, never asked.
+  await expect(dialog.getByText("5 bøder á 10 kr — i alt 50 kr pr. spiller.")).toBeVisible();
   await expect(dialog.getByLabel("Hvad er bøden for?")).toHaveCount(0);
-  await expect(dialog.getByText("I alt 50 kr pr. spiller.")).toBeVisible();
-  await dialog.getByRole("checkbox", { name: "Anna" }).check();
+  await expect(dialog.getByLabel("Antal bøder")).toHaveCount(0);
+  await chooseMany(dialog.getByLabel("Hvem?"), ["Anna"]);
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => db.fine.count({ where: { playerId: anna.id, units: 5, reason: "Rødt kort" } })).toBe(1);
@@ -88,10 +91,21 @@ test("a treasurer gives two players a catalogue fine, and the board and their ac
 
   await create(page, "Giv bøde");
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
-  await dialog.getByRole("checkbox", { name: "Anna" }).check();
-  await dialog.getByRole("checkbox", { name: "Bo" }).check();
+  const who = dialog.getByLabel("Hvem?");
+  // The app's own drop-down, as the catalogue is: one field, a drawer of players with a search.
+  await expect(who).toHaveRole("combobox");
+  await expect(who).toHaveText("Vælg spillere…");
+  const list = await openChoices(who);
+  await page.getByRole("searchbox", { name: "Søg" }).fill("an");
+  await expect(list.getByRole("option")).toHaveText([/Anna/]);
+  await list.getByRole("option", { name: /Anna/ }).click();
+  await page.getByRole("searchbox", { name: "Søg" }).fill("");
+  await list.getByRole("option", { name: /Bo/ }).click();
+  await page.getByRole("button", { name: "Færdig (2 valgt)" }).click();
+  await expect(list).toHaveCount(0);
+  await expect(who).toHaveText(/Anna, Bo/);
   await choose(dialog.getByLabel("Bøde fra kataloget"), "For sent (2 bøder)", { search: "sent" });
-  await expect(dialog.getByText("I alt 20 kr pr. spiller.")).toBeVisible();
+  await expect(dialog.getByText("2 bøder á 10 kr — i alt 20 kr pr. spiller.")).toBeVisible();
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
 
@@ -127,18 +141,33 @@ test("a refused fine keeps the dialog open and says why", async ({
 });
 
 test("a player gives a teammate a fine", async ({ page, loginAs }) => {
-  const { anna, bo } = await squad();
+  const { team, anna, bo } = await squad();
+  await db.fineType.create({ data: { teamId: team.id, name: "Glemte benskinner", units: 1 } });
   await loginAs(anna);
   await page.goto("/boder");
   await create(page, "Giv bøde");
   const dialog = page.getByRole("dialog", { name: "Giv bøde" });
-  await dialog.getByRole("checkbox", { name: "Bo" }).check();
-  await dialog.getByLabel("Hvad er bøden for?").fill("Glemte benskinner");
+  await chooseMany(dialog.getByLabel("Hvem?"), [/Bo/]);
+  await choose(dialog.getByLabel("Bøde fra kataloget"), "Glemte benskinner (1 bøde)");
   await dialog.getByRole("button", { name: "Giv bøde" }).click();
   await expect(dialog).toBeHidden();
   expect(await db.fine.findFirst({ where: { playerId: bo.id } })).toMatchObject(
     { issuedById: anna.id, reason: "Glemte benskinner" },
   );
+});
+
+test("with an empty catalogue there is no fine to give, and the dialog says so", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/boder");
+  await create(page, "Giv bøde");
+  const dialog = page.getByRole("dialog", { name: "Giv bøde" });
+  await expect(dialog.getByText(/Kataloget er tomt/)).toBeVisible();
+  await expect(dialog.getByLabel("Bøde fra kataloget")).toHaveCount(0);
+  await chooseMany(dialog.getByLabel("Hvem?"), [/Bo/]);
+  await dialog.getByRole("button", { name: "Giv bøde" }).click();
+  await expect(dialog.getByText("Vælg en bøde fra kataloget.")).toBeVisible();
+  expect(await db.fine.count()).toBe(0);
 });
 
 test("a player sees the catalogue but cannot change it", async ({

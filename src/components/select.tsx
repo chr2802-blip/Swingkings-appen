@@ -4,7 +4,7 @@ import { Children, Fragment, isValidElement, useEffect, useId, useRef, useState,
 import { Modal } from "@/components/modal";
 import { searchChoices } from "@/lib/search";
 
-type Choice = { value: string; label: string; disabled: boolean };
+type Choice = { value: string; label: string; disabled: boolean; leading?: ReactNode; detail?: string };
 
 /** The text of an `<option>`'s children: `{type.name} ({fineUnits(type.units)})` is one label. */
 function textOf(node: ReactNode): string {
@@ -153,7 +153,7 @@ export function Select({
       />
       <Modal open={open} onClose={() => setOpen(false)} title={title ?? heading} size="drawer">
         {/* Mounted with the drawer, so it leaves with it and opens afresh every time. */}
-        <Picker listId={listId} title={title ?? heading} choices={choices} current={current} onChoose={choose} />
+        <Picker listId={listId} title={title ?? heading} choices={choices} isSelected={(v) => v === current} onChoose={choose} />
       </Modal>
     </div>
   );
@@ -163,18 +163,25 @@ function Picker({
   listId,
   title,
   choices,
-  current,
+  isSelected,
   onChoose,
+  multiple = false,
+  onDone,
+  doneLabel,
 }: {
   listId: string;
   title: string;
   choices: Choice[];
-  current: string;
+  isSelected: (value: string) => boolean;
+  /** One choice pressed: the single drop-down closes on it, the multiple one ticks it on or off. */
   onChoose: (value: string) => void;
+  multiple?: boolean;
+  onDone?: () => void;
+  doneLabel?: string;
 }) {
   const [query, setQuery] = useState("");
   const shown = searchChoices(choices, query);
-  const [active, setActive] = useState(() => Math.max(0, shown.findIndex((c) => c.value === current)));
+  const [active, setActive] = useState(() => Math.max(0, shown.findIndex((c) => isSelected(c.value))));
   const list = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
 
@@ -226,10 +233,13 @@ function Picker({
         id={listId}
         role="listbox"
         aria-label={title}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        aria-multiselectable={multiple || undefined}
+        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pt-2 ${
+          multiple ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        }`}
       >
         {shown.map((choice, index) => {
-          const selected = choice.value === current;
+          const selected = isSelected(choice.value);
           return (
             <button
               key={choice.value}
@@ -242,17 +252,142 @@ function Picker({
                 index === active ? "bg-slate-100" : ""
               } ${selected ? "font-semibold text-[var(--accent-text)]" : "text-slate-800"}`}
             >
-              <span className="min-w-0 flex-1 break-words">{choice.label}</span>
-              {selected && (
-                <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0" fill="currentColor">
-                  <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4l3.3 3.29 7.3-7.3a1 1 0 0 1 1.4 0Z" />
-                </svg>
+              {multiple && (
+                <span
+                  aria-hidden
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                    selected ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-slate-300 bg-white"
+                  }`}
+                >
+                  {selected && <Tick className="h-3.5 w-3.5" />}
+                </span>
               )}
+              {choice.leading}
+              <span className="min-w-0 flex-1 break-words">{choice.label}</span>
+              {choice.detail && <span className="shrink-0 text-xs font-normal text-slate-400">{choice.detail}</span>}
+              {!multiple && selected && <Tick className="h-4 w-4 shrink-0" />}
             </button>
           );
         })}
         {shown.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-500">Ingen match</p>}
       </div>
+      {multiple && (
+        <div className="shrink-0 border-t border-slate-100 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={onDone}
+            className="press-button w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            {doneLabel ?? "Færdig"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Tick({ className }: { className: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className={className} fill="currentColor">
+      <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4l3.3 3.29 7.3-7.3a1 1 0 0 1 1.4 0Z" />
+    </svg>
+  );
+}
+
+export type MultiChoice = { value: string; label: string; leading?: ReactNode; detail?: string };
+
+/**
+ * The same drop-down for more than one choice — who gets the fine. The field shows what is
+ * chosen; the drawer is the same list with the same search, where a press ticks a choice
+ * on or off and "Færdig" closes it. Posted as one `name` field per choice, like a row of
+ * checkboxes would be.
+ */
+export function MultiSelect({
+  id,
+  name,
+  choices,
+  defaultValues = [],
+  placeholder = "Vælg…",
+  title,
+}: {
+  id?: string;
+  name: string;
+  choices: MultiChoice[];
+  defaultValues?: string[];
+  placeholder?: string;
+  title?: string;
+}) {
+  const [values, setValues] = useState<string[]>(defaultValues);
+  const [open, setOpen] = useState(false);
+  const [heading, setHeading] = useState(title ?? "");
+  const button = useRef<HTMLButtonElement>(null);
+  const listId = useId();
+  const chosen = choices.filter((choice) => values.includes(choice.value));
+  const summary = chosen.map((choice) => choice.label).join(", ");
+
+  function toggle(value: string) {
+    setValues((now) => (now.includes(value) ? now.filter((v) => v !== value) : [...now, value]));
+  }
+
+  function openPicker() {
+    if (!title && id) {
+      const label = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+      setHeading(label?.textContent?.trim() || "Vælg");
+    }
+    setOpen(true);
+  }
+
+  function close() {
+    setOpen(false);
+    button.current?.focus();
+  }
+
+  return (
+    <div className="relative">
+      <button
+        ref={button}
+        id={id}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={openPicker}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            openPicker();
+          }
+        }}
+        className={`${field} flex items-center gap-2 text-left`}
+      >
+        <span className={`min-w-0 flex-1 truncate ${chosen.length === 0 ? "text-slate-400" : ""}`}>
+          {summary || placeholder}
+        </span>
+        {chosen.length > 1 && (
+          <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--accent)_15%,white)] px-2 py-0.5 text-xs font-semibold text-[var(--accent-text)]">
+            {chosen.length}
+          </span>
+        )}
+        <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="currentColor">
+          <path d="M5.2 7.2a.75.75 0 0 1 1.06 0L10 10.94l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L5.2 8.26a.75.75 0 0 1 0-1.06Z" />
+        </svg>
+      </button>
+      {values.map((value) => (
+        <input key={value} type="hidden" name={name} value={value} />
+      ))}
+      <Modal open={open} onClose={close} title={title ?? heading} size="drawer">
+        <Picker
+          listId={listId}
+          title={title ?? heading}
+          choices={choices.map((choice) => ({ ...choice, disabled: false }))}
+          isSelected={(value) => values.includes(value)}
+          onChoose={toggle}
+          multiple
+          onDone={close}
+          doneLabel={chosen.length > 0 ? `Færdig (${chosen.length} valgt)` : "Færdig"}
+        />
+      </Modal>
     </div>
   );
 }
