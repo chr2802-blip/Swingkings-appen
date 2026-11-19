@@ -62,6 +62,21 @@ export function meetingTime(note: string | null | undefined) {
   return `${String(hour).padStart(2, "0")}:${found[2]}`;
 }
 
+/**
+ * The note with its meeting time taken out, for under a poster that says it already:
+ * "Mødetid 11:00 – vi kører samlet" → "Vi kører samlet". Null when nothing else is left.
+ */
+export function withoutMeetingTime(note: string | null | undefined) {
+  const rest = (note ?? "")
+    .replace(/m(?:ø|oe)detid\s*:?\s*(?:kl\.?\s*)?\d{1,2}[.:]\d{2}\b[ \t]*[.,;–-]?[ \t]*/gi, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : null;
+}
+
 /** The small word over the poster: where it is played. */
 export function venueLabel(isHome: boolean | null) {
   return isHome === true ? "Hjemme" : isHome === false ? "Ude" : null;

@@ -9,29 +9,57 @@ import { countdown, readInZone } from "@/lib/time";
  * the club's crest; the opponent's is the one the super admin put in (`clubLogos`), else
  * a shield drawn from their name (`src/lib/fixture.ts`).
  */
+type FixtureMatch = { id: string; opponent: string; isHome: boolean | null; startsAt: Date; location: string | null; note: string | null };
+
 export function FixtureCard({
   match,
   teamName,
   opponentLogo,
 }: {
-  match: { id: string; opponent: string; isHome: boolean | null; startsAt: Date; location: string | null; note: string | null };
+  match: FixtureMatch;
   teamName: string;
   /** The opponent's crest's address, when there is one. */
   opponentLogo?: string | null;
+}) {
+  const sides = fixtureSides(teamName, match.opponent, match.isHome);
+  const meet = meetingTime(match.note);
+  return (
+    <Link
+      href={`/aktiviteter/${match.id}`}
+      aria-label={`Kampdag: ${sides[0]!.name} mod ${sides[1]!.name} kl. ${readInZone(match.startsAt, "HH:mm")}${meet ? `, mødetid ${meet}` : ""}`}
+      className="press-card block overflow-hidden rounded-2xl shadow-sm"
+    >
+      <FixturePoster match={match} teamName={teamName} opponentLogo={opponentLogo} />
+    </Link>
+  );
+}
+
+/**
+ * The poster itself: the two crests, the kick-off between them, home or away, and when to
+ * meet. On the front page it is a link to the match; on the match's own page it heads the
+ * details, with the team's comments under it.
+ */
+export function FixturePoster({
+  match,
+  teamName,
+  opponentLogo,
+  mapLink = false,
+}: {
+  match: FixtureMatch;
+  teamName: string;
+  opponentLogo?: string | null;
+  /** The place as a link to the map — only where the poster is not itself a link. */
+  mapLink?: boolean;
 }) {
   const sides = fixtureSides(teamName, match.opponent, match.isHome);
   const left = countdown(match.startsAt);
   const venue = venueLabel(match.isHome);
   const meet = meetingTime(match.note);
   return (
-    <Link
-      href={`/aktiviteter/${match.id}`}
-      aria-label={`Kampdag: ${sides[0]!.name} mod ${sides[1]!.name} kl. ${readInZone(match.startsAt, "HH:mm")}${meet ? `, mødetid ${meet}` : ""}`}
-      className="fixture-poster press-card block overflow-hidden rounded-2xl shadow-sm"
-    >
+    <div className="fixture-poster">
       <div className="flex items-center justify-between gap-2 px-4 pt-3 text-[11px] font-semibold tracking-[0.18em] uppercase">
         <span className="flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-2 py-0.5 text-slate-900">
-          <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--star)]" />
+          {left.matchday && <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--star)]" />}
           {left.matchday ? "Kampdag" : left.text}
         </span>
         {venue && <span className="rounded-full border border-white/40 px-2 py-0.5">{venue}</span>}
@@ -52,10 +80,27 @@ export function FixtureCard({
 
       <div className="flex items-center justify-between gap-3 bg-black/15 px-4 py-2 text-xs">
         <span className="font-score text-base tracking-wide uppercase">{meet ? `Mødetid ${meet}` : left.text}</span>
-        {match.location && <span className="min-w-0 truncate opacity-85">📍 {match.location}</span>}
+        {match.location &&
+          (mapLink ? (
+            <a
+              href={mapsHref(match.location)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="press-text -my-2 block min-w-0 truncate py-2 underline-offset-2 opacity-90 hover:underline"
+            >
+              📍 {match.location} <span className="sr-only">(vis på kort)</span>
+            </a>
+          ) : (
+            <span className="min-w-0 truncate opacity-85">📍 {match.location}</span>
+          ))}
       </div>
-    </Link>
+    </div>
   );
+}
+
+/** A place, searched for on Google Maps. */
+export function mapsHref(location: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
 }
 
 /** A club's own crest, as the super admin put it in: kept whole, never cropped. */

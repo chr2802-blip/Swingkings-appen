@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CREST_COLOURS, crestColours, crestInitials, fixtureSides, meetingTime, venueLabel } from "@/lib/fixture";
+import { CREST_COLOURS, crestColours, crestInitials, fixtureSides, meetingTime, venueLabel, withoutMeetingTime } from "@/lib/fixture";
 
 describe("fixture poster", () => {
   it("makes a crest's letters from a club's name", () => {
@@ -38,6 +38,14 @@ describe("fixture poster", () => {
     expect(meetingTime("Mødested: Klubhuset")).toBeNull();
     expect(meetingTime("Mødetid 25:00")).toBeNull();
     expect(meetingTime(null)).toBeNull();
+  });
+
+  it("takes the meeting time out of a note the poster already says it for", () => {
+    expect(withoutMeetingTime("Mødetid 13:45")).toBeNull();
+    expect(withoutMeetingTime("Mødetid 11:00 – vi kører samlet fra klubhuset")).toBe("Vi kører samlet fra klubhuset");
+    expect(withoutMeetingTime("Husk støvler.\nMødetid: kl. 9.30\nTag vand med")).toBe("Husk støvler.\n\nTag vand med");
+    expect(withoutMeetingTime("Ingen mødetid her")).toBe("Ingen mødetid her");
+    expect(withoutMeetingTime(null)).toBeNull();
   });
 
   it("says home or away only when it is known", () => {

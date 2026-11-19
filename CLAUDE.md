@@ -183,7 +183,9 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   /admin and shared by every team — no `teamId`. A club is found by its folded name
   (`clubKey`), also without a team number ("Hvidovre IF (2)"). Served from
   `/api/club-logos/<id>` to anybody signed in; a new logo is a new row. The opponent's shows
-  on the front page's fixture poster, which is there on match day only.
+  on the fixture poster (`FixturePoster`): on the front page on match day only, and always at
+  the head of a match's details, with the team's comments in the same card. Under a poster
+  the note leaves out the meeting time it shows (`withoutMeetingTime`).
 - **Pictures** are shrunk in the browser (`downscale.ts`), re-measured on arrival
   (`photo-file.ts`) and served from `/api/photos/<id>` behind the session. The bytes are in
   Postgres, or in a private Supabase Storage bucket when `SUPABASE_URL` and
