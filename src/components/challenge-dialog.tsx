@@ -9,20 +9,17 @@ import { fineUnits, kr } from "@/lib/money";
 
 /**
  * Reporting a challenge that has been played. It goes through when somebody else on the
- * team approves it, and the stake moves from the winner's fines to the loser's.
+ * team approves it, and the stake moves from the winner's fines to the loser's. It names
+ * no match: a challenge is between two people, wherever it was played.
  */
 export function ChallengeDialog({
   opponents,
   finePriceKr,
-  matches,
-  defaultMatchId,
   defaultOpponentId,
   triggerClassName,
 }: {
   opponents: { userId: string; name: string }[];
   finePriceKr: number;
-  matches: { id: string; label: string }[];
-  defaultMatchId?: string;
   /** Somebody chosen from the start: the person whose page the "+" is on. */
   defaultOpponentId?: string;
   triggerClassName?: string;
@@ -85,18 +82,6 @@ export function ChallengeDialog({
           required
         />
       </Field>
-      {matches.length > 0 && (
-        <Field label="Kamp (valgfri)" htmlFor="matchId">
-          <Select id="matchId" name="matchId" defaultValue={defaultMatchId ?? ""}>
-            <option value="">Ingen kamp</option>
-            {matches.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      )}
     </FormDialog>
   );
 }

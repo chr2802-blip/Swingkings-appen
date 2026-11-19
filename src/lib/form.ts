@@ -39,6 +39,14 @@ export const optionalText = z
 export const wholeNumber = (message: string, min: number, max: number) =>
   z.coerce.number({ error: message }).int(message).min(min, message).max(max, message);
 
+/** A shirt number, 0–999; empty means none. Set by the player under Profil or by an admin. */
+export const shirtNumber = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v ? Number(v) : null))
+  .refine((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 999), "Trøjenummeret skal være et tal.");
+
 /** An optional id from a select: empty means none. */
 export const optionalId = z
   .string()

@@ -73,11 +73,15 @@ test("the catalogue drop-down searches its choices, and Escape closes it and not
 });
 
 test("a required drop-down left on its placeholder stops the form", async ({ page, loginAs }) => {
-  const { anna } = await squad();
+  const { team, anna } = await squad();
+  await db.match.create({ data: { teamId: team.id, kind: "MATCH", title: "Kamp", opponent: "FC Naboen", startsAt: new Date(Date.now() - 86_400_000) } });
   await loginAs(anna);
   await page.goto("/boder");
   await create(page, "Meld udfordring");
   const dialog = page.getByRole("dialog", { name: "Meld en udfordring" });
+  // A challenge is between two people: it names no match, though one was just played.
+  await expect(dialog.getByLabel("Hvem spillede du mod?")).toBeVisible();
+  await expect(dialog.getByLabel("Kamp (valgfri)")).toHaveCount(0);
   await expect(dialog.getByLabel("Hvem spillede du mod?")).toHaveText("Vælg spiller…");
   await dialog.getByLabel("Hvad gik udfordringen ud på?").fill("Overliggeren");
   await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
@@ -595,13 +599,11 @@ test("the overview stays on top: what you owe, what is in the box and the way to
 
   await loginAs(anna);
   await page.goto("/boder");
-  // Five fines given: 50 kr in the box, paid when the season is over, 10 of them Anna's.
+  // Five fines given: 50 kr in the box, 10 of them Anna's — the sums alone, no line under them.
   const mine = page.getByRole("link", { name: /Dine bøder/ });
-  await expect(mine).toContainText("10 kr");
-  await expect(mine).toContainText("1 bøde");
+  await expect(mine).toHaveText("Dine bøder10 kr");
   const box = page.getByText("I kassen").locator("..");
-  await expect(box).toContainText("50 kr");
-  await expect(box).toContainText("betales ved sæsonslut");
+  await expect(box).toHaveText("I kassen50 kr");
   // A row on the board opens the player's page, and says so at its end as the history's rows do.
   await expect(page.getByRole("link", { name: /Bo .*40 kr/ })).toBeVisible();
   await expect(

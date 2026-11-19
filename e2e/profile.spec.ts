@@ -12,6 +12,34 @@ test("renames yourself", async ({ page, loginAs }) => {
   expect((await db.user.findUniqueOrThrow({ where: { id: anna.id } })).name).toBe("Anna Andersen");
 });
 
+test("sets your own shirt number, which your card then wears", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/profil");
+  await expect(page.getByText("Dit nummer på Swingkings.")).toBeVisible();
+  await page.getByLabel("Trøjenummer").fill("10");
+  await page.getByRole("button", { name: "Gem" }).click();
+  await expect(page.getByText("Gemt.")).toBeVisible();
+  expect((await db.teamMember.findFirstOrThrow({ where: { userId: anna.id } })).shirtNumber).toBe(10);
+
+  await page.getByRole("link", { name: "Se min side" }).click();
+  await expect(page.getByText("#10", { exact: true })).toBeVisible();
+  await expect(page.locator('main [data-shirt="10"]').first()).toBeVisible();
+
+  // Your place on the board leads to the board.
+  await page.getByRole("link", { name: "Nummer 1 på bødetavlen" }).click();
+  await expect(page).toHaveURL(/\/boder$/);
+  await expect(page.getByRole("tab", { name: "Bødetavlen" })).toHaveAttribute("aria-selected", "true");
+
+  // A number past 999 the browser refuses to send, and the old one stands.
+  await page.goto("/profil");
+  const field = page.getByLabel("Trøjenummer");
+  await field.fill("1000");
+  await page.getByRole("button", { name: "Gem" }).click();
+  expect(await field.evaluate((input: HTMLInputElement) => input.validity.rangeOverflow)).toBe(true);
+  expect((await db.teamMember.findFirstOrThrow({ where: { userId: anna.id } })).shirtNumber).toBe(10);
+});
+
 test("changes the password, which then works at the login form", async ({ page, loginAs }) => {
   const { anna } = await squad();
   await loginAs(anna);

@@ -75,6 +75,9 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   `reason`/`units` in the form is not read. It takes several `fineTypeId`s too (a player's
   page offers it, `severalFines`): each is given to every player chosen, with one notice per
   player naming them all.
+- **A shirt number** (`TeamMember.shirtNumber`, per team) is set by the player under Profil
+  (`updateProfile`, the team on screen) or by an admin in the member dialog.
+- **A challenge names no match**: the report asks who, who won, what and the stake.
 - **Players are chosen with `PlayerSelect`** (`src/components/player-select.tsx`) everywhere
   a form picks people — a fine, a job's assignees, a notice's recipients, a poll's roster.
   It is the app's own `MultiSelect` (`src/components/select.tsx`, the multi-choice twin of

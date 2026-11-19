@@ -7,13 +7,14 @@ import { redirect } from "next/navigation";
 import { createSession, destroySession, hashPassword, requireUser, verifyPassword } from "@/lib/auth";
 import { deleteAccount, deletionBlocker } from "@/lib/account";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { readForm, requiredText } from "@/lib/form";
+import { readForm, requiredText, shirtNumber } from "@/lib/form";
+import { teamDb } from "@/lib/team-db";
 import { readPhotoChoice } from "@/lib/photos";
 import { PHOTO_FIELD } from "@/lib/photo-file";
 
 export async function updateProfile(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireUser();
-  const form = readForm(z.object({ name: requiredText("Skriv dit navn.", 100) }), formData);
+  const form = readForm(z.object({ name: requiredText("Skriv dit navn.", 100), shirtNumber }), formData);
   if (!form.ok) return fail(form.error);
 
   // A person's picture is filed under the team on screen — an upload has to be filed
@@ -29,6 +30,11 @@ export async function updateProfile(_prev: ActionResult, formData: FormData): Pr
     where: { id: user.id },
     data: { name: form.fields.name, ...(photoId !== undefined ? { photoId } : {}) },
   });
+  // One's shirt number is the team's on screen (a person can wear another on another team),
+  // and only on a team one is on: a super admin looking in has no place to put it.
+  if (user.teamId && formData.has("shirtNumber")) {
+    await teamDb(user.teamId).teamMember.updateMany({ where: { userId: user.id }, data: { shirtNumber: form.fields.shirtNumber } });
+  }
   revalidatePath("/", "layout");
   return ok();
 }
