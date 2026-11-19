@@ -198,7 +198,8 @@ export async function FinesScreen({
 }
 
 /**
- * The board as a league table: place, the player, how many fines and what they come to.
+ * The board as a league table: place, the player and what their fines come to. Your own
+ * row is marked by its colour, not by words.
  * Beside the place an arrow says how far they have moved since a week ago (`standings`).
  * Who owes the same shares the place.
  */
@@ -207,11 +208,10 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
     <Card padded={false} className="overflow-hidden">
       <div
         aria-hidden
-        className="grid grid-cols-[2.75rem_1fr_3.25rem_4.5rem_0.5rem] items-center gap-2 border-b border-slate-200 bg-slate-50 py-2 pr-3 pl-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase"
+        className="grid grid-cols-[2.75rem_1fr_4.5rem_0.5rem] items-center gap-2 border-b border-slate-200 bg-slate-50 py-2 pr-3 pl-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase"
       >
         <span className="text-center">#</span>
         <span>Spiller</span>
-        <span className="text-right">Bøder</span>
         <span className="text-right">Kr</span>
         <span />
       </div>
@@ -226,7 +226,7 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
               <Link
                 href={playerHref(row.userId)}
                 aria-current={isMe ? "true" : undefined}
-                className={`press-card grid grid-cols-[2.75rem_1fr_3.25rem_4.5rem_0.5rem] items-center gap-2 py-2.5 pr-3 pl-2 ${
+                className={`press-card grid grid-cols-[2.75rem_1fr_4.5rem_0.5rem] items-center gap-2 py-2.5 pr-3 pl-2 ${
                   isMe ? "bg-[var(--gold-tint)] shadow-[inset_4px_0_0_var(--gold)]" : ""
                 }`}
               >
@@ -244,11 +244,9 @@ function BoardPage({ userId, board, kings }: { userId: string; board: Board; kin
                         <span className="sr-only">(månedens bødekonge)</span>
                       </span>
                     )}
-                    {isMe && <span className="text-xs font-normal text-slate-500">(dig)</span>}
                     {!person.onTeam && <span className="text-xs font-normal text-slate-400">(ikke på holdet)</span>}
                   </span>
                 </span>
-                <span className="font-score text-right text-base text-slate-500">{row.units}</span>
                 <span className="text-right">
                   {paid ? (
                     <Badge tone="green">Betalt</Badge>
