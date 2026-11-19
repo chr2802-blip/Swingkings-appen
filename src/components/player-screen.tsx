@@ -269,7 +269,6 @@ function PlayerCreateMenu({
         <ChallengeDialog
           opponents={board.roster.filter((m) => m.userId !== viewerId)}
           finePriceKr={board.finePriceKr}
-          matches={matches}
           defaultOpponentId={other}
         />
       )}
@@ -383,15 +382,18 @@ function PlayerHeader({
         </div>
       </div>
       {/* Their season, on a card lying over the foot of the band. */}
-      <dl className="relative -mt-10 grid grid-cols-4 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2.5 text-center shadow-sm">
+      <dl className="relative -mt-10 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2.5 text-center shadow-sm">
         <Stat
           label={paid ? "betalt" : paying ? "skal betales" : "bøder i alt"}
           value={kr(account.owesKr)}
           tone={paid || account.owesKr === 0 ? "text-emerald-700" : "text-[var(--star)]"}
         />
-        <Stat label={account.units === 1 ? "bøde" : "bøder"} value={String(account.units)} />
         <Stat label={openTasks === 1 ? "opgave" : "opgaver"} value={String(openTasks)} />
-        <Stat label="på tavlen" value={place ? `#${place}` : "–"} />
+        {/* Their place leads to the board it is a place on. */}
+        <Link href="/boder" aria-label={place ? `Nummer ${place} på bødetavlen` : "Bødetavlen"} className="press-card -my-2.5 flex min-w-0 flex-col-reverse justify-center rounded-r-2xl py-2.5">
+          <span className="truncate text-[11px] text-slate-500">på tavlen ›</span>
+          <span className="font-score text-xl leading-tight font-semibold">{place ? `#${place}` : "–"}</span>
+        </Link>
       </dl>
       {paying && paid && (
         <p className="mt-3 text-center text-sm font-medium text-emerald-700">✅ Bøderne er betalt</p>

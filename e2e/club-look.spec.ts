@@ -86,6 +86,11 @@ test("the fine board is a table with each player's place and how they moved sinc
   await expect(page.getByRole("link", { name: /^1 .*op 1 plads siden sidste uge.* Bo .*60 kr/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /^2 .*ned 1 plads siden sidste uge.* Anna .*30 kr/ })).toBeVisible();
   await expect(page.getByRole("tabpanel", { name: "Bødetavlen" }).locator("[data-shirt]")).toHaveCount(0);
+  // Kroner only, no count of fines; and your own row is marked by its colour, not "(dig)".
+  await expect(page.getByRole("tabpanel", { name: "Bødetavlen" })).not.toContainText("Bøder");
+  const mine = page.locator('[aria-current="true"]');
+  await expect(mine).toContainText("Anna");
+  await expect(mine).not.toContainText("(dig)");
   // A clean sheet stands still and says so.
   await expect(page.getByRole("link", { name: /samme plads som for en uge siden.* Træner Tom .*ren tavle/ })).toBeVisible();
 });
@@ -100,8 +105,8 @@ test("a player's page is their card: the shirt with their number, and their plac
   await expect(page.getByRole("heading", { name: "Bo", level: 1 })).toBeVisible();
   // No picture, so the shirt with the number on its back stands in for one.
   await expect(page.locator('main [data-shirt="10"]').first()).toBeVisible();
-  const placed = page.getByRole("term").filter({ hasText: "på tavlen" }).locator("..");
-  await expect(placed).toContainText("#1");
+  // Their place, which leads to the board.
+  await expect(page.getByRole("link", { name: "Nummer 1 på bødetavlen" })).toContainText("#1");
 
   // Somebody with neither picture nor number keeps their initials.
   await page.goto(`/spiller/${anna.id}`);

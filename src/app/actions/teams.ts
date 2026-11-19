@@ -9,7 +9,7 @@ import { hashPassword, requireSuperAdmin, requireTeamUser, requireUser } from "@
 import { assertTeamAdmin, canAccessTeam, canAdministerTeam } from "@/lib/access";
 import { generateTemporaryPassword } from "@/lib/account";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { field, readForm, requiredText, wholeNumber } from "@/lib/form";
+import { field, readForm, requiredText, shirtNumber, wholeNumber } from "@/lib/form";
 import { generateLinkToken, hashLinkToken, joinPath } from "@/lib/invite-links";
 import { LINK_DAYS, LINK_MAX_USES } from "@/lib/invite-link-options";
 import { discardReplaced, readPhotoChoice, removeStored } from "@/lib/photos";
@@ -138,12 +138,7 @@ const memberSchema = z.object({
   userId: z.string().min(1),
   // Left out by the dialog: roles are ticked in the members table (setMemberRole).
   role: z.enum(ROLES).optional(),
-  shirtNumber: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v ? Number(v) : null))
-    .refine((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 999), "Trøjenummeret skal være et tal."),
+  shirtNumber,
   takesTasks: z.enum(["on", "off"]).optional(),
   duesPaid: z.enum(["on", "off"]).optional(),
   kampklarName: z.string().trim().max(120).optional(),

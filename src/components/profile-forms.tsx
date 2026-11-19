@@ -8,12 +8,37 @@ import { ProfilePhotoField } from "@/components/photo-field";
 import { useFormAction } from "@/components/use-form-action";
 import { changePassword, deleteMyAccount, setNewPassword, updateProfile } from "@/app/actions/profile";
 
-export function ProfileForm({ name, photoId, canUpload }: { name: string; photoId: string | null; canUpload: boolean }) {
+export function ProfileForm({
+  name,
+  photoId,
+  canUpload,
+  shirt,
+}: {
+  name: string;
+  photoId: string | null;
+  canUpload: boolean;
+  /** One's place on the team on screen, for the shirt number there; null on no team. */
+  shirt: { teamName: string; number: number | null } | null;
+}) {
   return (
     <ActionForm action={updateProfile} submitLabel="Gem" className="space-y-4">
       <Field label="Navn" htmlFor="name">
         <Input id="name" name="name" defaultValue={name} maxLength={100} required />
       </Field>
+      {shirt && (
+        <Field label="Trøjenummer" htmlFor="shirtNumber" hint={`Dit nummer på ${shirt.teamName}. Lad feltet stå tomt, hvis du ikke har et.`}>
+          <Input
+            id="shirtNumber"
+            name="shirtNumber"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={999}
+            defaultValue={shirt.number ?? ""}
+            className="max-w-28"
+          />
+        </Field>
+      )}
       {canUpload && <ProfilePhotoField name={name} defaultPhotoId={photoId} />}
     </ActionForm>
   );
