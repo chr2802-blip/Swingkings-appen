@@ -31,7 +31,7 @@ export function PhotoCarousel({ photoIds, alt }: { photoIds: string[]; alt: stri
   if (photoIds.length === 1) {
     return (
       <div ref={area} className="touch-pan-x touch-pan-y bg-slate-100">
-        <button type="button" onClick={() => open(0)} className="block w-full cursor-zoom-in">
+        <button type="button" onClick={() => open(0)} className="press-photo block w-full cursor-zoom-in">
           <Photo photoId={photoIds[0]!} alt={alt} className="max-h-[70vh] w-full object-contain" />
         </button>
         {overlay}
@@ -51,7 +51,7 @@ export function PhotoCarousel({ photoIds, alt }: { photoIds: string[]; alt: stri
         className="scrollbar-hidden flex snap-x snap-mandatory overflow-x-auto"
       >
         {photoIds.map((id, i) => (
-          <button key={id} type="button" onClick={() => open(i)} className="w-full shrink-0 cursor-zoom-in snap-center">
+          <button key={id} type="button" onClick={() => open(i)} className="press-photo w-full shrink-0 cursor-zoom-in snap-center">
             <Photo photoId={id} alt={`${alt} (${i + 1} af ${photoIds.length})`} className="aspect-[4/5] w-full object-cover" />
           </button>
         ))}
@@ -59,15 +59,18 @@ export function PhotoCarousel({ photoIds, alt }: { photoIds: string[]; alt: stri
       <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-slate-900/60 px-2 py-0.5 text-xs text-white">
         {index + 1}/{photoIds.length}
       </span>
-      <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
+      {/* Each dot sits in a finger-sized target; the targets touch, so the dots stand a little apart. */}
+      <div className="absolute inset-x-0 bottom-0 flex justify-center">
         {photoIds.map((id, i) => (
           <button
             key={id}
             type="button"
             aria-label={`Vis billede ${i + 1}`}
             onClick={() => strip.current?.scrollTo({ left: i * strip.current.clientWidth, behavior: "smooth" })}
-            className={`h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"}`}
-          />
+            className="press-icon flex h-8 w-8 items-center justify-center rounded-full"
+          >
+            <span className={`h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-white" : "w-1.5 bg-white/60"}`} />
+          </button>
         ))}
       </div>
       {overlay}

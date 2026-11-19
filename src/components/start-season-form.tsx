@@ -13,7 +13,7 @@ export function StartSeasonForm({ defaultName }: { defaultName: string }) {
       <Field label="Navn på sæsonen der slutter" htmlFor="season-name" hint="Står over resuméet under Tidligere sæsoner.">
         <Input id="season-name" name="name" required maxLength={MAX_SEASON_NAME} defaultValue={defaultName} />
       </Field>
-      <label className="flex items-start gap-2 font-medium">
+      <label className="press-text flex items-start gap-2 py-1.5 font-medium">
         <input type="checkbox" name="confirm" value="on" required className="mt-0.5 h-4 w-4 accent-[var(--accent)]" />
         Jeg forstår, at det ikke kan fortrydes
       </label>

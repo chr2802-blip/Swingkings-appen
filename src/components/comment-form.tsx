@@ -150,7 +150,7 @@ export function CommentForm({
           <span>
             Svarer <span className="font-semibold text-slate-700">{replyTo.name}</span>
           </span>
-          <button type="button" onClick={onCancelReply} className="font-medium text-slate-500 underline-offset-2 hover:underline">
+          <button type="button" onClick={onCancelReply} className="press-text tap-inline font-medium text-slate-500 underline-offset-2 hover:underline">
             Annuller
           </button>
         </p>

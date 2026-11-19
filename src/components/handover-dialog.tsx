@@ -6,7 +6,7 @@ import { Field, Textarea } from "@/components/ui";
 import { handOverTask } from "@/app/actions/tasks";
 
 const option =
-  "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_10%,white)]";
+  "press-card flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_10%,white)]";
 
 /**
  * Giving your place on a job away: ask the whole team in the chat, or one teammate. Either

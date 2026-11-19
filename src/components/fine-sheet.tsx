@@ -76,7 +76,7 @@ export function FineSheet({
               <p role="alert" className="text-sm text-red-600">
                 Bøden kunne ikke hentes. Tjek forbindelsen.
               </p>
-              <button type="button" onClick={load} className="text-sm font-medium text-[var(--accent-text)] underline">
+              <button type="button" onClick={load} className="press-text tap-inline text-sm font-medium text-[var(--accent-text)] underline">
                 Prøv igen
               </button>
             </div>

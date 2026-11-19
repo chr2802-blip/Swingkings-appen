@@ -43,7 +43,7 @@ export function ReactorsDrawer({ open, onClose, reactors }: { open: boolean; onC
         <ul aria-label="Reaktioner" className="space-y-3">
           {shown.map((person) => (
             <li key={person.id}>
-              <PlayerLink userId={person.id} className="flex items-center gap-3 text-sm font-medium">
+              <PlayerLink userId={person.id} press="button" className="flex items-center gap-3 text-sm font-medium">
                 <span className="relative shrink-0">
                   <Avatar name={person.name} photoId={person.photoId} size="sm" />
                   <span className="absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow ring-1 ring-slate-200">

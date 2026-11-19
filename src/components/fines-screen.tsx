@@ -91,7 +91,7 @@ export async function FinesScreen({
         </p>
       )}
 
-      <Card padded={false} className="mb-5 overflow-hidden">
+      <Card padded={false} className="mb-5">
         <div className={`grid divide-x divide-slate-100 ${mine ? "grid-cols-2" : ""}`}>
           {mine && (
             <Link href={playerHref(user.id)} className="press-card px-4 py-3">
@@ -204,7 +204,7 @@ export async function FinesScreen({
  */
 function BoardPage({ userId, board, kings }: { userId: string; board: Board; kings: string[] }) {
   return (
-    <Card padded={false} className="overflow-hidden">
+    <Card padded={false}>
       <div
         aria-hidden
         className="grid grid-cols-[2.75rem_1fr_3.25rem_4.5rem_0.5rem] items-center gap-2 border-b border-slate-200 bg-slate-50 py-2 pr-3 pl-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase"
@@ -300,7 +300,7 @@ function CataloguePage({ board, manages }: { board: Board; manages: boolean }) {
         </EmptyState>
       )}
       {types.length > 0 && (
-        <Card padded={false} className="overflow-hidden">
+        <Card padded={false}>
           <ul className="divide-y divide-slate-100">
             {types.map((type) => {
               const row = (

@@ -67,7 +67,7 @@ export function ActivityComments({
             onClick={() => fold(!open)}
             aria-expanded={open}
             aria-controls={listId}
-            className="press-button rounded-lg px-1 text-xs font-semibold text-[var(--accent-text)]"
+            className="press-button -my-2 rounded-lg px-1 py-2 text-xs font-semibold text-[var(--accent-text)]"
           >
             {open ? "Skjul ældre" : `Vis alle ${count}`}
           </button>
@@ -82,7 +82,7 @@ export function ActivityComments({
               <button
                 type="button"
                 onClick={() => fold(true)}
-                className="press-button mb-3 text-xs font-medium text-slate-600 hover:text-slate-900"
+                className="press-button -mt-2 mb-1 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
               >
                 {hidden === 1 ? "Se 1 tidligere kommentar" : `Se ${hidden} tidligere kommentarer`}
               </button>

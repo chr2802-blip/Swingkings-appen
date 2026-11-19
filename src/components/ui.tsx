@@ -31,10 +31,14 @@ export function ButtonLink({
   return <Link className={buttonClass(variant, className)} {...props} />;
 }
 
+/**
+ * A white card. Without padding it holds rows that reach its edges, so it cuts them to its
+ * rounded corners: a row's press shade (`press-card`) is never square in a round corner.
+ */
 export function Card({ className = "", padded = true, ...props }: ComponentProps<"div"> & { padded?: boolean }) {
   return (
     <div
-      className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${padded ? "p-5" : ""} ${className}`}
+      className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${padded ? "p-5" : "overflow-hidden"} ${className}`}
       {...props}
     />
   );

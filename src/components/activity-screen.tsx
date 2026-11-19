@@ -185,7 +185,7 @@ export async function ActivityScreen({
                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.location)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-start gap-1 text-sm text-slate-600 hover:underline"
+                          className="press-text -my-1.5 flex items-start gap-1 py-1.5 text-sm text-slate-600 hover:underline"
                         >
                           <span aria-hidden="true">📍</span>
                           <span>
@@ -331,7 +331,7 @@ function SignupFaces({ people, shirts }: { people: SignupPerson[]; shirts: Map<s
         return (
           <li key={p.key}>
             {p.userId ? (
-              <PlayerLink userId={p.userId} aria-label={p.name} className="flex flex-col items-center gap-1 hover:no-underline">
+              <PlayerLink userId={p.userId} aria-label={p.name} press="button" className="flex flex-col items-center gap-1">
                 {face}
               </PlayerLink>
             ) : (

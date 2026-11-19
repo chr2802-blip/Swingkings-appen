@@ -205,7 +205,7 @@ function ReactionMenu({
                 onClose();
                 action.onSelect();
               }}
-              className={`block w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-slate-50 ${action.danger ? "text-red-600" : "text-slate-800"}`}
+              className={`press-card block w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-slate-50 ${action.danger ? "text-red-600" : "text-slate-800"}`}
             >
               {action.label}
             </button>
@@ -225,18 +225,29 @@ export function ReactionSummary({ reactors, small = false }: { reactors: Reactor
   const [open, setOpen] = useState(false);
   if (reactors.length === 0) return null;
   const tally = tallyReactions(reactors, "");
+  const count = (
+    <>
+      {tally.top && <ReactionGlyph kind={tally.top} size={small ? "xs" : "md"} />}
+      {tally.total}
+    </>
+  );
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`${tally.total} ${tally.total === 1 ? "reaktion" : "reaktioner"}: ${reactorsLabel(reactors)}`}
+        // The small chip on a chat bubble is drawn inside a finger-sized target that a
+        // negative margin as big keeps from moving anything.
         className={`press-button flex shrink-0 items-center rounded-full text-slate-600 tabular-nums ${
-          small ? "h-5 gap-1 bg-white px-1.5 text-[11px] shadow-sm ring-1 ring-slate-200" : "h-9 gap-1.5 px-2 text-sm"
+          small ? "-m-1.5 p-1.5" : "h-9 gap-1.5 px-2 text-sm"
         }`}
       >
-        {tally.top && <ReactionGlyph kind={tally.top} size={small ? "xs" : "md"} />}
-        {tally.total}
+        {small ? (
+          <span className="flex h-5 items-center gap-1 rounded-full bg-white px-1.5 text-[11px] shadow-sm ring-1 ring-slate-200">{count}</span>
+        ) : (
+          count
+        )}
       </button>
       <ReactorsDrawer open={open} onClose={() => setOpen(false)} reactors={reactors} />
     </>
@@ -291,7 +302,7 @@ export function PostReactions({ children, ...thing }: Thing & { children?: React
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Vælg en anden reaktion"
-          className="sr-only focus:not-sr-only focus:rounded-full focus:px-2 focus:text-xs focus:text-slate-600"
+          className="press-text sr-only focus:not-sr-only focus:rounded-full focus:px-2 focus:text-xs focus:text-slate-600"
         >
           Flere
         </button>
@@ -359,7 +370,7 @@ export function Holdable({
         aria-label={`Reager eller svar på ${label}`}
         aria-haspopup="true"
         aria-expanded={open}
-        className="sr-only focus:not-sr-only focus:rounded-full focus:px-2 focus:text-xs focus:text-slate-600"
+        className="press-text sr-only focus:not-sr-only focus:rounded-full focus:px-2 focus:text-xs focus:text-slate-600"
       >
         Handlinger
       </button>
