@@ -107,7 +107,7 @@ export function ChallengeCard({
 
 function Side({ person, won }: { person: Person; won: boolean }) {
   return (
-    <PlayerLink userId={person.id} className="flex min-w-0 items-center gap-1.5">
+    <PlayerLink userId={person.id} press="button" className="flex min-h-8 min-w-0 items-center gap-1.5">
       <Avatar name={person.name} photoId={person.photoId} size="xs" />
       <span className={`min-w-0 break-words text-sm ${won ? "font-semibold" : ""}`}>
         {person.name}

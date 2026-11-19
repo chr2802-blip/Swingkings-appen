@@ -57,7 +57,7 @@ export default async function ProfilePage() {
         <Card className="space-y-3 text-sm text-slate-600">
           <p>
             Sådan bruger vi dine oplysninger:{" "}
-            <Link href="/privatliv" className="underline">
+            <Link href="/privatliv" className="press-text tap-inline underline">
               Privatliv
             </Link>
             .
@@ -65,7 +65,7 @@ export default async function ProfilePage() {
           <DeleteAccountForm />
         </Card>
       </section>
-      <LogoutButton className="text-sm text-slate-500 underline" />
+      <LogoutButton className="-my-1.5 py-1.5 text-sm text-slate-500 underline" />
       <footer className="flex flex-col items-center gap-2 pt-4 pb-2 text-center">
         <Image src="/logo.png" alt="" width={512} height={512} className="h-14 w-14 opacity-90" />
         <p className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase">

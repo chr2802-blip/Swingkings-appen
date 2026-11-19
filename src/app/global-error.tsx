@@ -46,7 +46,7 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-full bg-[#2563ab] px-5 py-2.5 font-medium text-white"
+            className="press-button rounded-full bg-[#2563ab] px-5 py-2.5 font-medium text-white"
           >
             Genindlæs
           </button>

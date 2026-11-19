@@ -191,6 +191,13 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   `npm run db:photos` moves the old ones). Pages read `photoId`, never the bytes.
 - **A migration that adds a table ends with `ENABLE ROW LEVEL SECURITY`** (Supabase serves
   `public` to the publishable key). Run `npm run db:check` after any schema change.
+- **Everything pressable answers the press and is at least 32×32 px.** Each button, link,
+  `<summary>`, choice label and sheet trigger carries a press class from `globals.css`,
+  chosen by its look: `press-icon` / `press-button` / `press-card` (by size; a card's shade
+  is cut by its own rounded corners, and `Card padded={false}` clips its rows to its own),
+  `press-text` for a word in a line (with `tap-inline` for the 32 px target without moving
+  the line), `press-photo` for a picture. `tests/unit/press-feedback.test.ts` reads the
+  source; `e2e/tap-targets.spec.ts` measures the demo team's pages and sheets.
 - **No Suspense boundaries** (`<Suspense>`, `loading.tsx`): an action that revalidates
   then waits on the boundary and its button can hang ("Stemmer…") on a slow machine. It
   happened twice and failed CI a few runs in ten; `tests/unit/no-suspense.test.ts` refuses it.

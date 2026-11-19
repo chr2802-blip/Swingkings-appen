@@ -142,7 +142,7 @@ export function TaskDetails({ task, user, members }: { task: TaskView; user: Tea
               const asking = pending.find((h) => h.fromId === a.user.id);
               return (
                 <li key={a.user.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <PlayerLink userId={a.user.id} className="shrink-0" aria-label={a.user.name}>
+                  <PlayerLink userId={a.user.id} press="icon" className="block shrink-0" aria-label={a.user.name}>
                     <Avatar name={a.user.name} photoId={a.user.photoId} shirtNumber={members.find((m) => m.userId === a.user.id)?.shirtNumber} size="sm" />
                   </PlayerLink>
                   <span className="min-w-0 flex-1 text-sm">
@@ -178,7 +178,7 @@ export function TaskDetails({ task, user, members }: { task: TaskView; user: Tea
 
       {task.handovers.length > 0 && (
         <details className="group rounded-2xl border border-slate-200">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-medium">
+          <summary className="press-card flex cursor-pointer list-none items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-medium">
             Historik ({task.handovers.length})
             <span aria-hidden className="text-slate-400 transition-transform group-open:rotate-90">
               ›

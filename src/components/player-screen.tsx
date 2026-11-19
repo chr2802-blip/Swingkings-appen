@@ -356,7 +356,7 @@ function PlayerHeader({
                       link={board.payLink}
                       amountKr={board.duesKr}
                       name={person.name}
-                      className="text-xs font-medium text-white underline underline-offset-2"
+                      className="press-text tap-inline text-xs font-medium text-white underline underline-offset-2"
                     >
                       Betal kontingent
                       {board.duesKr ? ` (${kr(board.duesKr)})` : ""} ›
@@ -370,7 +370,7 @@ function PlayerHeader({
                 href="/profil"
                 aria-label="Rediger"
                 title="Rediger"
-                className="flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-full bg-white/15 text-white hover:bg-white/25"
+                className="press-icon flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-full bg-white/15 text-white hover:bg-white/25"
               >
                 <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M12 20h9" />

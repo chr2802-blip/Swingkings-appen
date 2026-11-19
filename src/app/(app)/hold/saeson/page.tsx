@@ -259,7 +259,7 @@ async function StartStep({ teamId }: { teamId: string }) {
 
 function Go({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="font-medium text-[var(--accent)] underline-offset-2 hover:underline">
+    <Link href={href} className="press-text tap-inline font-medium text-[var(--accent)] underline-offset-2 hover:underline">
       {children}
     </Link>
   );

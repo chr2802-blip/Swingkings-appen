@@ -129,7 +129,7 @@ export function Select({
             openPicker();
           }
         }}
-        className={`${field} flex items-center gap-2 text-left disabled:opacity-50 ${className}`}
+        className={`${field} press-card flex items-center gap-2 text-left disabled:opacity-50 ${className}`}
       >
         <span className={`min-w-0 flex-1 truncate ${placeholder ? "text-slate-400" : ""}`}>
           {chosen?.label || "Vælg…"}
@@ -251,7 +251,7 @@ function Picker({
               aria-selected={selected}
               onClick={() => onChoose(choice.value)}
               onMouseMove={() => setActive(index)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm ${
+              className={`press-card flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm ${
                 index === active ? "bg-slate-100" : ""
               } ${selected ? "font-semibold text-[var(--accent-text)]" : "text-slate-800"}`}
             >
@@ -378,7 +378,7 @@ export function MultiSelect({
             openPicker();
           }
         }}
-        className={`${field} flex items-center gap-2 text-left`}
+        className={`${field} press-card flex items-center gap-2 text-left`}
       >
         <span className={`min-w-0 flex-1 truncate ${chosen.length === 0 ? "text-slate-400" : ""}`}>
           {summary || placeholder}

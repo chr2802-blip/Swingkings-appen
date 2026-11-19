@@ -32,9 +32,9 @@ export function FeedPostCard({
   const reactors = reactorsOf(post.reactions);
   return (
     <PostState>
-      <Card padded={false} className="overflow-hidden">
+      <Card padded={false}>
         <div className="flex items-center gap-3 px-4 py-3">
-          <PlayerLink userId={post.author.id} className="shrink-0" aria-label={post.author.name}>
+          <PlayerLink userId={post.author.id} press="icon" className="block shrink-0" aria-label={post.author.name}>
             <Avatar name={post.author.name} photoId={post.author.photoId} size="sm" />
           </PlayerLink>
           <div className="min-w-0 flex-1">

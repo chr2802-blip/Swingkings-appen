@@ -232,7 +232,7 @@ export function PollView({ poll }: { poll: PollViewData }) {
           <button
             type="button"
             onClick={() => setShowAll((value) => !value)}
-            className="press-button px-1 text-sm font-medium text-[var(--accent-text)]"
+            className="press-button -my-1.5 px-1 py-1.5 text-sm font-medium text-[var(--accent-text)]"
           >
             {showAll ? "Vis færre" : `Vis alle ${poll.options.length} svar`}
           </button>
@@ -241,7 +241,7 @@ export function PollView({ poll }: { poll: PollViewData }) {
           <button
             type="button"
             onClick={() => setShowVotes(true)}
-            className="press-button rounded-md px-1 text-sm font-medium text-[var(--accent-text)] underline-offset-2 hover:underline"
+            className="press-button -my-1.5 rounded-md px-1 py-1.5 text-sm font-medium text-[var(--accent-text)] underline-offset-2 hover:underline"
           >
             {voted}
           </button>
@@ -268,7 +268,7 @@ function Voters({ poll }: { poll: PollViewData }) {
       <ul aria-label="Har stemt" className="space-y-3">
         {poll.voters.map((voter) => (
           <li key={voter.id}>
-            <PlayerLink userId={voter.id} className="flex items-center gap-3 text-sm font-medium">
+            <PlayerLink userId={voter.id} press="button" className="flex items-center gap-3 text-sm font-medium">
               <Avatar name={voter.name} photoId={voter.photoId} size="sm" />
               {voter.name}
             </PlayerLink>
@@ -302,7 +302,7 @@ function Votes({ poll }: { poll: PollViewData }) {
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {option.voters.map((voter) => (
                   <li key={voter.id}>
-                    <PlayerLink userId={voter.id} className="flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pr-3 pl-1 text-sm">
+                    <PlayerLink userId={voter.id} press="button" className="flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pr-3 pl-1 text-sm">
                       <Avatar name={voter.name} photoId={voter.photoId} size="xs" />
                       {voter.name}
                     </PlayerLink>

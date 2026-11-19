@@ -101,12 +101,12 @@ function PostFields({ members }: { members: Member[] }) {
               </>
             )}
           </fieldset>
-          <label className="flex items-start gap-2 text-sm">
+          <label className="press-text flex items-start gap-2 py-1.5 text-sm">
             <input type="hidden" name="pollMultiple" value="off" />
             <input type="checkbox" name="pollMultiple" value="on" className="mt-0.5 h-4 w-4 accent-[var(--accent)]" />
             <span>Flere svar — man må vælge mere end ét</span>
           </label>
-          <label className="flex items-start gap-2 text-sm">
+          <label className="press-text flex items-start gap-2 py-1.5 text-sm">
             <input type="hidden" name="pollAnonymous" value="off" />
             <input
               type="checkbox"
@@ -125,7 +125,7 @@ function PostFields({ members }: { members: Member[] }) {
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm">
+          <label className="press-text flex items-start gap-2 py-1.5 text-sm">
             <input type="hidden" name="pollHideResults" value="off" />
             <input type="checkbox" name="pollHideResults" value="on" className="mt-0.5 h-4 w-4 accent-[var(--accent)]" />
             <span>

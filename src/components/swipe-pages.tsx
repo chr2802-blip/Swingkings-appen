@@ -265,7 +265,7 @@ export function SwipePages({
               aria-selected={index === shown}
               onClick={() => goTo(index)}
               // Until the script has placed the moving underline, the name carries its own.
-              className={`shrink-0 border-b-2 py-1.5 text-xs font-semibold whitespace-nowrap tracking-wider uppercase transition-colors duration-200 ${
+              className={`press-text flex min-h-8 shrink-0 items-center border-b-2 py-1.5 text-xs font-semibold whitespace-nowrap tracking-wider uppercase transition-colors duration-200 ${
                 index === shown ? "text-slate-900" : "text-slate-400"
               } ${index === shown && !ready ? "border-[var(--accent)]" : "border-transparent"}`}
             >

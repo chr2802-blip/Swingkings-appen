@@ -177,7 +177,7 @@ export function NotificationBell({ initialUnseen }: { initialUnseen: number }) {
               role="tab"
               aria-selected={tab === value}
               onClick={() => setTab(value)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+              className={`press-text -mb-px border-b-2 px-3 py-2 text-sm font-medium ${
                 tab === value ? "border-[var(--accent)] text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
@@ -228,7 +228,7 @@ function List({
               type="button"
               onClick={() => onFollow(item)}
               aria-label={`${item.read ? "" : "Ny: "}${item.title}`}
-              className={`flex w-full gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-slate-50 ${item.read ? "" : "bg-slate-50"}`}
+              className={`press-card flex w-full gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-slate-50 ${item.read ? "" : "bg-slate-50"}`}
             >
               <span
                 aria-hidden
@@ -266,10 +266,10 @@ function Settings({ muted, onSaved }: { muted: NotificationCategory[]; onSaved: 
         <p className="text-sm text-slate-600">
           Vælg hvad der giver en notifikation på telefonen. Alt står stadig her under klokken.
         </p>
-        <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
+        <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200">
           {PUSH_CATEGORIES.map((category) => (
             <li key={category.value}>
-              <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
+              <label className="press-card flex cursor-pointer items-start gap-3 px-4 py-3">
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium text-slate-900">{category.label}</span>
                   <span className="block text-xs text-slate-500">{category.hint}</span>

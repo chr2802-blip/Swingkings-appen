@@ -32,12 +32,12 @@ export function FineDetails({ fine, user }: { fine: HistoryFine; user: TeamUser 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <PlayerLink userId={fine.player.id} className="shrink-0" aria-label={fine.player.name}>
+        <PlayerLink userId={fine.player.id} press="icon" className="block shrink-0" aria-label={fine.player.name}>
           <Avatar name={fine.player.name} photoId={fine.player.photoId} size="lg" />
         </PlayerLink>
         <div className="min-w-0 flex-1">
           <p className="truncate text-lg font-semibold">
-            <PlayerLink userId={fine.player.id}>{fine.player.name}</PlayerLink>
+            <PlayerLink userId={fine.player.id} className="max-w-full truncate align-top">{fine.player.name}</PlayerLink>
           </p>
           <p className={`text-2xl font-semibold ${amount < 0 ? "text-emerald-700" : "text-red-600"}`}>{kr(amount)}</p>
         </div>

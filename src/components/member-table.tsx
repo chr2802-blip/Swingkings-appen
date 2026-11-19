@@ -59,7 +59,7 @@ export function MemberTable({
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
-                    <PlayerLink userId={member.userId}>{member.name}</PlayerLink>
+                    <PlayerLink userId={member.userId} className="max-w-full truncate align-top">{member.name}</PlayerLink>
                   </p>
                   {member.superAdmin && <p className="truncate text-xs text-[var(--accent-text)]">{SUPER_ADMIN_LABEL}</p>}
                 </div>
