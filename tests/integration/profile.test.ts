@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, verifyPassword } from "@/lib/auth";
 import { changePassword, updateProfile } from "@/app/actions/profile";
-import { PHOTO_FIELD, TEST_PASSWORD, formData, makeMember, makePhoto, makeTeam, makeUser, signIn } from "../helpers/factories";
+import { PHOTO_FIELD, TEST_PASSWORD, formData, joinTeam, makeMember, makePhoto, makeTeam, makeUser, signIn } from "../helpers/factories";
 import { cookieStore, SESSION_COOKIE_NAME } from "../helpers/next-mocks";
 import { expectRedirectToLogin } from "../helpers/expect";
 
@@ -41,6 +41,53 @@ describe("updateProfile", () => {
       ok: false,
       error: "Billedet findes ikke længere.",
     });
+  });
+
+  it("sets and clears one's own shirt number on the team on screen, and only there", async () => {
+    const team = await makeTeam();
+    const other = await makeTeam("Andre");
+    const anna = await makeMember(team.id, "Anna");
+    await joinTeam(anna.id, other.id);
+    await prisma.teamMember.updateMany({ where: { teamId: other.id, userId: anna.id }, data: { shirtNumber: 4 } });
+    const bo = await makeMember(team.id, "Bo");
+    await signIn(anna);
+    const number = (teamId: string, userId = anna.id) =>
+      prisma.teamMember.findFirstOrThrow({ where: { teamId, userId } }).then((m) => m.shirtNumber);
+
+    expect(await updateProfile(undefined, formData({ name: "Anna", shirtNumber: " 10 " }))).toEqual({ ok: true });
+    expect(await number(team.id)).toBe(10);
+    // Another team's number, and a teammate's, are left alone.
+    expect(await number(other.id)).toBe(4);
+    expect(await number(team.id, bo.id)).toBeNull();
+
+    // A form without the field leaves it; an empty one clears it.
+    await updateProfile(undefined, formData({ name: "Anna" }));
+    expect(await number(team.id)).toBe(10);
+    await updateProfile(undefined, formData({ name: "Anna", shirtNumber: "" }));
+    expect(await number(team.id)).toBeNull();
+  });
+
+  it("refuses a shirt number that is not one, and changes nothing", async () => {
+    const team = await makeTeam();
+    const anna = await makeMember(team.id, "Anna");
+    await signIn(anna);
+    for (const bad of ["-1", "1000", "7.5", "ti"]) {
+      expect(await updateProfile(undefined, formData({ name: "Ny", shirtNumber: bad }))).toEqual({
+        ok: false,
+        error: "Trøjenummeret skal være et tal.",
+      });
+    }
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: anna.id } })).name).toBe("Anna");
+    expect((await prisma.teamMember.findFirstOrThrow({ where: { userId: anna.id } })).shirtNumber).toBeNull();
+  });
+
+  it("gives a super admin looking into a team no place on it", async () => {
+    const team = await makeTeam();
+    const root = await makeUser({ role: "SUPER_ADMIN" });
+    await prisma.user.update({ where: { id: root.id }, data: { activeTeamId: team.id } });
+    await signIn(root);
+    expect(await updateProfile(undefined, formData({ name: "Root", shirtNumber: "1" }))).toEqual({ ok: true });
+    expect(await prisma.teamMember.count({ where: { userId: root.id } })).toBe(0);
   });
 
   it("works for somebody on no team, without a picture", async () => {

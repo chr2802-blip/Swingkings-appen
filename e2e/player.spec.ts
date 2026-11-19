@@ -106,7 +106,7 @@ test("a player's page shows their latest fines and challenges and their next job
   // What Bo owes, and how many fines and open jobs Bo has, stand above the tabs.
   await expect(page.getByText("bøder i alt")).toBeVisible();
   // What they owe, their open jobs and their place on the board — not how many fines.
-  await expect(page.locator("dl > div")).toHaveCount(3);
+  await expect(page.locator("dl > *")).toHaveCount(3);
   await expect(page.locator("dl")).not.toContainText(/\dbøder?(?! i alt)/);
   await expect(page.locator("dl > div").filter({ hasText: "opgave" })).toHaveText("opgave1");
   await page.getByRole("tab", { name: "Opgaver (1)" }).click();

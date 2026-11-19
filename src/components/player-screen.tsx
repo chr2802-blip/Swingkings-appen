@@ -269,7 +269,6 @@ function PlayerCreateMenu({
         <ChallengeDialog
           opponents={board.roster.filter((m) => m.userId !== viewerId)}
           finePriceKr={board.finePriceKr}
-          matches={matches}
           defaultOpponentId={other}
         />
       )}
@@ -390,7 +389,11 @@ function PlayerHeader({
           tone={paid || account.owesKr === 0 ? "text-emerald-700" : "text-[var(--star)]"}
         />
         <Stat label={openTasks === 1 ? "opgave" : "opgaver"} value={String(openTasks)} />
-        <Stat label="på tavlen" value={place ? `#${place}` : "–"} />
+        {/* Their place leads to the board it is a place on. */}
+        <Link href="/boder" aria-label={place ? `Nummer ${place} på bødetavlen` : "Bødetavlen"} className="press-card -my-2.5 flex min-w-0 flex-col-reverse justify-center rounded-r-2xl py-2.5">
+          <span className="truncate text-[11px] text-slate-500">på tavlen ›</span>
+          <span className="font-score text-xl leading-tight font-semibold">{place ? `#${place}` : "–"}</span>
+        </Link>
       </dl>
       {paying && paid && (
         <p className="mt-3 text-center text-sm font-medium text-emerald-700">✅ Bøderne er betalt</p>

@@ -105,8 +105,8 @@ test("a player's page is their card: the shirt with their number, and their plac
   await expect(page.getByRole("heading", { name: "Bo", level: 1 })).toBeVisible();
   // No picture, so the shirt with the number on its back stands in for one.
   await expect(page.locator('main [data-shirt="10"]').first()).toBeVisible();
-  const placed = page.getByRole("term").filter({ hasText: "på tavlen" }).locator("..");
-  await expect(placed).toContainText("#1");
+  // Their place, which leads to the board.
+  await expect(page.getByRole("link", { name: "Nummer 1 på bødetavlen" })).toContainText("#1");
 
   // Somebody with neither picture nor number keeps their initials.
   await page.goto(`/spiller/${anna.id}`);

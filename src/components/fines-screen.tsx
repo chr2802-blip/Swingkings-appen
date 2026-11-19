@@ -104,9 +104,10 @@ export async function FinesScreen({
               ) : (
                 <>
                   <p className={`font-score text-4xl font-semibold ${mine.owesKr > 0 ? "text-[var(--star)]" : "text-emerald-700"}`}>{kr(mine.owesKr)}</p>
-                  <p className="text-xs text-slate-500">
-                    {mine.owesKr === 0 ? "Ren tavle 🙌" : paying ? "Betal nu ›" : `${fineUnits(mine.units)} · se dem ›`}
-                  </p>
+                  {/* Just the sum: a line under it only when there is something to say. */}
+                  {(mine.owesKr === 0 || paying) && (
+                    <p className="text-xs text-slate-500">{mine.owesKr === 0 ? "Ren tavle 🙌" : "Betal nu ›"}</p>
+                  )}
                 </>
               )}
             </Link>
@@ -114,9 +115,9 @@ export async function FinesScreen({
           <div className="px-4 py-3">
             <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">I kassen</p>
             <p className="font-score text-4xl font-semibold">{kr(board.totalKr)}</p>
-            <p className="text-xs text-slate-500">
-              {!paying ? "betales ved sæsonslut" : board.missingKr > 0 ? `${kr(board.missingKr)} mangler` : "alle har betalt"}
-            </p>
+            {paying && (
+              <p className="text-xs text-slate-500">{board.missingKr > 0 ? `${kr(board.missingKr)} mangler` : "alle har betalt"}</p>
+            )}
           </div>
         </div>
         <DetailSheet
@@ -147,7 +148,6 @@ export async function FinesScreen({
               <ChallengeDialog
                 opponents={board.roster.filter((m) => m.userId !== user.id)}
                 finePriceKr={board.finePriceKr}
-                matches={matches}
                 triggerClassName="w-full"
               />
             </div>

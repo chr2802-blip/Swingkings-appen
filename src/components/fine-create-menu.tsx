@@ -28,7 +28,7 @@ export function FineCreateMenu({
   return (
     <CreateMenu>
       <GiveFineDialog members={members} fineTypes={fineTypes} finePriceKr={finePriceKr} matches={matches} />
-      <ChallengeDialog opponents={members.filter((m) => m.userId !== viewerId)} finePriceKr={finePriceKr} matches={matches} />
+      <ChallengeDialog opponents={members.filter((m) => m.userId !== viewerId)} finePriceKr={finePriceKr} />
       {managesFines && <FineTypeDialog finePriceKr={finePriceKr} />}
     </CreateMenu>
   );
