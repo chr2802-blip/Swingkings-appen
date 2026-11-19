@@ -11,6 +11,7 @@ import { readForm } from "@/lib/form";
 import { REACTION_KINDS, REACTION_TARGETS, type ReactionTarget } from "@/lib/reactions";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED, FEED_CHANGED } from "@/lib/realtime-topic";
+import { activitiesSeenBy, announceTo, postsSeenBy, teamsOf } from "@/lib/club-reach";
 
 const schema = z.object({
   target: z.enum(REACTION_TARGETS, { message: "Det kan man ikke reagere på." }),
@@ -29,23 +30,34 @@ const COLUMN = {
 } as const satisfies Record<ReactionTarget, string>;
 
 /**
- * The thing being reacted to, found within the viewer's team — another team's id is "not
- * found" — with the page to draw anew.
+ * The thing being reacted to, found within the viewer's reach — the team's own things, and
+ * a club post or club activity shown to it; another team's own id is "not found" — with the
+ * page to draw anew and the teams to tell.
  */
-async function findTarget(teamId: string, target: ReactionTarget, id: string): Promise<{ path: string | null } | null> {
+async function findTarget(
+  teamId: string,
+  target: ReactionTarget,
+  id: string,
+): Promise<{ path: string | null; teamIds: string[] } | null> {
   const db = teamDb(teamId);
+  const shared = { teamId: true, teams: { select: { teamId: true } } } as const;
   switch (target) {
-    case "post":
-      return (await db.post.count({ where: { id } })) ? { path: "/oversigt" } : null;
-    case "comment":
-      // A comment has no team of its own; it is the team's when its post is.
-      return (await prisma.postComment.count({ where: { id, post: { teamId } } })) ? { path: "/oversigt" } : null;
+    case "post": {
+      const post = await prisma.post.findFirst({ where: { AND: [{ id }, postsSeenBy(teamId)] }, select: shared });
+      return post ? { path: "/oversigt", teamIds: teamsOf(post) } : null;
+    }
+    case "comment": {
+      // A comment has no team of its own; it is within reach when its post is.
+      const comment = await prisma.postComment.findFirst({ where: { id, post: postsSeenBy(teamId) }, select: { post: { select: shared } } });
+      return comment ? { path: "/oversigt", teamIds: teamsOf(comment.post) } : null;
+    }
     case "chat":
       // The chat fetches its messages itself; it is told to by the team's signal.
-      return (await db.chatMessage.count({ where: { id } })) ? { path: null } : null;
+      return (await db.chatMessage.count({ where: { id } })) ? { path: null, teamIds: [teamId] } : null;
     case "activityComment": {
-      const comment = await db.activityComment.findFirst({ where: { id }, select: { matchId: true } });
-      return comment ? { path: `/aktiviteter/${comment.matchId}` } : null;
+      // On a club activity every team it is shared with comments together.
+      const comment = await prisma.activityComment.findFirst({ where: { id, match: activitiesSeenBy(teamId) }, select: { matchId: true } });
+      return comment ? { path: `/aktiviteter/${comment.matchId}`, teamIds: [teamId] } : null;
     }
   }
 }
@@ -67,7 +79,8 @@ export async function react(_prev: ActionResult, formData: FormData): Promise<Ac
   if (on === "on") {
     // One statement, held by the unique (thing, person) index: two presses at once — the
     // same reaction or two different ones — leave one row, the last to arrive. Raw SQL
-    // for the ON CONFLICT; the thing was found in the viewer's team just above.
+    // for the ON CONFLICT; the thing was found within the viewer's reach just above. The
+    // reaction carries the reactor's team, the one on screen.
     await prisma.$executeRaw`
       INSERT INTO "Reaction" ("id", "teamId", "userId", "kind", ${Prisma.raw(`"${column}"`)})
       VALUES (gen_random_uuid()::text, ${user.teamId}, ${user.id}, CAST(${kind} AS "ReactionKind"), ${id})
@@ -75,11 +88,12 @@ export async function react(_prev: ActionResult, formData: FormData): Promise<Ac
       DO UPDATE SET "kind" = EXCLUDED."kind"`;
   } else {
     // Only that reaction: a late "off" for one the viewer has since changed leaves the new one.
-    await teamDb(user.teamId).reaction.deleteMany({ where: { [column]: id, userId: user.id, kind } });
+    // Their own reaction on it, from whichever team they gave it on.
+    await prisma.reaction.deleteMany({ where: { [column]: id, userId: user.id, kind } });
   }
 
   if (target === "chat") announce(user.teamId, CHAT_POSTED);
-  if (target === "post" || target === "comment") announce(user.teamId, FEED_CHANGED);
+  if (target === "post" || target === "comment") announceTo(found.teamIds, FEED_CHANGED);
   if (found.path) revalidatePath(found.path);
   return ok();
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
-import { teamDb } from "@/lib/team-db";
+import { reachDb } from "@/lib/club-reach";
 import { prisma } from "@/lib/prisma";
 import { readInZone, startOfDayInZone } from "@/lib/time";
 import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
@@ -29,13 +29,14 @@ const ROW = {
   source: true,
   externalSignups: true,
   signups: { select: { going: true } },
+  club: { select: { name: true } },
 } satisfies Prisma.MatchSelect;
 
 type Row = Prisma.MatchGetPayload<{ select: typeof ROW }>;
 
 /**
- * Every activity — matches, trainings and the rest — in one list in the order they are
- * played, from today. The earlier ones are folded away under "Vis tidligere", newest first.
+ * Every activity — matches, trainings and the rest, and the club's activities shared with
+ * the team (named with the club) — in one list in the order they are played, from today. The earlier ones are folded away under "Vis tidligere", newest first.
  * Each row says one thing on its right: that it is cancelled, or in a green circle how many
  * have signed up — for a hand-made activity also a red one for those who said no.
  */
@@ -43,12 +44,13 @@ export default async function ActivitiesPage() {
   const user = await requireTeamUser();
   const admin = canAdministerTeam(user, user.teamId);
   const today = startOfDayInZone();
-  const db = teamDb(user.teamId);
+  // The team's own activities and the club activities shared with it.
+  const seen = reachDb(user.teamId);
 
   const [team, upcoming, earlier, templates, copyable, feedPath] = await Promise.all([
     prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { calendarUrl: true } }),
-    db.match.findMany({ where: { startsAt: { gte: today } }, orderBy: { startsAt: "asc" }, take: EACH_WAY, select: ROW }),
-    db.match.findMany({ where: { startsAt: { lt: today } }, orderBy: { startsAt: "desc" }, take: EACH_WAY, select: ROW }),
+    seen.match.findMany({ where: { startsAt: { gte: today } }, orderBy: { startsAt: "asc" }, take: EACH_WAY, select: ROW }),
+    seen.match.findMany({ where: { startsAt: { lt: today } }, orderBy: { startsAt: "desc" }, take: EACH_WAY, select: ROW }),
     templateOptions(user.teamId),
     copyableActivities(user.teamId),
     calendarPathFor(user.id, user.teamId),
@@ -105,6 +107,7 @@ function ActivityMonths({ rows }: { rows: Row[] }) {
                         {activityName(match)}
                       </p>
                       <p className="truncate text-xs text-slate-500">
+                        {match.club && <span className="font-semibold text-slate-600">{match.club.name} · </span>}
                         {readInZone(match.startsAt, "HH:mm")}
                         {match.kind === "MATCH" && match.isHome !== null && ` · ${match.isHome ? "Hjemme" : "Ude"}`}
                         {match.location && ` · ${match.location}`}

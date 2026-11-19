@@ -30,7 +30,7 @@ async function pollFor(anonymous: boolean, multipleChoice = false) {
 describe("castVote", () => {
   it("stores an anonymous vote with no trace of the voter, and only once", async () => {
     const { team, voter, poll, friday, saturday } = await pollFor(true, true);
-    expect(await castVote(team.id, voter.id, poll.id, [friday, saturday])).toEqual({ ok: true });
+    expect(await castVote(team.id, voter.id, poll.id, [friday, saturday])).toEqual({ ok: true, teamIds: [team.id] });
 
     const votes = await prisma.pollVote.findMany({ where: { pollId: poll.id } });
     expect(votes).toHaveLength(2);

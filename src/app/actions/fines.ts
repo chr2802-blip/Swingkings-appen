@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
+import { findActivitySeenBy } from "@/lib/club-reach";
 import { requireTeamUser } from "@/lib/auth";
 import { assertFineManager, assertTeamAdmin, canDeleteFine, canManageFines } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
@@ -105,7 +106,7 @@ export async function giveFine(_prev: ActionResult, formData: FormData): Promise
   // In the order they were chosen, so the history reads as the giver picked them.
   const types = typeIds.map((id) => found.find((type) => type.id === id)!);
 
-  if (form.fields.matchId && !(await db.match.findFirst({ where: { id: form.fields.matchId }, select: { id: true } }))) {
+  if (form.fields.matchId && !(await findActivitySeenBy(user.teamId, form.fields.matchId, { id: true }))) {
     return fail("Kampen findes ikke.");
   }
 
@@ -283,7 +284,7 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
   const db = teamDb(user.teamId);
   const opponent = await db.teamMember.findFirst({ where: { userId: opponentId }, select: { user: { select: { name: true } } } });
   if (!opponent) return fail("Spilleren er ikke på holdet.");
-  if (matchId && !(await db.match.count({ where: { id: matchId } }))) return fail("Kampen findes ikke.");
+  if (matchId && !(await findActivitySeenBy(user.teamId, matchId, { id: true }))) return fail("Kampen findes ikke.");
 
   const winnerId = outcome === "won" ? user.id : opponentId;
   const loserId = outcome === "won" ? opponentId : user.id;

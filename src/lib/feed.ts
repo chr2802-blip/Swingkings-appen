@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { Prisma } from "@prisma/client";
-import { teamDb } from "./team-db";
+import { prisma } from "./prisma";
+import { postsSeenBy } from "./club-reach";
 import { teamRoster } from "./roster";
 import { FEED_PAGE, FEED_SEARCH_LIMIT, readFeedSearch } from "./feed-page";
 import { isOpen, resultsHidden, tally } from "./polls";
@@ -65,9 +66,15 @@ function searchWhere(query: string): Prisma.PostWhereInput {
   };
 }
 
+/**
+ * Who is reading: whether they administer the team (its own posts) and the club (its posts
+ * shown to the team) — what decides who may close a poll or show its result.
+ */
+export type FeedViewer = { id: string; canAdminister: boolean; canAdministerClub?: boolean };
+
 export async function feedPosts(
   teamId: string,
-  viewer: { id: string; canAdminister: boolean },
+  viewer: FeedViewer,
   {
     take = FEED_PAGE,
     after = null,
@@ -81,6 +88,8 @@ export async function feedPosts(
     createdAt: true,
     editedAt: true,
     pinnedAt: true,
+    clubId: true,
+    club: { select: { name: true } },
     author: person,
     photos: { orderBy: { position: "asc" }, select: { photoId: true } },
     // Shown as faces, first to react first — hence the picture and the order.
@@ -109,11 +118,13 @@ export async function feedPosts(
       },
     },
   } satisfies Prisma.PostSelect;
-  const db = teamDb(teamId);
+  // The team's own posts and the club posts shown to it (`postsSeenBy`): read across teams
+  // on purpose, so with `prisma`, and always under this team's reach.
+  const seen = postsSeenBy(teamId);
   const posts = search
     ? // A search is one list, newest first, pinned or not, with no pages after it.
-      await db.post.findMany({
-        where: searchWhere(search),
+      await prisma.post.findMany({
+        where: { AND: [seen, searchWhere(search)] },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: Math.min(take, FEED_SEARCH_LIMIT),
         select,
@@ -127,16 +138,19 @@ export async function feedPosts(
     const [pinned, paged] = await Promise.all([
       after
         ? []
-        : db.post.findMany({
-            where: { pinnedAt: { not: null } },
+        : prisma.post.findMany({
+            where: { AND: [seen, { pinnedAt: { not: null } }] },
             orderBy: [{ pinnedAt: "desc" }, { id: "desc" }],
             take: MAX_PINNED_SHOWN,
             select,
           }),
-      db.post.findMany({
+      prisma.post.findMany({
         where: {
-          pinnedAt: null,
-          ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
+          AND: [
+            seen,
+            { pinnedAt: null },
+            ...(after ? [{ OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] }] : []),
+          ],
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take,
@@ -149,7 +163,10 @@ export async function feedPosts(
   return posts.map(({ poll, ...post }) => ({
     ...post,
     photoIds: post.photos.map((p) => p.photoId),
-    poll: poll ? pollView(poll, post.author.id, viewer, now) : null,
+    // A club post's poll is the club's admins' to close, not the team's.
+    poll: poll
+      ? pollView(poll, post.author.id, { id: viewer.id, canAdminister: post.clubId ? !!viewer.canAdministerClub : viewer.canAdminister }, now)
+      : null,
   }));
 }
 
@@ -250,6 +267,6 @@ export function sortByVotes<T extends { votes: number }>(options: T[]): T[] {
  * reads, and `TeamFeed` — rendered only once those are done — finds it already on its way
  * instead of beginning a second round of trips to the database.
  */
-export const teamFeed = cache((teamId: string, viewerId: string, canAdminister: boolean) =>
-  Promise.all([feedPosts(teamId, { id: viewerId, canAdminister }), teamRoster(teamId)]),
+export const teamFeed = cache((teamId: string, viewerId: string, canAdminister: boolean, canAdministerClub: boolean = false) =>
+  Promise.all([feedPosts(teamId, { id: viewerId, canAdminister, canAdministerClub }), teamRoster(teamId)]),
 );

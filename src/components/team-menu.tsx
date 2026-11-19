@@ -12,7 +12,7 @@ type TeamChoice = { id: string; name: string; photoId: string | null; role: Memb
 
 /**
  * The team's picture (else the Swingkings crest) and name in the header, and the menu
- * behind them: this team's settings (for its admins), your profile, the other teams you
+ * behind them: this team's settings (for its admins), the club's page (for its club admins), your profile, the other teams you
  * are on, and logging out.
  */
 export function TeamMenu({
@@ -21,6 +21,7 @@ export function TeamMenu({
   label,
   photoId,
   canAdminister,
+  showClub = false,
   showAdmin,
   profileHref,
 }: {
@@ -29,6 +30,8 @@ export function TeamMenu({
   label: string;
   photoId: string | null;
   canAdminister: boolean;
+  /** A club admin of the team's club: the club's page. */
+  showClub?: boolean;
   showAdmin: boolean;
   profileHref: string;
 }) {
@@ -70,6 +73,11 @@ export function TeamMenu({
           {canAdminister && (
             <Link href="/hold" className={item} onClick={() => setOpen(false)}>
               Holdindstillinger
+            </Link>
+          )}
+          {showClub && (
+            <Link href="/klub" className={item} onClick={() => setOpen(false)}>
+              Klub
             </Link>
           )}
           <Link href={profileHref} className={item} onClick={() => setOpen(false)}>

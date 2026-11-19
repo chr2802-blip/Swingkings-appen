@@ -1,5 +1,5 @@
-import { requireUser } from "@/lib/auth";
-import { canAdministerTeam } from "@/lib/access";
+import { clubOnScreen, requireUser } from "@/lib/auth";
+import { canAdministerClub, canAdministerTeam } from "@/lib/access";
 import { NavLinks } from "@/components/nav-links";
 import { BottomNav } from "@/components/bottom-nav";
 import { TeamMenu } from "@/components/team-menu";
@@ -43,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               label={user.teamName ?? "Swingkings"}
               photoId={user.teamPhotoId}
               canAdminister={user.teamId !== null && canAdministerTeam(user, user.teamId)}
+              showClub={canAdministerClub(user, clubOnScreen(user))}
               showAdmin={showAdmin}
               profileHref={profileHref}
             />

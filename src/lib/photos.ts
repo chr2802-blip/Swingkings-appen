@@ -144,6 +144,19 @@ export async function discardPhotos(teamId: string, photoIds: (string | null | u
   await deleteUnclaimed(teamId, photoIds.filter((id): id is string => Boolean(id)));
 }
 
+/**
+ * As `discardPhotos`, for pictures that may be filed under different teams — a club post's,
+ * each under the team it was uploaded on.
+ */
+export async function discardPhotosWhereFiled(photoIds: (string | null | undefined)[]) {
+  const ids = photoIds.filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return;
+  const rows = await prisma.photo.findMany({ where: { id: { in: ids } }, select: { id: true, teamId: true } });
+  const byTeam = new Map<string, string[]>();
+  for (const row of rows) byTeam.set(row.teamId, [...(byTeam.get(row.teamId) ?? []), row.id]);
+  for (const [teamId, teamPhotos] of byTeam) await deleteUnclaimed(teamId, teamPhotos);
+}
+
 export async function discardPhoto(teamId: string, photoId: string | null | undefined) {
   await discardPhotos(teamId, [photoId]);
 }

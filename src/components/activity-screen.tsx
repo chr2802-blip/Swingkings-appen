@@ -1,6 +1,8 @@
 import type { TeamUser } from "@/lib/auth";
-import { canAdministerTeam, canManageFines } from "@/lib/access";
-import { teamDb } from "@/lib/team-db";
+import { canAdministerClub, canAdministerTeam, canManageFines } from "@/lib/access";
+import { prisma } from "@/lib/prisma";
+import { reachDb, teamsOf } from "@/lib/club-reach";
+import { clubTeams, rosterAcross } from "@/lib/clubs";
 import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
 import { fineBoard, fineHistory } from "@/lib/fine-data";
@@ -10,6 +12,7 @@ import { Badge, buttonClass, Card, EmptyState, PageHeader, SectionTitle } from "
 import { TaskRow, TASK_SELECT } from "@/components/task-row";
 import { TaskDialog } from "@/components/task-dialog";
 import { ActivityDialog } from "@/components/activity-dialog";
+import { ClubActivityDialog } from "@/components/club-dialogs";
 import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
@@ -22,6 +25,7 @@ import { AutoSync } from "@/components/auto-sync";
 import { ActivityComments } from "@/components/activity-comments";
 import { ClampedText } from "@/components/clamped-text";
 import { deleteActivity } from "@/app/actions/activities";
+import { deleteClubActivity } from "@/app/actions/club";
 import { SignupChoice } from "@/components/signup-choice";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
 import { isTaskOpen } from "@/lib/tasks";
@@ -72,20 +76,25 @@ export async function ActivityScreen({
   openTaskId?: string;
 }) {
   const manages = canManageFines(user, user.teamId);
-  const db = teamDb(user.teamId);
 
+  // The team's own activity, or a club activity shared with it (read across teams on
+  // purpose). On a club activity the jobs and challenges shown are this team's own; the
+  // sign-ups and comments are everybody's on it.
   const match = await foundOr404(
-    db.match.findFirst({
+    reachDb(user.teamId).match.findFirst({
       where: { id },
       include: {
-        tasks: { orderBy: { createdAt: "asc" }, select: TASK_SELECT },
+        club: { select: { id: true, name: true } },
+        teams: { select: { teamId: true } },
+        tasks: { where: { teamId: user.teamId }, orderBy: { createdAt: "asc" }, select: TASK_SELECT },
         // Only those still waiting: a settled one is in the history as the fines it moved.
-        challenges: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude },
+        challenges: { where: { teamId: user.teamId, status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude },
         signups: { select: { userId: true, going: true } },
         comments: {
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: {
             id: true,
+            teamId: true,
             parentId: true,
             body: true,
             createdAt: true,
@@ -96,12 +105,17 @@ export async function ActivityScreen({
       },
     }),
   );
-  const [roster, board, templates, copyable, fines] = await Promise.all([
+  const club = match.club;
+  const clubAdmin = canAdministerClub(user, club?.id);
+  const [roster, board, templates, copyable, fines, everybody, ofClub] = await Promise.all([
     teamRoster(user.teamId),
     fineBoard(user.teamId),
     templateOptions(user.teamId),
     copyableActivities(user.teamId, match.id),
     fineHistory(user.teamId, { matchId: match.id }),
+    // A club activity's sign-ups are read against everybody on the teams it is shared with.
+    club ? rosterAcross(teamsOf(match)) : null,
+    club && clubAdmin ? clubTeams(club.id) : null,
   ]);
   const history = historyItems(fines, match.challenges);
   const label = activityName(match);
@@ -118,7 +132,7 @@ export async function ActivityScreen({
     ? external
       ? externalSignupSummary(roster, external).going
       : []
-    : people(signupSummary(roster, match.signups).going);
+    : people(everybody ? signupSummary(everybody, match.signups).going : signupSummary(roster, match.signups).going);
   const mine = match.signups.find((s) => s.userId === user.id)?.going;
   const past = (match.endsAt ?? match.startsAt) < new Date();
 
@@ -129,7 +143,8 @@ export async function ActivityScreen({
     body: comment.body,
     stamp: stampLabel(comment.createdAt),
     author: comment.author,
-    canDelete: comment.author.id === user.id || admin,
+    // A team's admins tidy their own team's comments; on a club activity the club's admins all of them.
+    canDelete: comment.author.id === user.id || (comment.teamId === user.teamId && admin) || clubAdmin,
     reactors: reactorsOf(comment.reactions),
   }));
 
@@ -207,6 +222,7 @@ export async function ActivityScreen({
                           )}
                           {(match.cancelledAt || match.kind !== "MATCH") && (
                             <div className="flex flex-wrap gap-1.5">
+                              {club && <Badge>Klubaktivitet · {club.name}</Badge>}
                               {match.cancelledAt && <Badge tone="red">Aflyst</Badge>}
                               {match.kind !== "MATCH" && <Badge>{KIND_LABEL[match.kind]}</Badge>}
                             </div>
@@ -258,11 +274,35 @@ export async function ActivityScreen({
                         <SignupChoice activityId={match.id} mine={mine} />
                       </div>
                     )}
-                    {going.length > 0 ? <SignupFaces people={going} shirts={new Map(roster.map((m) => [m.userId, m.shirtNumber]))} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu. Bliv den første på holdkortet.</p>}
+                    {going.length > 0 ? <SignupFaces people={going} shirts={new Map((everybody ?? roster).map((m) => [m.userId, m.shirtNumber]))} /> : <p className="text-sm text-slate-500">Ingen tilmeldte endnu. Bliv den første på holdkortet.</p>}
                   </Card>
                 </section>
 
-                {!fromKampKlar && (
+                {/* A club activity is changed and deleted by the club's admins, for all its teams. */}
+                {club && ofClub && (
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    <ClubActivityDialog
+                      teams={ofClub}
+                      activity={{
+                        id: match.id,
+                        title: match.title,
+                        startsAtInput: toLocalDateTimeInput(match.startsAt),
+                        location: match.location,
+                        note: match.note,
+                        teamIds: teamsOf(match),
+                      }}
+                    />
+                    <ActionButton
+                      action={deleteClubActivity}
+                      fields={{ id: match.id }}
+                      label="Slet klubaktivitet"
+                      variant="danger"
+                      confirm="Slet klubaktiviteten for alle hold, med tilmeldinger, kommentarer og holdenes opgaver?"
+                      confirmLabel="Slet klubaktivitet"
+                    />
+                  </div>
+                )}
+                {!fromKampKlar && !club && (
                   <div className="mt-6 flex flex-wrap gap-2">
                     <ActivityDialog
                       activity={{

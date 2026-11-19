@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { requireTeamUser } from "@/lib/auth";
+import { clubOnScreen, requireTeamUser } from "@/lib/auth";
+import { reachDb } from "@/lib/club-reach";
 import { teamDb } from "@/lib/team-db";
-import { canAdministerTeam } from "@/lib/access";
+import { canAdministerClub, canAdministerTeam } from "@/lib/access";
 import { teamFeed } from "@/lib/feed";
 import Image from "next/image";
 import { fineBoard, monthKings } from "@/lib/fine-data";
@@ -25,14 +26,16 @@ import { clubLogos } from "@/lib/club-logos";
 export default async function OverviewPage() {
   const user = await requireTeamUser();
   const db = teamDb(user.teamId);
+  // Activities, polls and posts: the team's own and the club's shared with it.
+  const seen = reachDb(user.teamId);
   // The feed at the bottom is rendered only once all this is read; start its reads now, so
   // they run alongside instead of after (`TeamFeed` picks up the same request-cached call).
-  void teamFeed(user.teamId, user.id, canAdministerTeam(user, user.teamId));
+  void teamFeed(user.teamId, user.id, canAdministerTeam(user, user.teamId), canAdministerClub(user, clubOnScreen(user)));
   const [board, kings, nextMatch, nextFixture, myTaskCount, openChallenges, pollsWaiting, newPosts, handoversToMe] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
-    db.match.findFirst({
-      where: { ...LISTED_ACTIVITY, cancelledAt: null, startsAt: { gte: startOfDayInZone() } },
+    seen.match.findFirst({
+      where: { AND: [LISTED_ACTIVITY, { cancelledAt: null, startsAt: { gte: startOfDayInZone() } }] },
       orderBy: { startsAt: "asc" },
       select: { id: true, kind: true, title: true, opponent: true, startsAt: true, isHome: true },
     }),
@@ -44,7 +47,7 @@ export default async function OverviewPage() {
     }),
     db.task.count({ where: { ...openTask(), assignees: { some: { userId: user.id } } } }),
     db.challenge.findMany({ where: { status: "PENDING" }, select: { status: true, reportedById: true } }),
-    db.poll.count({
+    seen.poll.count({
       where: {
         closedAt: null,
         OR: [{ closesAt: null }, { closesAt: { gt: new Date() } }],
@@ -52,7 +55,7 @@ export default async function OverviewPage() {
       },
     }),
     db.teamMember.findFirst({ where: { userId: user.id }, select: { feedSeenAt: true, createdAt: true } }).then((member) =>
-      db.post.count({
+      seen.post.count({
         where: { authorId: { not: user.id }, createdAt: { gt: member?.feedSeenAt ?? member?.createdAt ?? new Date() } },
       }),
     ),

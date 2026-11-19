@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { Venue } from "@prisma/client";
 import { teamDb } from "@/lib/team-db";
+import { prisma } from "@/lib/prisma";
+import { findActivitySeenBy } from "@/lib/club-reach";
 import { requireTeamUser } from "@/lib/auth";
 import { assertTeamAdmin } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
@@ -116,15 +118,13 @@ export async function setSignup(_prev: ActionResult, formData: FormData): Promis
   const user = await requireTeamUser();
   const going = field(formData, "going");
   if (going !== "yes" && going !== "no") return fail("Svar ja eller nej.");
-  const db = teamDb(user.teamId);
-  const activity = await db.match.findFirst({
-    where: { id: field(formData, "activityId") },
-    select: { id: true, source: true, cancelledAt: true },
-  });
+  // The team's own activity, or a club activity shared with it: everybody on its teams signs up on the same one.
+  const activity = await findActivitySeenBy(user.teamId, field(formData, "activityId"), { id: true, source: true, cancelledAt: true });
   if (!activity) return fail("Aktiviteten findes ikke.");
   if (activity.source !== "MANUAL") return fail("Der er ikke tilmelding til aktiviteter fra KampKlar.");
   if (activity.cancelledAt) return fail("Aktiviteten er aflyst.");
-  await db.activitySignup.upsert({
+  // One answer per person per activity, filed under the team they answered on.
+  await prisma.activitySignup.upsert({
     where: { matchId_userId: { matchId: activity.id, userId: user.id } },
     create: { teamId: user.teamId, matchId: activity.id, userId: user.id, going: going === "yes" },
     update: { going: going === "yes" },
@@ -158,11 +158,9 @@ export async function autoSyncCalendar(): Promise<{ synced: boolean }> {
   return { synced: !!result?.ok };
 }
 
+/** The activity jobs go on: the team's own, or a club activity shared with it (the jobs are the team's). */
 async function activityFrom(teamId: string, formData: FormData) {
-  return teamDb(teamId).match.findFirst({
-    where: { id: field(formData, "activityId") },
-    select: { id: true, startsAt: true },
-  });
+  return findActivitySeenBy(teamId, field(formData, "activityId"), { id: true, startsAt: true });
 }
 
 /** Adds the ticked standard jobs to one activity and hands them out. */

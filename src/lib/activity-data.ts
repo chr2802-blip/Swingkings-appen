@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { teamDb } from "./team-db";
+import { prisma } from "./prisma";
+import { activitiesSeenBy } from "./club-reach";
 import { kickoffLabel, startOfDayInZone } from "./time";
 import { activityName, readExternalSignups } from "./activity";
 
@@ -36,8 +38,9 @@ const UPCOMING_FOR_TASKS = 30;
  * person's page): from today on, soonest first. Every job belongs to one.
  */
 export async function upcomingActivities(teamId: string, now: Date = new Date()) {
-  const rows = await teamDb(teamId).match.findMany({
-    where: { startsAt: { gte: startOfDayInZone(now) } },
+  // The team's own and the club activities shared with it: a job can go on either.
+  const rows = await prisma.match.findMany({
+    where: { AND: [activitiesSeenBy(teamId), { startsAt: { gte: startOfDayInZone(now) } }] },
     orderBy: { startsAt: "asc" },
     take: UPCOMING_FOR_TASKS,
     select: { id: true, kind: true, title: true, opponent: true, startsAt: true },

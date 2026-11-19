@@ -68,6 +68,22 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   moderation), and one SUPER_ADMIN on the installation (a partial unique index allows only
   one). A fine is deleted by its giver or `canManageFines` (`canDeleteFine`). Never ask
   "the team on screen" alone.
+- **Clubs** (`Club`, `Team.clubId`, `src/lib/clubs.ts`): the super admin makes a club, puts
+  teams in it and names its club admins (`ClubAdmin`, `canAdministerClub`) under /admin — a
+  club admin always plays on one of its teams (`pruneClubAdmins` ends the role otherwise).
+  A club admin writes club posts (`createClubPost`) and makes club activities
+  (`saveClubActivity`) on `/klub`, each for the teams ticked: a `Post`/`Match`/`Poll` with
+  `clubId` and **no `teamId`** (a CHECK allows exactly one), shown to the teams in its
+  `PostTeam`/`MatchTeam` rows. `teamDb` never finds those rows; what a team *sees* is read
+  through `src/lib/club-reach.ts` (`reachDb`, `postsSeenBy`, `findActivitySeenBy`, …), and
+  everybody on those teams comments, reacts, votes and signs up on the same row (each
+  comment/sign-up/reaction carries the writer's own team). A club activity's jobs, fines and
+  challenges are each team's own. A club post/poll is pinned, edited, closed and deleted by
+  its author or the club's admins (`canChangePost`), never a team's admins. Notify across
+  teams with `notifyAcross`/`notifyEverybodyOn` (each person once, on the first of the teams
+  they joined) and nudge every team with `announceTo`. A club sees nothing of a team's own
+  life. Taking a team off a club activity, or out of the club, deletes that team's
+  sign-ups, comments and jobs on it (`unshareActivity`, `setTeamClub`).
 - **Every action** that reads input takes `(prev, formData)` and returns `ActionResult`;
   records referenced by id are looked up through `teamDb`, so another team's id is "not found".
 - **A fine is always from the catalogue** (`giveFine` requires `fineTypeId`): its name and

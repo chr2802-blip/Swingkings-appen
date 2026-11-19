@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { ActivityKind } from "@prisma/client";
 import { prisma } from "./prisma";
-import { teamDb } from "./team-db";
+import { activitiesSeenBy } from "./club-reach";
 import { activityTitle } from "./activity";
 
 /**
@@ -148,8 +148,9 @@ export function buildCalendar(teamName: string, activities: FeedActivity[], orig
 
 /** The team's activities from `FEED_PAST_DAYS` back, for the feed. */
 export async function feedActivities(teamId: string, now: Date = new Date()): Promise<FeedActivity[]> {
-  return teamDb(teamId).match.findMany({
-    where: { startsAt: { gte: new Date(now.getTime() - FEED_PAST_DAYS * 86_400_000) } },
+  // The team's own and the club activities shared with it, read across teams on purpose.
+  return prisma.match.findMany({
+    where: { AND: [activitiesSeenBy(teamId), { startsAt: { gte: new Date(now.getTime() - FEED_PAST_DAYS * 86_400_000) } }] },
     orderBy: { startsAt: "asc" },
     select: {
       id: true,

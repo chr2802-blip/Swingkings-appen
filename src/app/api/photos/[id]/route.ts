@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Serves a stored picture to somebody on the team it belongs to — and a person's own
- * picture to anybody who shares a team with them, wherever it happens to be filed. The
+ * picture to anybody who shares a team with them, wherever it happens to be filed, and a
+ * club post's pictures to everybody on the teams it is shown to. The
  * super admin, who may look into every team, is served every picture.
  * Anything else is "not found", the same as an id that never existed.
  */
@@ -29,7 +30,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     (await prisma.user.count({
       where: { photoId: id, memberships: { some: { teamId: { in: teamIds } } } },
     })) > 0;
-  if (!reachable && !teammatesOwn) return new Response("Not found", { status: 404 });
+  // A club post's pictures are filed under the team they were uploaded on, and shown to
+  // every team the post is shared with.
+  const onClubPost =
+    !reachable &&
+    !teammatesOwn &&
+    teamIds.length > 0 &&
+    (await prisma.postPhoto.count({ where: { photoId: id, post: { teams: { some: { teamId: { in: teamIds } } } } } })) > 0;
+  if (!reachable && !teammatesOwn && !onClubPost) return new Response("Not found", { status: 404 });
 
   const headers: Record<string, string> = {
     "content-type": photo.contentType,
