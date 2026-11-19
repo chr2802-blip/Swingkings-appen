@@ -8,7 +8,7 @@ export default function NotFound() {
       </div>
       <h1 className="text-2xl">Forbi målet</h1>
       <p className="text-sm text-slate-500">Siden findes ikke, eller den hører til et andet hold.</p>
-      <Link href="/oversigt" className="font-medium text-[var(--accent-text)] underline">
+      <Link href="/oversigt" className="press-text tap-inline font-medium text-[var(--accent-text)] underline">
         Til oversigten
       </Link>
     </main>

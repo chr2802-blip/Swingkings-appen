@@ -61,7 +61,7 @@ export default async function ActivitiesPage() {
       <PageHeader title="Aktiviteter" action={<CalendarButton path={feedPath} />} />
       {team.calendarUrl && <AutoSync />}
       {!team.calendarUrl && admin && (
-        <Link href="/hold" className="-mt-4 mb-6 block text-sm font-medium text-[var(--accent-text)]">
+        <Link href="/hold" className="press-text -mt-5.5 mb-4.5 flex min-h-8 w-fit items-center text-sm font-medium text-[var(--accent-text)]">
           Hent kampene fra KampKlar ›
         </Link>
       )}

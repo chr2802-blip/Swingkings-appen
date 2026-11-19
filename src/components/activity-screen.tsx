@@ -29,6 +29,9 @@ import { deleteClubActivity } from "@/app/actions/club";
 import { SignupChoice } from "@/components/signup-choice";
 import { copyableActivities, templateOptions } from "@/lib/activity-data";
 import { isTaskOpen } from "@/lib/tasks";
+import { clubLogos } from "@/lib/club-logos";
+import { FixturePoster, mapsHref } from "@/components/fixture-card";
+import { withoutMeetingTime } from "@/lib/fixture";
 import {
   activityName,
   activityTitle,
@@ -104,10 +107,9 @@ export async function ActivityScreen({
   );
   const club = match.club;
   const clubAdmin = canAdministerClub(user, club?.id);
-  const [roster, board, team, templates, copyable, fines, everybody, ofClub] = await Promise.all([
+  const [roster, board, templates, copyable, fines, everybody, ofClub] = await Promise.all([
     teamRoster(user.teamId),
     fineBoard(user.teamId),
-    prisma.team.findUniqueOrThrow({ where: { id: user.teamId }, select: { calendarSyncedAt: true } }),
     templateOptions(user.teamId),
     copyableActivities(user.teamId, match.id),
     fineHistory(user.teamId, { matchId: match.id }),
@@ -146,6 +148,12 @@ export async function ActivityScreen({
     reactors: reactorsOf(comment.reactions),
   }));
 
+  // A match against somebody heads its details with the poster, as on the front page on match day.
+  const poster = match.kind === "MATCH" && match.opponent ? { ...match, opponent: match.opponent } : null;
+  const opponentLogo = poster ? (await clubLogos([poster.opponent])).get(poster.opponent) : null;
+  // The poster says when to meet; the note does not say it again.
+  const note = poster ? withoutMeetingTime(match.note) : match.note;
+  const hasDetails = !poster || Boolean(match.cancelledAt || note || (fromKampKlar && match.externalUrl));
   const day = relativeDay(match.startsAt);
   // Within a week it reads "i morgen" or "om 3 dage"; further off it is only the date again.
   const nearby = day !== readInZone(match.startsAt, "d. MMM");
@@ -185,56 +193,51 @@ export async function ActivityScreen({
               <div>
                 {/* One card: what, when and where on top, compact — a long note folded to a few
                     lines — and the team's comments on it underneath. */}
-                <Card padded={false} className="mb-6 divide-y divide-slate-100">
-                  <div className="space-y-2 p-4">
-                    <p className="font-semibold">
-                      {time}
-                      {/* "i morgen", "om 3 dage" — not the date the line above already says. */}
-                      {nearby && <span className="font-normal text-slate-500"> · {day}</span>}
-                    </p>
-                    {match.kind === "MATCH" && match.title !== label && <p className="text-sm text-slate-600">{match.title}</p>}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      {match.location && (
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.location)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-start gap-1 text-sm text-slate-600 hover:underline"
-                        >
-                          <span aria-hidden="true">📍</span>
-                          <span>
-                            {match.location} <span className="sr-only">(vis på kort)</span>
-                          </span>
-                        </a>
+                <Card padded={false} className="mb-6 divide-y divide-slate-100 overflow-hidden">
+                  {poster && <FixturePoster match={poster} teamName={user.teamName} opponentLogo={opponentLogo} mapLink />}
+                  {hasDetails && (
+                    <div className="space-y-2 p-4">
+                      {!poster && (
+                        <p className="font-semibold">
+                          {time}
+                          {/* "i morgen", "om 3 dage" — not the date the line above already says. */}
+                          {nearby && <span className="font-normal text-slate-500"> · {day}</span>}
+                        </p>
                       )}
-                      {(match.cancelledAt || fromKampKlar || match.kind !== "MATCH") && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {club && <Badge>Klubaktivitet · {club.name}</Badge>}
-                          {match.cancelledAt && <Badge tone="red">Aflyst</Badge>}
-                          {fromKampKlar && <Badge>Fra DBU KampKlar</Badge>}
-                          {match.kind !== "MATCH" && <Badge>{KIND_LABEL[match.kind]}</Badge>}
+                      {!poster && match.kind === "MATCH" && match.title !== label && <p className="text-sm text-slate-600">{match.title}</p>}
+                      {((match.location && !poster) || match.cancelledAt || match.kind !== "MATCH") && (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                          {match.location && !poster && (
+                            <a
+                              href={mapsHref(match.location)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="press-text -my-1.5 flex items-start gap-1 py-1.5 text-sm text-slate-600 hover:underline"
+                            >
+                              <span aria-hidden="true">📍</span>
+                              <span>
+                                {match.location} <span className="sr-only">(vis på kort)</span>
+                              </span>
+                            </a>
+                          )}
+                          {(match.cancelledAt || match.kind !== "MATCH") && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {club && <Badge>Klubaktivitet · {club.name}</Badge>}
+                              {match.cancelledAt && <Badge tone="red">Aflyst</Badge>}
+                              {match.kind !== "MATCH" && <Badge>{KIND_LABEL[match.kind]}</Badge>}
+                            </div>
+                          )}
                         </div>
                       )}
+                      {note && <ClampedText text={note} className="text-sm text-slate-600" />}
+                      {/* A KampKlar activity is signed up for there. */}
+                      {fromKampKlar && match.externalUrl && (
+                        <a href={match.externalUrl} target="_blank" rel="noopener noreferrer" className={buttonClass("primary", "w-full")}>
+                          Åbn i KampKlar ↗
+                        </a>
+                      )}
                     </div>
-                    {match.note && <ClampedText text={match.note} className="text-sm text-slate-600" />}
-                    {fromKampKlar && match.externalUrl && (
-                      <a
-                        href={match.externalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={buttonClass("primary", "w-full")}
-                      >
-                        Åbn i KampKlar ↗
-                      </a>
-                    )}
-                    {fromKampKlar && (
-                      <p className="text-xs text-slate-400">
-                        {team.calendarSyncedAt
-                          ? `Hentet fra KampKlar ${readInZone(team.calendarSyncedAt, "d. MMM 'kl.' HH:mm")}`
-                          : "Ikke hentet fra KampKlar endnu"}
-                      </p>
-                    )}
-                  </div>
+                  )}
                   <div className="p-4">
                     <ActivityComments
                       matchId={match.id}
@@ -370,7 +373,7 @@ function SignupFaces({ people, shirts }: { people: SignupPerson[]; shirts: Map<s
         return (
           <li key={p.key}>
             {p.userId ? (
-              <PlayerLink userId={p.userId} aria-label={p.name} className="flex flex-col items-center gap-1 hover:no-underline">
+              <PlayerLink userId={p.userId} aria-label={p.name} press="button" className="flex flex-col items-center gap-1">
                 {face}
               </PlayerLink>
             ) : (

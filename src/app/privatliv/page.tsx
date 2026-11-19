@@ -77,7 +77,7 @@ export default function PrivacyPage() {
       </div>
 
       <p className="mt-8 text-center">
-        <Link href="/login" className="text-slate-500 underline">
+        <Link href="/login" className="press-text tap-inline text-slate-500 underline">
           Tilbage
         </Link>
       </p>

@@ -54,11 +54,13 @@ export function MultiPhotoField({ max, initial = [] }: { max: number; initial?: 
                 type="button"
                 onClick={() => setPhotoIds((current) => current.filter((x) => x !== id))}
                 aria-label={`Fjern billede ${index + 1}`}
-                className="press-icon absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/70 text-white"
+                className="press-icon absolute top-0 right-0 flex h-8 w-8 items-center justify-center rounded-full"
               >
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3">
-                  <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
-                </svg>
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/70 text-white">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3">
+                    <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
+                  </svg>
+                </span>
               </button>
             </li>
           ))}

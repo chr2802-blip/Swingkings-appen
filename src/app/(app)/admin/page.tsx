@@ -71,7 +71,7 @@ export default async function AdminPage() {
               <Input id="logo-name" name="name" required maxLength={80} placeholder="Fx Hvidovre IF" />
             </Field>
             <Field label="Logo" htmlFor="logo-file" hint="PNG, JPEG eller WebP, højst 300 kB. PNG med gennemsigtig baggrund ser bedst ud.">
-              <Input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required />
+              <Input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required className="press-card" />
             </Field>
           </ActionForm>
           {logos.length > 0 && (

@@ -27,7 +27,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         Glemt adgangskoden? Bed holdets admin om en midlertidig.
       </p>
       <p className="mt-6 text-center text-xs">
-        <Link href="/privatliv" className="text-slate-500 underline">
+        <Link href="/privatliv" className="press-text tap-inline text-slate-500 underline">
           Privatliv
         </Link>
       </p>

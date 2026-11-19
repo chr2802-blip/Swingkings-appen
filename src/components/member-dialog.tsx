@@ -22,7 +22,7 @@ export function MemberDialog({
       <Field label="Trøjenummer" htmlFor="shirtNumber">
         <Input id="shirtNumber" name="shirtNumber" type="number" inputMode="numeric" min={0} max={999} defaultValue={member.shirtNumber ?? ""} />
       </Field>
-      <label className="flex items-center gap-2 text-sm">
+      <label className="press-text flex min-h-8 items-center gap-2 text-sm">
         <input type="hidden" name="takesTasks" value="off" />
         <input type="checkbox" name="takesTasks" value="on" defaultChecked={member.takesTasks} className="h-4 w-4 accent-[var(--accent)]" />
         Med i den automatiske opgavefordeling

@@ -193,8 +193,8 @@ test("an activity from KampKlar takes no sign-ups, links to KampKlar and shows o
   await expect(page.getByRole("heading", { name: "Mod AB", level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Jeg kommer", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Åbn i KampKlar/ })).toHaveAttribute("href", link);
-  // When the feed was last read, in Danish time (20:30 in Copenhagen is 19:30 UTC in November).
-  await expect(page.getByText(/^Hentet fra KampKlar 16\. nov\.? kl\. 20:30$/)).toBeVisible();
+  // Where it came from and when it was read is nobody's business on the page.
+  await expect(page.getByText(/Fra DBU KampKlar|Hentet fra KampKlar/)).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Tilmeldte (3)" })).toBeVisible();
   // "Kasserer" in KampKlar is the one member whose name starts so.
   await expect(page.getByRole("link", { name: "Kasserer Kim" })).toBeVisible();
@@ -268,7 +268,7 @@ test("an activity from KampKlar whose feed carries no sign-ups has nobody signed
   await page.goto(`/aktiviteter/${match.id}`);
   await expect(page.getByText("Ingen tilmeldte endnu.")).toBeVisible();
   await expect(page.getByRole("link", { name: /Åbn i KampKlar/ })).toHaveCount(0);
-  await expect(page.getByText("Ikke hentet fra KampKlar endnu")).toBeVisible();
+  await expect(page.getByText(/hentet fra KampKlar/i)).toHaveCount(0);
 });
 
 test("an activity's tabs are swiped or tapped between, each at its own address", async ({ page, loginAs }) => {

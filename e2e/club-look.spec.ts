@@ -54,6 +54,45 @@ test("on match day the front page shows the match as a fixture, with the opponen
   await expect(page).toHaveURL(new RegExp(`/aktiviteter/${today.id}$`));
 });
 
+test("a match's details are headed by its poster, with the team's comments in the same card", async ({ page, loginAs }) => {
+  const { team, anna, bo } = await squad();
+  const match = await db.match.create({
+    data: {
+      teamId: team.id,
+      kind: "MATCH",
+      title: "Swingkings - B.93",
+      opponent: "B.93",
+      isHome: true,
+      startsAt: inDays(3),
+      location: "Kunstgræsbanen",
+      note: "Mødetid 13:45 – vi mødes ved klubhuset",
+      source: "KAMPKLAR",
+      externalUid: "kamp-1",
+    },
+  });
+  await db.activityComment.create({ data: { teamId: team.id, matchId: match.id, authorId: bo.id, body: "Jeg tager bolde med" } });
+  await loginAs(anna);
+  await page.goto(`/aktiviteter/${match.id}`);
+  const details = page.getByRole("tabpanel", { name: /^Detaljer/ });
+  const card = details.locator(".fixture-poster").locator("..");
+  await expect(card.locator(".fixture-poster")).toContainText("Om 3 dage");
+  await expect(card.locator(".fixture-poster")).toContainText("Mødetid 13:45");
+  // The place opens the map; the comments are in the same card, under the poster.
+  await expect(card.getByRole("link", { name: /Kunstgræsbanen/ })).toHaveAttribute("href", /google\.com\/maps.*Kunstgr/);
+  await expect(card.getByText("Jeg tager bolde med")).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Kommentarer (1)" })).toBeVisible();
+  // The note says the rest without the meeting time again, and nothing of KampKlar's bookkeeping.
+  await expect(card.getByText("Vi mødes ved klubhuset")).toBeVisible();
+  await expect(card.getByText("Mødetid 13:45 – vi mødes ved klubhuset")).toHaveCount(0);
+  await expect(details.getByText(/Fra DBU KampKlar|Hentet fra KampKlar/)).toHaveCount(0);
+
+  // A training keeps the plain card, with no poster.
+  const training = await db.match.create({ data: { teamId: team.id, kind: "TRAINING", title: "Træning", startsAt: inDays(2), location: "Banen" } });
+  await page.goto(`/aktiviteter/${training.id}`);
+  await expect(page.locator(".fixture-poster")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Banen/ })).toHaveAttribute("href", /google\.com\/maps/);
+});
+
 test("the super admin puts in a club's logo under Admin, and it is shared by every team", async ({ page, loginAs }) => {
   const { team } = await squad();
   const root = await db.user.create({ data: { email: "root@e2e.dk", name: "Root", passwordHash: "x", role: "SUPER_ADMIN", activeTeamId: team.id } });

@@ -22,7 +22,7 @@ export function VisitingBanner({ teamName, home }: { teamName: string; home: Mem
           </button>
         </form>
       ) : (
-        <Link href="/admin" className="rounded-lg px-3 py-1.5 font-medium underline-offset-2 hover:underline">
+        <Link href="/admin" className="press-button rounded-lg px-3 py-1.5 font-medium underline-offset-2 hover:underline">
           Til Admin
         </Link>
       )}

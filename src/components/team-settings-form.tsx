@@ -84,7 +84,7 @@ export function TeamSettingsForm({
             <label
               key={theme.value}
               data-theme={theme.value}
-              className="flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm has-[:checked]:ring-2 has-[:checked]:ring-[var(--accent)]"
+              className="press-button flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm has-[:checked]:ring-2 has-[:checked]:ring-[var(--accent)]"
             >
               <input type="radio" name="theme" value={theme.value} defaultChecked={team.theme === theme.value} className="sr-only" />
               <span className="h-4 w-4 rounded-full bg-[var(--accent)]" />

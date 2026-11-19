@@ -23,7 +23,7 @@ export function ClubTeamsField({ teams, chosen }: { teams: ClubTeam[]; chosen?: 
         <span>Hold</span>
         <button
           type="button"
-          className="text-xs font-medium text-[var(--accent-text)]"
+          className="press-text tap-inline text-xs font-medium text-[var(--accent-text)]"
           onClick={() => setPicked(new Set(all ? [] : teams.map((t) => t.id)))}
         >
           {all ? "Fravælg alle" : "Vælg alle"}
@@ -32,7 +32,7 @@ export function ClubTeamsField({ teams, chosen }: { teams: ClubTeam[]; chosen?: 
       <ul className="grid gap-1.5 sm:grid-cols-2">
         {teams.map((team) => (
           <li key={team.id}>
-            <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
+            <label className="press-card flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
               <input
                 type="checkbox"
                 name="teamId"

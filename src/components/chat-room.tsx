@@ -223,7 +223,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
             type="button"
             onClick={() => void loadOlder(oldestId)}
             disabled={loadingOlder}
-            className="rounded-full px-3 py-1 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-60"
+            className="press-button -my-1 rounded-full px-3 py-2 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-60"
           >
             {loadingOlder ? "Henter ældre beskeder…" : "Vis ældre beskeder"}
           </button>
@@ -241,14 +241,14 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
             <li key={message.id} id={`chat-message-${message.id}`} className={`group flex items-end gap-2 rounded-2xl transition-colors ${own ? "flex-row-reverse" : ""}`}>
               <span className={`w-8 ${grouped ? "invisible" : ""}`}>
                 {!own && (
-                  <PlayerLink userId={message.author.id} aria-label={message.author.name} tabIndex={grouped ? -1 : undefined}>
+                  <PlayerLink userId={message.author.id} press="icon" className="block" aria-label={message.author.name} tabIndex={grouped ? -1 : undefined}>
                     <Avatar name={message.author.name} photoId={message.author.photoId} size="sm" />
                   </PlayerLink>
                 )}
               </span>
               <div className={`flex max-w-[78%] flex-col ${own ? "items-end" : "items-start"}`}>
                 {!grouped && !own && (
-                  <PlayerLink userId={message.author.id} className="mb-0.5 px-1 text-xs text-slate-500">
+                  <PlayerLink userId={message.author.id} className="-mb-1.5 px-1 text-xs text-slate-500">
                     {message.author.name}
                   </PlayerLink>
                 )}
@@ -273,7 +273,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
                       type="button"
                       onClick={() => showQuoted(message.replyTo!.id)}
                       aria-label={`Svar på ${possessive(message.replyTo.authorName)} besked: ${message.replyTo.body || "billede"}`}
-                      className={`-mb-2 max-w-full rounded-2xl bg-slate-200/70 px-3 pt-1.5 pb-3.5 text-left text-xs text-slate-600 ${own ? "self-end" : "self-start"}`}
+                      className={`press-card -mb-2 max-w-full rounded-2xl bg-slate-200/70 px-3 pt-1.5 pb-3.5 text-left text-xs text-slate-600 ${own ? "self-end" : "self-start"}`}
                     >
                       <span className="block font-semibold">↩ {message.replyTo.authorName}</span>
                       <span className="line-clamp-2 break-words">{message.replyTo.body || (message.replyTo.photo ? "📷 Billede" : "")}</span>
@@ -291,7 +291,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
                     {message.task && (
                       <Link
                         href={`/opgaver/${message.task.id}`}
-                        className={`mx-2 mb-2 block rounded-xl px-3 py-2 text-sm font-medium ${
+                        className={`press-card mx-2 mb-2 block rounded-xl px-3 py-2 text-sm font-medium ${
                           own ? "bg-white/15 text-white" : "bg-slate-100 text-[var(--accent-text)]"
                         }`}
                       >
@@ -320,11 +320,13 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
                   type="button"
                   onClick={() => setPhotoIds((current) => current.filter((x) => x !== id))}
                   aria-label={`Fjern billede ${index + 1}`}
-                  className="press-icon absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/80 text-white"
+                  className="press-icon absolute -top-2.5 -right-2.5 flex h-8 w-8 items-center justify-center rounded-full"
                 >
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3">
-                    <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
-                  </svg>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/80 text-white">
+                    <svg aria-hidden viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
+                    </svg>
+                  </span>
                 </button>
               </li>
             ))}
@@ -346,7 +348,7 @@ export function ChatRoom({ initial, viewerId, canModerate }: { initial: ChatPage
               type="button"
               onClick={() => setReplyingTo(null)}
               aria-label="Annuller svar"
-              className="press-icon -mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200"
+              className="press-icon -my-1 -mr-2 -ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200"
             >
               <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
@@ -425,7 +427,7 @@ function ChatPhotos({ photoIds, onOpen }: { photoIds: string[]; onOpen: (index: 
   const count = photoIds.length;
   if (count === 1) {
     return (
-      <button type="button" onClick={() => onOpen(0)} className="block w-full cursor-zoom-in">
+      <button type="button" onClick={() => onOpen(0)} className="press-photo block w-full cursor-zoom-in">
         <Photo photoId={photoIds[0]!} alt="Billede i chatten" size="thumb" className="max-h-72 w-full object-cover" />
       </button>
     );
@@ -441,7 +443,7 @@ function ChatPhotos({ photoIds, onOpen }: { photoIds: string[]; onOpen: (index: 
             key={id}
             type="button"
             onClick={() => onOpen(index)}
-            className={`relative cursor-zoom-in ${wide ? "col-span-2" : ""}`}
+            className={`press-photo relative cursor-zoom-in ${wide ? "col-span-2" : ""}`}
           >
             <Photo
               photoId={id}

@@ -129,7 +129,7 @@ function Comment({
 
   return (
     <div className={`flex items-start gap-2.5 ${deleting ? "opacity-50" : ""}`}>
-      <PlayerLink userId={comment.author.id} className="shrink-0" aria-label={comment.author.name}>
+      <PlayerLink userId={comment.author.id} press="icon" className={`block shrink-0 ${small ? "-m-1 p-1" : ""}`} aria-label={comment.author.name}>
         <Avatar name={comment.author.name} photoId={comment.author.photoId} size={small ? "xs" : "sm"} />
       </PlayerLink>
       <Holdable

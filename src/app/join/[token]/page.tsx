@@ -51,7 +51,7 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
           )}
           <JoinAsMeForm token={token} teamName={link.team.name} />
           <div className="text-center text-sm text-slate-500">
-            Ikke dig? <LogoutButton className="inline font-medium text-[var(--accent-text)] underline" />
+            Ikke dig? <LogoutButton className="tap-inline font-medium text-[var(--accent-text)] underline" />
           </div>
         </Card>
       ) : (
@@ -59,12 +59,12 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
       )}
 
       <p className="mt-6 text-center text-sm text-slate-500">
-        <Link href="/login" className="font-medium text-[var(--accent-text)] underline">
+        <Link href="/login" className="press-text tap-inline font-medium text-[var(--accent-text)] underline">
           Til login
         </Link>
       </p>
       <p className="mt-4 text-center text-xs">
-        <Link href="/privatliv" className="text-slate-500 underline">
+        <Link href="/privatliv" className="press-text tap-inline text-slate-500 underline">
           Sådan bruger vi dine oplysninger
         </Link>
       </p>
