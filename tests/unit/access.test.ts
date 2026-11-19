@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { MemberRole, PlatformRole } from "@prisma/client";
 import type { SessionUser } from "@/lib/auth";
-import { canAdministerTeam, canDeleteFine, canManageFines } from "@/lib/access";
+import { canAdministerClub, canAdministerTeam, canChangePost, canDeleteFine, canManageFines } from "@/lib/access";
 
 const TEAM = "team-1";
 
-function person(role: MemberRole | null, platform: PlatformRole = "USER"): SessionUser {
+function person(role: MemberRole | null, platform: PlatformRole = "USER", clubAdminOf: string[] = []): SessionUser {
   return {
     id: "me",
     email: "me@test.dk",
@@ -13,7 +13,8 @@ function person(role: MemberRole | null, platform: PlatformRole = "USER"): Sessi
     role: platform,
     photoId: null,
     mustChangePassword: false,
-    teams: role ? [{ id: TEAM, name: "Swingkings", photoId: null, theme: "SWINGKINGS", role }] : [],
+    teams: role ? [{ id: TEAM, name: "Swingkings", photoId: null, theme: "SWINGKINGS", role, clubId: "club-1" }] : [],
+    clubAdminOf,
     teamId: TEAM,
     teamName: "Swingkings",
     teamPhotoId: null,
@@ -21,6 +22,27 @@ function person(role: MemberRole | null, platform: PlatformRole = "USER"): Sessi
     teamRole: role,
   };
 }
+
+describe("clubs", () => {
+  it("are looked after by their own club admins and the super admin, nobody else", () => {
+    expect(canAdministerClub(person("PLAYER", "USER", ["club-1"]), "club-1")).toBe(true);
+    expect(canAdministerClub(person("PLAYER", "USER", ["club-1"]), "club-2")).toBe(false);
+    // A team admin is nothing in the club.
+    expect(canAdministerClub(person("ADMIN"), "club-1")).toBe(false);
+    expect(canAdministerClub(person(null, "SUPER_ADMIN"), "club-1")).toBe(true);
+    expect(canAdministerClub(person(null, "SUPER_ADMIN"), null)).toBe(false);
+  });
+
+  it("let a club's admins change its posts, and a team's admins only the team's own", () => {
+    const clubPost = { authorId: "someone", clubId: "club-1" };
+    const teamPost = { authorId: "someone", clubId: null };
+    expect(canChangePost(person("ADMIN"), TEAM, clubPost)).toBe(false);
+    expect(canChangePost(person("PLAYER", "USER", ["club-1"]), TEAM, clubPost)).toBe(true);
+    expect(canChangePost(person("ADMIN"), TEAM, teamPost)).toBe(true);
+    expect(canChangePost(person("PLAYER", "USER", ["club-1"]), TEAM, teamPost)).toBe(false);
+    expect(canChangePost(person("PLAYER"), TEAM, { authorId: "me", clubId: "club-1" })).toBe(true);
+  });
+});
 
 describe("roles", () => {
   it("give the team's settings to admins and the super admin only", () => {

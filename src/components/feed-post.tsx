@@ -21,15 +21,21 @@ export function FeedPostCard({
   post,
   viewerId,
   admin,
+  clubAdmin = false,
   members,
 }: {
   post: FeedPost;
   viewerId: string;
   admin: boolean;
+  /** The viewer administers the club of the team on screen: its posts are theirs to look after. */
+  clubAdmin?: boolean;
   /** The team, for tagging in comments. */
   members: CommentMember[];
 }) {
   const reactors = reactorsOf(post.reactions);
+  // A club post is looked after by the club's admins, a team's post by the team's.
+  const club = post.clubId !== null;
+  const looksAfter = club ? clubAdmin : admin;
   return (
     <PostState>
       <Card padded={false} className="overflow-hidden">
@@ -45,6 +51,13 @@ export function FeedPostCard({
               {stampLabel(post.createdAt)}
               {post.editedAt && " · redigeret"}
             </p>
+            {post.club && (
+              <p className="mt-0.5">
+                <span className="rounded-full bg-[var(--gold-tint)] px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                  <span aria-hidden>🏟️ </span>Klubopslag · {post.club.name}
+                </span>
+              </p>
+            )}
           </div>
           {post.pinnedAt && (
             <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
@@ -56,7 +69,8 @@ export function FeedPostCard({
             body={post.body}
             photoIds={post.photoIds}
             pinned={post.pinnedAt !== null}
-            canChange={post.author.id === viewerId || admin}
+            canChange={post.author.id === viewerId || looksAfter}
+            canPin={!club || clubAdmin}
             poll={post.poll}
           />
         </div>
@@ -80,7 +94,7 @@ export function FeedPostCard({
                 body: comment.body,
                 stamp: stampLabel(comment.createdAt),
                 author: { id: comment.author.id, name: comment.author.name, photoId: comment.author.photoId },
-                canDelete: comment.author.id === viewerId || admin,
+                canDelete: comment.author.id === viewerId || looksAfter,
                 reactors: reactorsOf(comment.reactions),
               }))}
             />

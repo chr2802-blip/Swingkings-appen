@@ -33,7 +33,11 @@ export function PostDialog({ members }: { members: Member[] }) {
   );
 }
 
-function PostFields({ members }: { members: Member[] }) {
+/**
+ * The post's own fields. Without `members` (a club post, shown to several teams) a poll's
+ * answers are only typed.
+ */
+export function PostFields({ members }: { members: Member[] | null }) {
   const [withPoll, setWithPoll] = useState(false);
   const [kind, setKind] = useState<"custom" | "players">("custom");
   const [options, setOptions] = useState(["", ""]);
@@ -54,15 +58,17 @@ function PostFields({ members }: { members: Member[] }) {
           </Field>
           <fieldset className="space-y-2">
             <legend className="mb-1 text-sm font-medium">Svarmuligheder</legend>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant={kind === "custom" ? "primary" : "secondary"} aria-pressed={kind === "custom"} onClick={() => setKind("custom")}>
-                Skriv svar
-              </Button>
-              <Button type="button" variant={kind === "players" ? "primary" : "secondary"} aria-pressed={kind === "players"} onClick={() => setKind("players")}>
-                Vælg fra holdlisten
-              </Button>
-            </div>
-            {kind === "custom" ? (
+            {members && (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant={kind === "custom" ? "primary" : "secondary"} aria-pressed={kind === "custom"} onClick={() => setKind("custom")}>
+                  Skriv svar
+                </Button>
+                <Button type="button" variant={kind === "players" ? "primary" : "secondary"} aria-pressed={kind === "players"} onClick={() => setKind("players")}>
+                  Vælg fra holdlisten
+                </Button>
+              </div>
+            )}
+            {kind === "custom" || !members ? (
               <>
                 {options.map((value, index) => (
                   <div key={index} className="flex gap-2">

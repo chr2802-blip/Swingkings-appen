@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
+import { findActivitySeenBy } from "@/lib/club-reach";
 import { requireTeamUser } from "@/lib/auth";
 import { canAdministerTeam } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
@@ -48,7 +49,8 @@ export async function createTask(_prev: ActionResult, formData: FormData): Promi
   if (!form.ok) return fail(form.error);
   const db = teamDb(user.teamId);
 
-  const match = await db.match.findFirst({ where: { id: form.fields.matchId }, select: { id: true, startsAt: true } });
+  // The team's own activity, or a club activity shared with it: the job is the team's either way.
+  const match = await findActivitySeenBy(user.teamId, form.fields.matchId, { id: true, startsAt: true });
   if (!match) return fail("Aktiviteten findes ikke.");
   let dueAt: Date | null = match.startsAt;
   if (form.fields.dueOn) {

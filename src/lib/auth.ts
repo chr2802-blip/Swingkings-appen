@@ -65,6 +65,8 @@ export type Membership = {
   photoId: string | null;
   theme: TeamTheme;
   role: MemberRole;
+  /** The club the team is part of, if any. */
+  clubId: string | null;
 };
 
 export type SessionUser = {
@@ -77,6 +79,8 @@ export type SessionUser = {
   mustChangePassword: boolean;
   /** Every team this person is on. This is what says where they may go. */
   teams: Membership[];
+  /** The clubs this person is a club admin of (`ClubAdmin`). */
+  clubAdminOf: string[];
   /** The team on screen, drawn from `teams` (or any team, for a super admin). */
   teamId: string | null;
   teamName: string | null;
@@ -104,12 +108,13 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     return null;
   }
 
-  const teamSelect = { id: true, name: true, photoId: true, theme: true } as const;
+  const teamSelect = { id: true, name: true, photoId: true, theme: true, clubId: true } as const;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
       activeTeam: { select: teamSelect },
       memberships: { orderBy: { createdAt: "asc" }, select: { role: true, team: { select: teamSelect } } },
+      clubAdminOf: { select: { clubId: true } },
     },
   });
   if (!user || user.tokenVersion !== version) return null;
@@ -132,6 +137,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     photoId: user.photoId,
     mustChangePassword: user.mustChangePassword,
     teams,
+    clubAdminOf: user.clubAdminOf.map((row) => row.clubId),
     teamId: active?.id ?? null,
     teamName: active?.name ?? null,
     teamPhotoId: active?.photoId ?? null,
@@ -141,6 +147,11 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 });
 
 export type TeamUser = SessionUser & { teamId: string; teamName: string };
+
+/** The club of the team on screen, as the person's membership says; null for a team on its own. */
+export function clubOnScreen(user: SessionUser): string | null {
+  return user.teams.find((team) => team.id === user.teamId)?.clubId ?? null;
+}
 
 export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();

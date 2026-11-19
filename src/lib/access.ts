@@ -42,6 +42,29 @@ export function canDeleteFine(user: SessionUser, teamId: string, fine: { issuedB
   return fine.issuedById === user.id || canManageFines(user, teamId);
 }
 
+/**
+ * Club admin: writes club posts and makes club activities for the club's teams, and tidies
+ * up after others on them. The super admin may too. A club admin sees nothing more of a
+ * team than its players do.
+ */
+export function canAdministerClub(user: SessionUser, clubId: string | null | undefined) {
+  if (!clubId) return false;
+  return user.role === "SUPER_ADMIN" || user.clubAdminOf.includes(clubId);
+}
+
+export function assertClubAdmin(user: SessionUser, clubId: string | null | undefined) {
+  if (!canAdministerClub(user, clubId)) throw new NotAllowedError();
+}
+
+/**
+ * Who may change or delete a post, close its poll or show its result: whoever wrote it, the
+ * team's admins for a team's post, and the club's admins for a club's.
+ */
+export function canChangePost(user: SessionUser, teamId: string, post: { authorId: string; clubId: string | null }) {
+  if (post.authorId === user.id) return true;
+  return post.clubId ? canAdministerClub(user, post.clubId) : canAdministerTeam(user, teamId);
+}
+
 export function assertTeamAdmin(user: SessionUser, teamId: string) {
   if (!canAdministerTeam(user, teamId)) throw new NotAllowedError();
 }
@@ -49,6 +72,8 @@ export function assertTeamAdmin(user: SessionUser, teamId: string) {
 export function assertFineManager(user: SessionUser, teamId: string) {
   if (!canManageFines(user, teamId)) throw new NotAllowedError();
 }
+
+export const CLUB_ADMIN_LABEL = "Klubadmin";
 
 export const ROLE_LABEL: Record<MemberRole, string> = {
   ADMIN: "Admin",

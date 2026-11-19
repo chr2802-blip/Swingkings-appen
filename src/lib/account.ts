@@ -75,12 +75,14 @@ export async function deleteAccount(userId: string) {
   const [user, messages, posts] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { photo: { select: { id: true, teamId: true } } } }),
     prisma.chatMessage.findMany({ where: { authorId: userId }, select: { teamId: true, photos: { select: { photoId: true } } } }),
-    prisma.post.findMany({ where: { authorId: userId }, select: { teamId: true, photos: { select: { photoId: true } } } }),
+    // A club post's pictures are filed under the team they were uploaded on, so each is read with its own.
+    prisma.post.findMany({ where: { authorId: userId }, select: { photos: { select: { photoId: true, photo: { select: { teamId: true } } } } } }),
   ]);
   const photosByTeam = new Map<string, string[]>();
   const add = (teamId: string, photoId: string) => photosByTeam.set(teamId, [...(photosByTeam.get(teamId) ?? []), photoId]);
   if (user.photo) add(user.photo.teamId, user.photo.id);
-  for (const row of [...messages, ...posts]) for (const p of row.photos) add(row.teamId, p.photoId);
+  for (const row of messages) for (const p of row.photos) add(row.teamId, p.photoId);
+  for (const row of posts) for (const p of row.photos) add(p.photo.teamId, p.photoId);
 
   await prisma.user.delete({ where: { id: userId } });
   // Only pictures nothing else points at go: one a teammate reused is left alone.

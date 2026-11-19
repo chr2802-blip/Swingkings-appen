@@ -4,6 +4,7 @@ import { addComment, createPost, deleteComment, deletePost, editPost, pinPost, v
 import { react } from "@/app/actions/reactions";
 import { createChallenge, deleteFine, giveFine, markFinesPaid, saveFineType, setFinePayment } from "@/app/actions/fines";
 import { startNewSeason } from "@/app/actions/season";
+import { createClubPost } from "@/app/actions/club";
 import { CHAT_POSTED, FEED_CHANGED, FINES_CHANGED, teamTopic } from "@/lib/realtime-topic";
 import { formData, makePoll, makeSquad, signIn } from "../helpers/factories";
 import { expectDenied, expectRedirect } from "../helpers/expect";
@@ -89,6 +90,31 @@ describe("the feed", () => {
     await signIn(anna);
     expect(await deletePost(undefined, formData({ id: post.id }))).toEqual({ ok: true });
     expect(await heard()).toContainEqual(feedChanged(team.id));
+  });
+
+  it("nudges every team a club post is shown to — for the post, a comment and a vote — and no other", async () => {
+    const club = await prisma.club.create({ data: { name: "Swingkings FC" } });
+    const first = await makeSquad("Herrer 1");
+    const second = await makeSquad("Damer 1");
+    const notChosen = await makeSquad("Oldboys");
+    await prisma.team.updateMany({ where: { id: { in: [first.team.id, second.team.id, notChosen.team.id] } }, data: { clubId: club.id } });
+    await prisma.clubAdmin.create({ data: { clubId: club.id, userId: first.anna.id } });
+    await signIn(first.anna);
+    const teamId = [first.team.id, second.team.id];
+    expect(
+      await createClubPost(undefined, formData({ body: "Klubdag", teamId, withPoll: "on", pollQuestion: "Grill?", pollOption: ["Ja", "Nej"] })),
+    ).toEqual({ ok: true });
+    const both = [feedChanged(first.team.id), feedChanged(second.team.id)];
+    const posted = await heard();
+    for (const nudge of both) expect(posted).toContainEqual(nudge);
+    expect(posted.map((m) => m.topic)).not.toContain(teamTopic(notChosen.team.id));
+
+    const post = await prisma.post.findFirstOrThrow({ where: { clubId: club.id }, include: { poll: { include: { options: true } } } });
+    await signIn(second.bo);
+    expect(await addComment(undefined, formData({ postId: post.id, body: "Vi kommer" }))).toEqual({ ok: true });
+    expect(await heard()).toEqual(expect.arrayContaining(both));
+    expect(await vote(undefined, formData({ pollId: post.poll!.id, optionId: post.poll!.options[0]!.id }))).toEqual({ ok: true });
+    expect(await heard()).toEqual(both);
   });
 
   it("does not nudge the feed for a chat reaction", async () => {

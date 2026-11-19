@@ -2,22 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { requireTeamUser } from "@/lib/auth";
-import { canAdministerTeam } from "@/lib/access";
+import { canAdministerClub, canAdministerTeam, canChangePost } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
-import { field, MAX_MESSAGE, optionalId, readForm } from "@/lib/form";
-import { readPhotoChoices, discardPhotos } from "@/lib/photos";
+import { field, MAX_MESSAGE } from "@/lib/form";
+import { readPhotoChoices, discardPhotos, discardPhotosWhereFiled } from "@/lib/photos";
 import { MAX_CHAT_PHOTOS } from "@/lib/photo-file";
 import { teamRoster } from "@/lib/roster";
 import { castVote } from "@/lib/voting";
-import { cleanOptions, MAX_POLL_OPTIONS, MAX_POST_PHOTOS } from "@/lib/polls";
-import { parseLocalDateTime } from "@/lib/time";
+import { MAX_POST_PHOTOS } from "@/lib/polls";
+import { readPollForm } from "@/lib/poll-form";
 import { checkRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { announce } from "@/lib/realtime";
 import { CHAT_POSTED, FEED_CHANGED } from "@/lib/realtime-topic";
 import { notify, recordComment } from "@/lib/notifications";
+import { SHARED_WITH, announceTo, findPostSeenBy, notifyAcross, notifyEverybodyOn, pollsSeenBy, postsSeenBy, teamsOf } from "@/lib/club-reach";
 import { notifyChatLater, notifyCommentLater } from "@/lib/grouped-push";
 import { mentionedIds } from "@/lib/mentions";
 
@@ -77,22 +79,10 @@ export async function deleteChatMessage(_prev: ActionResult, formData: FormData)
 
 /* ── Feed ───────────────────────────────────────────────────────────────────────── */
 
-const pollSchema = z.object({
-  pollQuestion: z.string().trim().min(1, "Skriv spørgsmålet til afstemningen.").max(200),
-  pollKind: z.enum(["custom", "players"]).default("custom"),
-  /** "on" when the players were picked from the roster; otherwise every player is an answer. */
-  pollPickPlayers: z.enum(["on", "off"]).default("off"),
-  pollAnonymous: z.enum(["on", "off"]).default("off"),
-  pollHideResults: z.enum(["on", "off"]).default("off"),
-  pollMultiple: z.enum(["on", "off"]).default("off"),
-  pollClosesAt: z.string().trim().optional(),
-  pollMatchId: optionalId,
-});
-
 /**
  * A post: pictures (up to ten, already shrunk in the browser), some words, a poll — at
- * least one of them. A poll's answers are either typed, or players on the team — the
- * ones ticked on the roster (`pollPlayerId`), or all of them. Whether it is anonymous, and whether its result is hidden until shown by hand, is fixed here.
+ * least one of them. The poll is read by `readPollForm`: typed answers, or players on the
+ * team — the ones ticked on the roster (`pollPlayerId`), or all of them.
  */
 export async function createPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
@@ -102,52 +92,10 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
   const photos = await readPhotoChoices(formData, user.teamId, MAX_POST_PHOTOS);
   if (!photos.ok) return fail(photos.error);
 
-  let poll: {
-    question: string;
-    anonymous: boolean;
-    multipleChoice: boolean;
-    hideResults: boolean;
-    closesAt: Date | null;
-    matchId: string | null;
-    options: { text: string; playerId: string | null }[];
-  } | null = null;
-  if (formData.get("withPoll") === "on") {
-    const form = readForm(pollSchema, formData);
-    if (!form.ok) return fail(form.error);
-    let options: { text: string; playerId: string | null }[];
-    if (form.fields.pollKind === "players") {
-      const roster = await teamRoster(user.teamId);
-      let chosen = roster;
-      if (form.fields.pollPickPlayers === "on") {
-        const picked = new Set(formData.getAll("pollPlayerId").map(String).filter(Boolean));
-        if ([...picked].some((id) => !roster.some((m) => m.userId === id))) return fail("Spilleren er ikke på holdet.");
-        chosen = roster.filter((m) => picked.has(m.userId));
-      }
-      options = chosen.map((m) => ({ text: m.name, playerId: m.userId }));
-    } else {
-      options = cleanOptions(formData.getAll("pollOption").map(String)).map((t) => ({ text: t, playerId: null }));
-    }
-    if (options.length < 2) return fail("En afstemning skal have mindst to svarmuligheder.");
-    if (options.length > MAX_POLL_OPTIONS) return fail(`Højst ${MAX_POLL_OPTIONS} svarmuligheder.`);
-    let closesAt: Date | null = null;
-    if (form.fields.pollClosesAt) {
-      closesAt = parseLocalDateTime(form.fields.pollClosesAt);
-      if (!closesAt) return fail("Sluttidspunktet kunne ikke læses.");
-      if (closesAt <= new Date()) return fail("Sluttidspunktet skal ligge ude i fremtiden.");
-    }
-    if (form.fields.pollMatchId && !(await db.match.count({ where: { id: form.fields.pollMatchId } }))) {
-      return fail("Kampen findes ikke.");
-    }
-    poll = {
-      question: form.fields.pollQuestion,
-      anonymous: form.fields.pollAnonymous === "on",
-      multipleChoice: form.fields.pollMultiple === "on",
-      hideResults: form.fields.pollHideResults === "on",
-      closesAt,
-      matchId: form.fields.pollMatchId,
-      options,
-    };
-  }
+  const read = readPollForm(formData, formData.get("withPoll") === "on" ? await teamRoster(user.teamId) : []);
+  if (!read.ok) return fail(read.error);
+  const poll = read.poll;
+  if (poll?.matchId && !(await db.match.count({ where: { id: poll.matchId } }))) return fail("Kampen findes ikke.");
   if (!text.data && photos.photoIds.length === 0 && !poll) return fail("Vælg billeder, skriv noget eller lav en afstemning.");
 
   const post = await db.post.create({
@@ -195,26 +143,29 @@ export async function createPost(_prev: ActionResult, formData: FormData): Promi
   return ok();
 }
 
+/**
+ * Deleting a post: whoever wrote it, the team's admins — or, for a club post, the club's
+ * admins (`canChangePost`). A club post goes from every team it was shown to.
+ */
 export async function deletePost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const db = teamDb(user.teamId);
-  const post = await db.post.findFirst({
-    where: { id: field(formData, "id") },
-    select: { id: true, authorId: true, photos: { select: { photoId: true } } },
+  const post = await findPostSeenBy(user.teamId, field(formData, "id"), {
+    id: true,
+    authorId: true,
+    clubId: true,
+    teamId: true,
+    teams: SHARED_WITH,
+    photos: { select: { photoId: true } },
   });
   if (!post) return ok();
-  if (!canChangePost(user, post)) return fail("Det er ikke dit opslag.");
-  await db.post.deleteMany({ where: { id: post.id } });
-  // The pictures belonged to this post and nothing else.
-  await discardPhotos(user.teamId, post.photos.map((p) => p.photoId));
-  announce(user.teamId, FEED_CHANGED);
+  if (!canChangePost(user, user.teamId, post)) return fail("Det er ikke dit opslag.");
+  // Found under this team's reach just above: its own post, or a club post shown to it.
+  await prisma.post.deleteMany({ where: { id: post.id } });
+  // The pictures belonged to this post and nothing else; a club post's are filed where they were uploaded.
+  await discardPhotosWhereFiled(post.photos.map((p) => p.photoId));
+  announceTo(teamsOf(post), FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
-}
-
-/** Who may change or delete a post: whoever wrote it, and the team's admins. */
-function canChangePost(user: Awaited<ReturnType<typeof requireTeamUser>>, post: { authorId: string }) {
-  return post.authorId === user.id || canAdministerTeam(user, user.teamId);
 }
 
 /**
@@ -224,13 +175,17 @@ function canChangePost(user: Awaited<ReturnType<typeof requireTeamUser>>, post: 
  */
 export async function editPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const db = teamDb(user.teamId);
-  const post = await db.post.findFirst({
-    where: { id: field(formData, "id") },
-    select: { id: true, authorId: true, photos: { select: { photoId: true } }, poll: { select: { id: true } } },
+  const post = await findPostSeenBy(user.teamId, field(formData, "id"), {
+    id: true,
+    authorId: true,
+    clubId: true,
+    teamId: true,
+    teams: SHARED_WITH,
+    photos: { select: { photoId: true } },
+    poll: { select: { id: true } },
   });
   if (!post) return fail("Opslaget findes ikke.");
-  if (!canChangePost(user, post)) return fail("Det er ikke dit opslag.");
+  if (!canChangePost(user, user.teamId, post)) return fail("Det er ikke dit opslag.");
   const text = body.safeParse(formData.get("body") ?? undefined);
   if (!text.success) return fail(`Teksten er for lang (højst ${MAX_MESSAGE} tegn).`);
   const before = post.photos.map((p) => p.photoId);
@@ -238,15 +193,15 @@ export async function editPost(_prev: ActionResult, formData: FormData): Promise
   if (!photos.ok) return fail(photos.error);
   if (!text.data && photos.photoIds.length === 0 && !post.poll) return fail("Et opslag skal have tekst eller billeder.");
 
-  // `PostPhoto` has no team of its own; the post was found through `teamDb` just above.
+  // `PostPhoto` has no team of its own; the post was found under this team's reach just above.
   await prisma.$transaction([
     prisma.postPhoto.deleteMany({ where: { postId: post.id } }),
     prisma.postPhoto.createMany({ data: photos.photoIds.map((photoId, position) => ({ postId: post.id, photoId, position })) }),
-    prisma.post.updateMany({ where: { id: post.id, teamId: user.teamId }, data: { body: text.data, editedAt: new Date() } }),
+    prisma.post.updateMany({ where: { id: post.id }, data: { body: text.data, editedAt: new Date() } }),
   ]);
   // The pictures taken off belonged to this post and nothing else.
-  await discardPhotos(user.teamId, before.filter((id) => !photos.photoIds.includes(id)));
-  announce(user.teamId, FEED_CHANGED);
+  await discardPhotosWhereFiled(before.filter((id) => !photos.photoIds.includes(id)));
+  announceTo(teamsOf(post), FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -258,14 +213,21 @@ export async function editPost(_prev: ActionResult, formData: FormData): Promise
  */
 export async function pinPost(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const db = teamDb(user.teamId);
-  const post = await db.post.findFirst({ where: { id: field(formData, "id") }, select: { id: true, pinnedAt: true } });
+  const post = await findPostSeenBy(user.teamId, field(formData, "id"), {
+    id: true,
+    pinnedAt: true,
+    clubId: true,
+    teamId: true,
+    teams: SHARED_WITH,
+  });
   if (!post) return fail("Opslaget findes ikke.");
+  // A club post lies at the top of every team it is shown to: only the club's admins move it.
+  if (post.clubId && !canAdministerClub(user, post.clubId)) return fail("Klubopslag fastgøres af klubbens admins.");
   const pin = formData.get("pinned") === "on";
   if (pin !== (post.pinnedAt !== null)) {
-    await db.post.updateMany({ where: { id: post.id }, data: { pinnedAt: pin ? new Date() : null } });
+    await prisma.post.updateMany({ where: { id: post.id }, data: { pinnedAt: pin ? new Date() : null } });
   }
-  announce(user.teamId, FEED_CHANGED);
+  announceTo(teamsOf(post), FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -282,23 +244,28 @@ export async function vote(_prev: ActionResult, formData: FormData): Promise<Act
     formData.getAll("optionId").map(String),
   );
   if (!result.ok) return fail(result.error);
-  announce(user.teamId, FEED_CHANGED);
+  announceTo(result.teamIds, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
+}
+
+/** A poll the team sees — its own, or one on a club post shown to it — with who may look after it. */
+function pollSeenBy<S extends Prisma.PollSelect>(teamId: string, pollId: string, select: S) {
+  return prisma.poll.findFirst({ where: { AND: [{ id: pollId }, pollsSeenBy(teamId)] }, select });
 }
 
 /** Closing early: whoever made the poll, or the team's admins. */
 export async function closePoll(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const db = teamDb(user.teamId);
-  const poll = await db.poll.findFirst({
-    where: { id: field(formData, "pollId") },
-    select: { id: true, closedAt: true, post: { select: { authorId: true } } },
+  const poll = await pollSeenBy(user.teamId, field(formData, "pollId"), {
+    id: true,
+    closedAt: true,
+    post: { select: { authorId: true, clubId: true, teamId: true, teams: SHARED_WITH } },
   });
   if (!poll) return fail("Afstemningen findes ikke.");
-  if (poll.post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din afstemning.");
-  if (!poll.closedAt) await db.poll.updateMany({ where: { id: poll.id }, data: { closedAt: new Date() } });
-  announce(user.teamId, FEED_CHANGED);
+  if (!canChangePost(user, user.teamId, poll.post)) return fail("Det er ikke din afstemning.");
+  if (!poll.closedAt) await prisma.poll.updateMany({ where: { id: poll.id }, data: { closedAt: new Date() } });
+  announceTo(teamsOf(poll.post), FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -310,18 +277,21 @@ export async function closePoll(_prev: ActionResult, formData: FormData): Promis
  */
 export async function showPollResults(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
-  const db = teamDb(user.teamId);
-  const poll = await db.poll.findFirst({
-    where: { id: field(formData, "pollId") },
-    select: { id: true, postId: true, question: true, hideResults: true, post: { select: { authorId: true } } },
+  const poll = await pollSeenBy(user.teamId, field(formData, "pollId"), {
+    id: true,
+    postId: true,
+    question: true,
+    hideResults: true,
+    post: { select: { authorId: true, clubId: true, teamId: true, teams: SHARED_WITH } },
   });
   if (!poll) return fail("Afstemningen findes ikke.");
-  if (poll.post.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din afstemning.");
+  if (!canChangePost(user, user.teamId, poll.post)) return fail("Det er ikke din afstemning.");
   if (!poll.hideResults) return fail("Resultatet er ikke skjult.");
-  const shown = await db.poll.updateMany({ where: { id: poll.id, resultsShownAt: null }, data: { resultsShownAt: new Date() } });
+  const shown = await prisma.poll.updateMany({ where: { id: poll.id, resultsShownAt: null }, data: { resultsShownAt: new Date() } });
+  const teamIds = teamsOf(poll.post);
   if (shown.count > 0) {
-    const members = await db.teamMember.findMany({ select: { userId: true } });
-    await notify(user.teamId, members.map((m) => m.userId), user.id, {
+    // Everybody the poll is shown to — one team, or each of a club post's — hears it once.
+    await notifyEverybodyOn(teamIds, user.id, {
       category: "FEED",
       postId: poll.postId,
       title: "Resultatet er offentliggjort 🗳️",
@@ -330,14 +300,17 @@ export async function showPollResults(_prev: ActionResult, formData: FormData): 
       tag: "feed",
     });
   }
-  announce(user.teamId, FEED_CHANGED);
+  announceTo(teamIds, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
 
-/** Comments carry no team of their own; the post is found through `teamDb` first. */
+/**
+ * Comments carry no team of their own; the post is found first, under the team's reach:
+ * its own post, or a club post shown to it — where every team it is shown to comments together.
+ */
 async function postInTeam(teamId: string, postId: string) {
-  return teamDb(teamId).post.findFirst({ where: { id: postId }, select: { id: true, authorId: true } });
+  return findPostSeenBy(teamId, postId, { id: true, authorId: true, clubId: true, teamId: true, teams: SHARED_WITH });
 }
 
 /**
@@ -355,7 +328,7 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   const answering = field(formData, "parentId");
   let replyTo: { id: string; authorId: string; parent: { id: string; authorId: string } | null } | null = null;
   if (answering) {
-    // Only a comment on this very post, which was found through `teamDb` above.
+    // Only a comment on this very post, which was found under this team's reach above.
     replyTo = await prisma.postComment.findFirst({
       where: { id: answering, postId: post.id },
       select: { id: true, authorId: true, parent: { select: { id: true, authorId: true } } },
@@ -372,14 +345,16 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
   const answered = replyTo && thread ? [replyTo.authorId, thread.authorId] : [];
   const tagged = mentionedIds(text.data, await teamRoster(user.teamId)).filter((id) => !answered.includes(id));
   const about = { category: "COMMENTS", url: "/oversigt#feed", postId: post.id } as const;
-  await notify(user.teamId, answered, user.id, { ...about, title: `${user.name} svarede på din kommentar`, body: preview });
+  // On a club post the one answered may be on another of its teams: each hears it on their own.
+  const teamIds = teamsOf(post);
+  await notifyAcross(teamIds, answered, user.id, { ...about, title: `${user.name} svarede på din kommentar`, body: preview });
   await notify(user.teamId, tagged, user.id, { ...about, title: `${user.name} nævnte dig i en kommentar`, body: preview });
   if (!answered.includes(post.authorId) && !tagged.includes(post.authorId)) {
     // Grouped per post, in the center and on the phone: one buzz, then a quiet count.
     await recordComment(user.teamId, post.id, user.id);
     notifyCommentLater(post.id, user.id);
   }
-  announce(user.teamId, FEED_CHANGED);
+  announceTo(teamIds, FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }
@@ -387,12 +362,15 @@ export async function addComment(_prev: ActionResult, formData: FormData): Promi
 export async function deleteComment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireTeamUser();
   const comment = await prisma.postComment.findFirst({
-    where: { id: field(formData, "id"), post: { teamId: user.teamId } },
+    where: { id: field(formData, "id"), post: postsSeenBy(user.teamId) },
+    select: { id: true, authorId: true, post: { select: { authorId: true, clubId: true, teamId: true, teams: SHARED_WITH } } },
   });
   if (!comment) return ok();
-  if (comment.authorId !== user.id && !canAdministerTeam(user, user.teamId)) return fail("Det er ikke din kommentar.");
+  // Whoever wrote it, and whoever looks after the post: the team's admins, or a club post's club admins.
+  const looksAfter = comment.post.clubId ? canAdministerClub(user, comment.post.clubId) : canAdministerTeam(user, user.teamId);
+  if (comment.authorId !== user.id && !looksAfter) return fail("Det er ikke din kommentar.");
   await prisma.postComment.delete({ where: { id: comment.id } });
-  announce(user.teamId, FEED_CHANGED);
+  announceTo(teamsOf(comment.post), FEED_CHANGED);
   revalidatePath("/oversigt");
   return ok();
 }

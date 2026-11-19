@@ -6,7 +6,9 @@ import { ActionButton } from "@/components/action-button";
 import { createDemoTeamAction, deleteTeam, removeDemoTeamAction, visitTeam } from "@/app/actions/teams";
 import { DEMO_TEAM_NAME } from "@/lib/demo-team";
 import { ActionForm } from "@/components/action-form";
-import { Card, Field, Input, PageHeader, SectionTitle } from "@/components/ui";
+import { Card, Field, Input, PageHeader, SectionTitle, Select } from "@/components/ui";
+import { addClubAdmin, createClub, deleteClub, removeClubAdmin, setTeamClubAction } from "@/app/actions/club";
+import { allClubs, clubPlayers } from "@/lib/clubs";
 import { deleteClubLogo, saveClubLogo } from "@/app/actions/club-logos";
 import { logoUrl } from "@/lib/club-logos";
 
@@ -16,11 +18,13 @@ export default async function AdminPage() {
   const logos = await prisma.clubLogo.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
   const teams = await prisma.team.findMany({
     orderBy: { createdAt: "asc" },
-    select: { id: true, name: true, photoId: true, _count: { select: { members: true, fines: true, matches: true } } },
+    select: { id: true, name: true, photoId: true, clubId: true, _count: { select: { members: true, fines: true, matches: true } } },
   });
+  const clubs = await allClubs();
+  const players = new Map(await Promise.all(clubs.map(async (club) => [club.id, await clubPlayers(club.id)] as const)));
   return (
     <div className="space-y-8">
-      <PageHeader title="Admin" description="Alle hold på installationen." />
+      <PageHeader title="Admin" description="Alle hold og klubber på installationen." />
       <Card>
         <CreateTeamForm />
       </Card>
@@ -91,6 +95,76 @@ export default async function AdminPage() {
           )}
         </Card>
       </section>
+      <section aria-labelledby="clubs-title">
+        <SectionTitle>
+          <span id="clubs-title">Klubber</span>
+        </SectionTitle>
+        <div className="space-y-4">
+          <Card>
+            <p className="mb-3 text-sm text-slate-600">
+              En klub samler flere hold. Klubbens admins laver klubopslag og klubaktiviteter til de hold, de vælger, og alle på
+              holdene kan kommentere, stemme og tilmelde sig. En klubadmin skal spille på et af klubbens hold.
+            </p>
+            <ActionForm action={createClub} submitLabel="Opret klub" resetOnSuccess className="grid gap-4 sm:grid-cols-2">
+              <Field label="Klubbens navn" htmlFor="club-name">
+                <Input id="club-name" name="name" required maxLength={80} placeholder="Fx Swingkings FC" />
+              </Field>
+            </ActionForm>
+          </Card>
+          {clubs.map((club) => {
+            const candidates = (players.get(club.id) ?? []).filter((p) => !club.admins.some((a) => a.user.id === p.id));
+            return (
+              <Card key={club.id} className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h3 className="min-w-0 flex-1 truncate font-semibold">{club.name}</h3>
+                  <ActionButton
+                    action={deleteClub}
+                    fields={{ clubId: club.id }}
+                    label="Slet klub"
+                    variant="ghost"
+                    confirm={`Slet ${club.name} med alle klubopslag og klubaktiviteter? Holdene bliver.`}
+                    confirmLabel="Slet klubben"
+                  />
+                </div>
+                <p className="text-sm text-slate-600">
+                  {club.teams.length > 0 ? `Hold: ${club.teams.map((t) => t.name).join(", ")}` : "Ingen hold endnu — vælg klub ud for holdene nedenfor."}
+                </p>
+                <ul className="divide-y divide-slate-100 border-t border-slate-100">
+                  {club.admins.map(({ user }) => (
+                    <li key={user.id} className="flex items-center gap-3 py-2">
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {user.name} <span className="text-slate-500">· Klubadmin</span>
+                      </span>
+                      <ActionButton
+                        action={removeClubAdmin}
+                        fields={{ clubId: club.id, userId: user.id }}
+                        label="Fjern"
+                        variant="ghost"
+                        confirm={`Fjern ${user.name} som klubadmin i ${club.name}?`}
+                        confirmLabel="Fjern klubadmin"
+                      />
+                    </li>
+                  ))}
+                </ul>
+                {candidates.length > 0 && (
+                  <ActionForm action={addClubAdmin} submitLabel="Gør til klubadmin" className="grid gap-4 sm:grid-cols-2">
+                    <input type="hidden" name="clubId" value={club.id} />
+                    <Field label="Ny klubadmin" htmlFor={`club-admin-${club.id}`}>
+                      <Select id={`club-admin-${club.id}`} name="userId" defaultValue={candidates[0]!.id}>
+                        {candidates.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  </ActionForm>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      </section>
       <section>
         <SectionTitle>Hold</SectionTitle>
         <Card padded={false}>
@@ -103,6 +177,22 @@ export default async function AdminPage() {
                   <p className="text-xs text-slate-500">
                     {team._count.members} spillere · {team._count.matches} aktiviteter · {team._count.fines} bøder
                   </p>
+                  {clubs.length > 0 && (
+                    <ActionForm action={setTeamClubAction} submitLabel="Gem klub" className="mt-2 flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <label className="sr-only" htmlFor={`team-club-${team.id}`}>
+                        Klub for {team.name}
+                      </label>
+                      <Select id={`team-club-${team.id}`} name="clubId" defaultValue={team.clubId ?? ""}>
+                        <option value="">Ingen klub</option>
+                        {clubs.map((club) => (
+                          <option key={club.id} value={club.id}>
+                            {club.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </ActionForm>
+                  )}
                 </div>
                 <form action={visitTeam.bind(null, team.id)}>
                   <button className="press-button rounded-lg px-3 py-1.5 text-sm text-[var(--accent-text)] hover:bg-slate-100">Åbn</button>

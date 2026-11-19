@@ -38,6 +38,11 @@ export default function PrivacyPage() {
             Kun folk på dit hold kan se holdets indhold. Ved en <strong>anonym afstemning</strong> gemmes din stemme uden
             nogen kobling til dig, så heller ikke admin kan se, hvad du stemte.
           </p>
+          <p className="mt-2">
+            Er dit hold en del af en <strong>klub</strong>, kan klubbens admins dele opslag og aktiviteter med holdet. Dine
+            kommentarer, reaktioner, stemmer og tilmeldinger på dem kan ses af alle på de hold, de er delt med, og af
+            klubbens admins. Klubben ser ikke holdets bøder, chat eller egne opslag og aktiviteter.
+          </p>
         </section>
 
         <section>

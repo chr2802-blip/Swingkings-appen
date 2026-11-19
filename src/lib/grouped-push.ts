@@ -90,10 +90,16 @@ export function notifyCommentLater(postId: string, commenterId: string) {
 }
 
 export async function pushComments(postId: string, commenterId: string, now: Date = new Date()) {
-  const post = await prisma.post.findUnique({ where: { id: postId }, select: { teamId: true, authorId: true, createdAt: true } });
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { teamId: true, authorId: true, createdAt: true, teams: { select: { teamId: true } } },
+  });
   if (!post || post.authorId === commenterId) return;
-  const member = await teamDb(post.teamId).teamMember.findFirst({
-    where: { userId: post.authorId, NOT: { mutedPush: { has: "COMMENTS" } }, user: { pushSubscriptions: { some: {} } } },
+  // A club post's author is asked on their own team among those it is shown to: the first they joined.
+  const teamIds = post.teamId ? [post.teamId] : post.teams.map((t) => t.teamId);
+  const member = await prisma.teamMember.findFirst({
+    where: { teamId: { in: teamIds }, userId: post.authorId, NOT: { mutedPush: { has: "COMMENTS" } }, user: { pushSubscriptions: { some: {} } } },
+    orderBy: [{ createdAt: "asc" }, { teamId: "asc" }],
     select: { feedSeenAt: true },
   });
   if (!member || isActive(member.feedSeenAt, now)) return;

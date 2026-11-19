@@ -1,10 +1,11 @@
 import { prisma } from "./prisma";
-import { teamDb } from "./team-db";
+import { pollsSeenBy } from "./club-reach";
 import { checkVote } from "./polls";
 
 /**
- * Casting (or, in an open poll, changing) a vote. The poll is found through `teamDb`, so
- * another team's poll is not found.
+ * Casting (or, in an open poll, changing) a vote. The poll is found under the team's reach —
+ * its own, or one on a club post shown to it — so another team's own poll is not found.
+ * Says which teams the poll is shown to, to tell them.
  *
  * Anonymous: one transaction writes the ballot ("has voted") and the votes with no voter
  * on them — random ids, no timestamps. The ballot's primary key is what stops a second
@@ -17,11 +18,13 @@ export async function castVote(
   pollId: string,
   chosen: string[],
   now: Date = new Date(),
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const poll = await teamDb(teamId).poll.findFirst({
-    where: { id: pollId },
+): Promise<{ ok: true; teamIds: string[] } | { ok: false; error: string }> {
+  const poll = await prisma.poll.findFirst({
+    where: { AND: [{ id: pollId }, pollsSeenBy(teamId)] },
     select: {
       id: true,
+      teamId: true,
+      post: { select: { teams: { select: { teamId: true } } } },
       anonymous: true,
       multipleChoice: true,
       closesAt: true,
@@ -55,5 +58,5 @@ export async function castVote(
     if ((error as { code?: string }).code === "P2002") return { ok: false, error: "Du har allerede stemt." };
     throw error;
   }
-  return { ok: true };
+  return { ok: true, teamIds: poll.teamId ? [poll.teamId] : poll.post.teams.map((t) => t.teamId) };
 }

@@ -144,8 +144,11 @@ model Team {
    * fines or report challenges, so what each player owes stands still. A new season closes it.
    */
   finePaymentOpenedAt DateTime?
+  /// The club the team is part of (`Club`); null for a team on its own. Set by the super admin.
+  clubId              String?
   createdAt           DateTime  @default(now())
 
+  club             Club?             @relation(fields: [clubId], references: [id], onDelete: SetNull)
   members          TeamMember[]
   activeFor        User[]            @relation("ActiveTeam")
   inviteLinks      InviteLink[]
@@ -166,8 +169,11 @@ model Team {
   notifications    Notification[]
   photos           Photo[]           @relation("PhotoTeam")
   photo            Photo?            @relation("TeamPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  postsShared      PostTeam[]
+  matchesShared    MatchTeam[]
 
   @@index([photoId])
+  @@index([clubId])
 }
 
 /**
@@ -198,6 +204,7 @@ model User {
   pushPauses         PushPause[]
   notifications      Notification[]
   inviteLinksCreated InviteLink[]       @relation("InviteLinkCreatedBy")
+  clubAdminOf        ClubAdmin[]
 
   finesReceived Fine[] @relation("FinePlayer")
   finesIssued   Fine[] @relation("FineIssuedBy")
@@ -402,7 +409,10 @@ model Challenge {
  */
 model Match {
   id              String       @id @default(cuid())
-  teamId          String
+  /// The team's own activity; null for a club's (`clubId`), which reaches its teams through `MatchTeam`.
+  teamId          String?
+  /// A club activity (klubaktivitet): made by a club admin and shared with the teams in `teams`.
+  clubId          String?
   title           String
   opponent        String?
   kind            ActivityKind @default(MATCH)
@@ -424,7 +434,9 @@ model Match {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  team       Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team       Team?             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  club       Club?             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  teams      MatchTeam[]
   tasks      Task[]
   fines      Fine[]
   challenges Challenge[]
@@ -436,6 +448,7 @@ model Match {
 
   @@unique([teamId, externalUid])
   @@index([teamId, startsAt])
+  @@index([clubId, startsAt])
 }
 
 /**
@@ -584,7 +597,10 @@ model ChatPhoto {
  */
 model Post {
   id        String    @id @default(cuid())
-  teamId    String
+  /// The team's own post; null for a club's (`clubId`), which reaches its teams through `PostTeam`.
+  teamId    String?
+  /// A club post (klubopslag): written by a club admin and shown in the feed of each team in `teams`.
+  clubId    String?
   authorId  String
   body      String?
   createdAt DateTime  @default(now())
@@ -593,7 +609,9 @@ model Post {
   /// Pinned posts lie at the top of the feed, the latest pinned first. Anybody on the team pins and unpins.
   pinnedAt  DateTime?
 
-  team      Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team      Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  club      Club?         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  teams     PostTeam[]
   author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
   photos    PostPhoto[]
   poll      Poll?
@@ -604,6 +622,7 @@ model Post {
 
   @@index([teamId, createdAt])
   @@index([teamId, pinnedAt])
+  @@index([clubId, createdAt])
   @@index([authorId])
 }
 
@@ -634,7 +653,9 @@ model PostPhoto {
  */
 model Poll {
   id             String    @id @default(cuid())
-  teamId         String
+  /// As its post's: the team's, or null on a club post (`clubId`).
+  teamId         String?
+  clubId         String?
   postId         String    @unique
   question       String
   anonymous      Boolean   @default(false)
@@ -649,7 +670,8 @@ model Poll {
   resultsShownAt DateTime?
   createdAt      DateTime  @default(now())
 
-  team    Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team    Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  club    Club?        @relation(fields: [clubId], references: [id], onDelete: Cascade)
   post    Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
   match   Match?       @relation(fields: [matchId], references: [id], onDelete: SetNull)
   options PollOption[]
@@ -978,4 +1000,65 @@ model ClubLogo {
   height      Int
   bytes       Bytes
   createdAt   DateTime @default(now())
+}
+
+/**
+ * A club (klub): several teams under one roof. Its club admins (`ClubAdmin`) write club posts
+ * and make club activities, each shared with the teams they choose (`PostTeam`, `MatchTeam`);
+ * everybody on those teams comments, reacts, votes and signs up on the same post or activity.
+ * A club sees nothing of its teams' own life — fines, chat, their own posts and activities.
+ * Made by the super admin, who puts teams in it and names its admins. Read with `prisma`:
+ * it is above the teams, so it carries no `teamId`.
+ */
+model Club {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  teams   Team[]
+  admins  ClubAdmin[]
+  posts   Post[]
+  matches Match[]
+  polls   Poll[]
+}
+
+/**
+ * Somebody who looks after a club: club posts and club activities, for its teams. Always
+ * somebody playing on one of the club's teams too; leaving the last of them, or the team
+ * leaving the club, ends it (`src/lib/clubs.ts`).
+ */
+model ClubAdmin {
+  clubId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, userId])
+  @@index([userId])
+}
+
+/** A team a club post is shown to. Carries the team, so `teamDb` scopes it. */
+model PostTeam {
+  postId String
+  teamId String
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([postId, teamId])
+  @@index([teamId])
+}
+
+/** A team a club activity is shared with. Carries the team, so `teamDb` scopes it. */
+model MatchTeam {
+  matchId String
+  teamId  String
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([matchId, teamId])
+  @@index([teamId])
 }

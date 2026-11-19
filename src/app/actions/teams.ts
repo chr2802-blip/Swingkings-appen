@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
+import { pruneClubAdmins } from "@/lib/clubs";
 import { hashPassword, requireSuperAdmin, requireTeamUser, requireUser } from "@/lib/auth";
 import { assertTeamAdmin, canAccessTeam, canAdministerTeam } from "@/lib/access";
 import { generateTemporaryPassword } from "@/lib/account";
@@ -233,6 +234,8 @@ export async function removeMember(_prev: ActionResult, formData: FormData): Pro
     db.teamMember.deleteMany({ where: { userId } }),
     prisma.taskAssignee.deleteMany({ where: { userId, task: { teamId: user.teamId, ...openTask() } } }),
   ]);
+  // A club admin is always a player on one of the club's teams: off the last, the role goes.
+  await pruneClubAdmins((await prisma.team.findUnique({ where: { id: user.teamId }, select: { clubId: true } }))?.clubId);
   revalidatePath("/hold", "layout");
   return ok();
 }
@@ -299,8 +302,10 @@ export async function deleteTeam(_prev: ActionResult, formData: FormData): Promi
   const id = field(formData, "teamId");
   // The rows go with the team; the objects in storage do not, so their names are read first.
   const stored = await prisma.photo.findMany({ where: { teamId: id, storageKey: { not: null } }, select: { storageKey: true } });
+  const club = await prisma.team.findUnique({ where: { id }, select: { clubId: true } });
   await prisma.team.deleteMany({ where: { id } });
   await removeStored(stored.map((photo) => photo.storageKey));
+  if (club?.clubId) await pruneClubAdmins(club.clubId);
   revalidatePath("/", "layout");
   return ok();
 }

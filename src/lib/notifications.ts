@@ -135,10 +135,18 @@ export function notify(teamId: string, userIds: string[], actorId: string | null
  * the same way, by `notifyCommentLater`.
  */
 export async function recordComment(teamId: string, postId: string, commenterId: string) {
+  // The post the commenter's team sees: its own, or a club post shown to it.
+  const found = await prisma.post.findFirst({
+    where: { id: postId, OR: [{ teamId }, { teams: { some: { teamId } } }] },
+    select: { id: true, authorId: true, teamId: true, teams: { select: { teamId: true } } },
+  });
+  if (!found || found.authorId === commenterId) return;
+  // A club post's author hears of it on their own team among those it is shown to.
+  const authorTeam = await authorsTeam(found.authorId, found.teamId ? [found.teamId] : found.teams.map((t) => t.teamId));
+  if (!authorTeam) return;
+  const post = { id: found.id, authorId: found.authorId };
+  teamId = authorTeam;
   const db = teamDb(teamId);
-  const post = await db.post.findFirst({ where: { id: postId }, select: { id: true, authorId: true } });
-  if (!post || post.authorId === commenterId) return;
-  if (!(await db.teamMember.count({ where: { userId: post.authorId } }))) return;
   const groupKey = `comments:${post.id}`;
   const open = await db.notification.findFirst({
     where: { userId: post.authorId, groupKey, readAt: null },
@@ -172,6 +180,16 @@ export async function recordComment(teamId: string, postId: string, commenterId:
     });
   }
   announce(teamId, NOTIFIED);
+}
+
+/** The first of `teamIds` the person joined, or null when they are on none of them. */
+async function authorsTeam(userId: string, teamIds: string[]) {
+  const row = await prisma.teamMember.findFirst({
+    where: { userId, teamId: { in: teamIds } },
+    orderBy: [{ createdAt: "asc" }, { teamId: "asc" }],
+    select: { teamId: true },
+  });
+  return row?.teamId ?? null;
 }
 
 /** What the bell counts: unread notifications that came (or moved) after the center was last opened. */

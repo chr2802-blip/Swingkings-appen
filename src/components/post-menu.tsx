@@ -31,7 +31,7 @@ type Step = "menu" | "delete" | "close" | "show";
 /**
  * The ⋯ in a post's corner, with everything one can do to it: pin it to the top, edit it,
  * vote again, close the poll, show its hidden result and delete the post. Only what this viewer may do is listed;
- * pinning is for everybody, so there is always a button. Who voted for what is not here:
+ * pinning a team's post is for everybody on it, a club post's for the club's admins. Who voted for what is not here:
  * that opens from the poll's "x har stemt" (`PollView`).
  */
 export function PostMenu({
@@ -40,14 +40,17 @@ export function PostMenu({
   photoIds,
   pinned,
   canChange,
+  canPin = true,
   poll,
 }: {
   postId: string;
   body: string | null;
   photoIds: string[];
   pinned: boolean;
-  /** The author and the team's admins: edit and delete. */
+  /** The author and the team's admins (a club post's: the club's admins): edit and delete. */
   canChange: boolean;
+  /** Everybody on the team pins the team's posts; a club post only its club's admins. */
+  canPin?: boolean;
   poll: PollViewData | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -61,6 +64,8 @@ export function PostMenu({
   const canShowResults = poll !== null && poll.canShowResults;
 
   const close = () => setOpen(false);
+  // Nothing this viewer may do to it: no ⋯ at all.
+  if (!canPin && !canChange && !canChangeVote && !canClose && !canShowResults) return null;
   const show = (next: Step) => {
     setStep(next);
     setOpen(true);
@@ -91,6 +96,7 @@ export function PostMenu({
         {step === "menu" && (
           <ModalBody>
             <ul className="-mx-2 space-y-0.5">
+              {canPin && (
               <li>
                 <form onSubmit={pin.handleSubmit}>
                   <input type="hidden" name="id" value={postId} />
@@ -105,6 +111,7 @@ export function PostMenu({
                   )}
                 </form>
               </li>
+              )}
               {canChange && (
                 <li>
                   <button

@@ -1,5 +1,5 @@
-import type { TeamUser } from "@/lib/auth";
-import { canAdministerTeam } from "@/lib/access";
+import { clubOnScreen, type TeamUser } from "@/lib/auth";
+import { canAdministerClub, canAdministerTeam } from "@/lib/access";
 import { FEED_PAGE, nextFeedCursor, teamFeed } from "@/lib/feed";
 import { EmptyState, SectionTitle } from "@/components/ui";
 import { PostDialog } from "@/components/post-dialog";
@@ -18,7 +18,8 @@ import { FeedSearch } from "@/components/feed-search";
  */
 export async function TeamFeed({ user }: { user: TeamUser }) {
   const admin = canAdministerTeam(user, user.teamId);
-  const [posts, roster] = await teamFeed(user.teamId, user.id, admin);
+  const clubAdmin = canAdministerClub(user, clubOnScreen(user));
+  const [posts, roster] = await teamFeed(user.teamId, user.id, admin, clubAdmin);
   const members = roster.map((m) => ({ userId: m.userId, name: m.name, photoId: m.photoId }));
   // Changes on every render, so the posts `FeedMore` fetched are fetched again when an
   // action (a like, a comment) has the page rendered anew.
@@ -41,7 +42,7 @@ export async function TeamFeed({ user }: { user: TeamUser }) {
         <FeedSearch renderedAt={renderedAt}>
           <div className="space-y-6">
             {posts.map((post) => (
-              <FeedPostCard key={post.id} post={post} viewerId={user.id} admin={admin} members={members} />
+              <FeedPostCard key={post.id} post={post} viewerId={user.id} admin={admin} clubAdmin={clubAdmin} members={members} />
             ))}
             <FeedMore after={nextFeedCursor(posts, FEED_PAGE)} renderedAt={renderedAt} />
           </div>

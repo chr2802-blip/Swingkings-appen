@@ -33,6 +33,10 @@ const NO_TEAM_ID: Record<string, { refuse: true; because: string } | { refuse: f
   PushPause: { refuse: false },
   // A club's crest is the same on every team: the super admin's, shared by all.
   ClubLogo: { refuse: false },
+  // A club and its admins are above the teams (`src/lib/clubs.ts`); a club's posts and
+  // activities have no team of their own and are reached through `src/lib/club-reach.ts`.
+  Club: { refuse: false },
+  ClubAdmin: { refuse: false },
 };
 
 function decide(model: string): "scope" | "refuse" | "pass" {

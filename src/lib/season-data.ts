@@ -110,6 +110,12 @@ export async function startSeason(teamId: string, name: string, now: Date = new 
     await tx.notification.deleteMany({ where: { teamId, category: { in: ["FINES", "CHALLENGES"] } } });
     // Jobs and sign-ups go with their activity (onDelete: Cascade).
     await tx.match.deleteMany({ where: { teamId, startsAt: { lt: now } } });
+    // A club activity is the club's and stays; the team's own jobs, sign-ups and comments on
+    // those that have taken place go, as they would with an activity of its own.
+    const pastClub = { clubId: { not: null }, startsAt: { lt: now } };
+    await tx.task.deleteMany({ where: { teamId, match: pastClub } });
+    await tx.activitySignup.deleteMany({ where: { teamId, match: pastClub } });
+    await tx.activityComment.deleteMany({ where: { teamId, match: pastClub } });
     await tx.task.deleteMany({ where: { teamId, matchId: null, NOT: openTask(now) } });
     await tx.inviteLink.deleteMany({ where: { teamId } });
     await tx.teamMember.updateMany({ where: { teamId }, data: { duesPaidAt: null, finesPaidAt: null } });
