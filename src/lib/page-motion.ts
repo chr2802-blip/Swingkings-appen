@@ -29,3 +29,12 @@ export function pageMotion(from: string, to: string, tabs: TabPaths): PageMotion
   if (down === 0) return null;
   return down > 0 ? "open" : "close";
 }
+
+/**
+ * Whether a link to `href` leads away from a page whose own addresses are `scope` and the
+ * ones below it (its tabs) — for a page's banner, which rolls up only when it is left.
+ */
+export function leavesScope(href: string, scope: string) {
+  const path = href.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+  return path !== scope && !path.startsWith(`${scope}/`);
+}

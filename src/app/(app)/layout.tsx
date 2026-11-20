@@ -64,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </Link>
           </div>
         </div>
-        <StripeBand />
+        <StripeBand className="header-stripes" />
       </header>
 
       <main className="mx-auto max-w-5xl pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:pb-10">

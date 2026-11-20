@@ -22,7 +22,10 @@ test("sets your own shirt number, which your card then wears", async ({ page, lo
   await expect(page.getByText("Gemt.")).toBeVisible();
   expect((await db.teamMember.findFirstOrThrow({ where: { userId: anna.id } })).shirtNumber).toBe(10);
 
-  await page.getByRole("link", { name: "Se min side" }).click();
+  // The settings are a tab of your own page: the card above them wears it at once.
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/profil$`));
+  await page.getByRole("tab", { name: "Detaljer" }).click();
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
   await expect(page.getByText("#10", { exact: true })).toBeVisible();
   await expect(page.locator('main [data-shirt="10"]').first()).toBeVisible();
 
