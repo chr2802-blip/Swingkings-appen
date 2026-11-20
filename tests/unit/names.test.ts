@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { possessive } from "@/lib/names";
+import { firstName, possessive } from "@/lib/names";
 
 describe("possessive", () => {
   it("adds an s, or only an apostrophe after s, x and z", () => {
@@ -9,5 +9,13 @@ describe("possessive", () => {
     expect(possessive("Max")).toBe("Max'");
     expect(possessive("Fritz")).toBe("Fritz'");
     expect(possessive("Anna Berg ")).toBe("Anna Bergs");
+  });
+});
+
+describe("firstName", () => {
+  it("keeps only the first name, whatever the spaces", () => {
+    expect(firstName("Anna Holm")).toBe("Anna");
+    expect(firstName("  Bo  Berg Hansen ")).toBe("Bo");
+    expect(firstName("Carl")).toBe("Carl");
   });
 });

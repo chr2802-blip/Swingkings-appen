@@ -109,8 +109,9 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   and the dialog's `onDone` hands them to `useShowFresh(result, href)`. A fine given on an
   activity or a player's page stays there: that page's own fines tab slides in
   (`GiveFineDialog`'s `showIn`). Given in the fine box, or moved by an approval, fines go to
-  its history — slid to when on screen, else opened — and a reported challenge opens the
-  challenges' sheet. `FreshPulse` (in the app layout) pulses each row (`data-fresh`) once
+  its history — slid to when on screen, else opened — and so does a reported challenge
+  (`challenge:<id>` on its row; from a player's page, that page's fines tab).
+  `FreshPulse` (in the app layout) pulses each row (`data-fresh`) once
   it is in view. The page moves only after
   `sheetsSettled()`, or the closing sheet's `history.back()` lands after it and undoes it.
 - **Money**: a `Fine` copies `units` and `unitPriceKr` when given — never recompute from the
@@ -138,8 +139,12 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   transaction guarded on `Team.seasonStartedAt`, so a double press ends it once. The
   KampKlar sync brings nothing back from before `seasonStartedAt`.
 - **Challenges** are reported after they are played (winner, loser, stake) and go through
-  when anybody but the reporter approves — the only flow (`canMove` in
-  `src/lib/challenges.ts`). Approving is `settleChallenge` (`src/lib/fines.ts`): the
+  when anybody but the reporter approves — or an admin, their own too — the only flow
+  (`canMove` in `src/lib/challenges.ts`). They have no list or page of their own: one
+  waiting stands in the history among the fines, and its sheet is fetched when it is
+  opened (`loadChallengeDetails`), as a fine's is (`loadFineDetails`). A list reads only
+  what its rows show (`fineHistory`, `challengeRowSelect`); a row names people by first
+  name (`firstName`) beside their picture. Approving is `settleChallenge` (`src/lib/fines.ts`): the
   winner gets a fine with negative units, the loser one with positive, so the stake
   moves; capped at what the winner owes, guarded on status so a double press moves it
   once. A withdrawn challenge is deleted and shown nowhere: withdrawing one that waits

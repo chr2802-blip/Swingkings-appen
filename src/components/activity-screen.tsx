@@ -1,11 +1,11 @@
 import type { TeamUser } from "@/lib/auth";
-import { canAdministerClub, canAdministerTeam, canManageFines } from "@/lib/access";
+import { canAdministerClub, canAdministerTeam } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { reachDb, teamsOf } from "@/lib/club-reach";
 import { clubTeams, rosterAcross } from "@/lib/clubs";
 import { foundOr404 } from "@/lib/scoped";
 import { teamRoster } from "@/lib/roster";
-import { fineBoard, fineHistory } from "@/lib/fine-data";
+import { challengeRowSelect, fineBoard, fineHistory } from "@/lib/fine-data";
 import { kickoffLabel, readInZone, relativeDay, stampLabel, toLocalDateTimeInput } from "@/lib/time";
 import { reactionRows, reactorsOf } from "@/lib/reactions";
 import { Badge, buttonClass, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
@@ -17,7 +17,6 @@ import { GiveFineDialog } from "@/components/give-fine-dialog";
 import { Avatar } from "@/components/photo";
 import { PlayerLink } from "@/components/player-link";
 import { FineHistory, historyItems } from "@/components/fine-history";
-import { challengeCardInclude } from "@/components/challenge-card";
 import { CreateMenu } from "@/components/create-button";
 import { ActionButton } from "@/components/action-button";
 import { SwipePages, TurnButton } from "@/components/swipe-pages";
@@ -75,7 +74,6 @@ export async function ActivityScreen({
   /** A job whose sheet a link asked to open (`?opgave=`). */
   openTaskId?: string;
 }) {
-  const manages = canManageFines(user, user.teamId);
 
   // The team's own activity, or a club activity shared with it (read across teams on
   // purpose). On a club activity the jobs and challenges shown are this team's own; the
@@ -88,7 +86,7 @@ export async function ActivityScreen({
         teams: { select: { teamId: true } },
         tasks: { where: { teamId: user.teamId }, orderBy: { createdAt: "asc" }, select: TASK_SELECT },
         // Only those still waiting: a settled one is in the history as the fines it moved.
-        challenges: { where: { teamId: user.teamId, status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude },
+        challenges: { where: { teamId: user.teamId, status: "PENDING" }, orderBy: { createdAt: "desc" }, select: challengeRowSelect },
         signups: { select: { userId: true, going: true } },
         comments: {
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -350,7 +348,7 @@ export async function ActivityScreen({
               history.length === 0 ? (
                 <EmptyState icon="😇">Ingen bøder endnu. Alle opførte sig pænt – eller ingen så det.</EmptyState>
               ) : (
-                <FineHistory items={history} viewer={{ viewerId: user.id, managesFines: manages, finePriceKr: board.finePriceKr }} />
+                <FineHistory items={history} finePriceKr={board.finePriceKr} />
               ),
           },
         ]}

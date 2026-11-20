@@ -2,18 +2,14 @@ import Link from "next/link";
 import type { TeamUser } from "@/lib/auth";
 import { canManageFines } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
-import { fineBoard, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
-import { waitsOn } from "@/lib/challenges";
+import { challengeRowSelect, fineBoard, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
 import { fineUnits, kr } from "@/lib/money";
-import { Badge, Card, EmptyState, PageHeader, SectionTitle } from "@/components/ui";
+import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { playerHref } from "@/components/player-link";
 import { SwipePages } from "@/components/swipe-pages";
 import { FineHistory, historyItems } from "@/components/fine-history";
 import { FineCreateMenu } from "@/components/fine-create-menu";
-import { ChallengeCard, challengeCardInclude } from "@/components/challenge-card";
-import { ChallengeDialog } from "@/components/challenge-dialog";
-import { DetailSheet } from "@/components/detail-sheet";
 import { FineTypeDialog } from "@/components/fine-type-dialog";
 import { Crown } from "@/components/crest";
 import { LiveRefresh } from "@/components/live-refresh";
@@ -25,49 +21,36 @@ const HISTORY = 100;
 /** The pages under the overview, in the order they are swiped through. */
 export const FINE_PAGES = ["/boder", "/boder/historik", "/boder/katalog"] as const;
 
-/** `/boder?udfordringer` opens the fine box with the challenges' sheet open (a notification's link). */
+/**
+ * `/boder?udfordringer` was the challenges' sheet, in links from notifications already
+ * sent; they now open the history, where the challenges are.
+ */
 export const CHALLENGES_PARAM = "udfordringer";
 
 type Board = Awaited<ReturnType<typeof fineBoard>>;
 
 /**
- * The fine box: the overview stays put at the top — what you owe, what is in the box, and
- * the challenges — and under it the board, the history and the catalogue are swiped
- * between. Each has its own address (`show`), and all three are read at once, so a swipe
- * never waits on the server. Challenges have no page of their own: while any wait for
- * approval the overview says how many, and a tap opens them in a sheet (`openChallenges`
- * on arrival). With none waiting the overview says nothing of them; settled ones are in
- * the history, with the fines they moved.
+ * The fine box: the overview stays put at the top — what you owe and what is in the box —
+ * and under it the board, the history and the catalogue are swiped between. Each has its
+ * own address (`show`), and all three are read at once, so a swipe never waits on the
+ * server. Challenges have no page of their own: one waiting stands in the history among
+ * the fines, opened (and approved) from its row; once approved, the fines it moved stand
+ * there instead.
  */
-export async function FinesScreen({
-  user,
-  show,
-  openChallenges = false,
-}: {
-  user: TeamUser;
-  show: (typeof FINE_PAGES)[number];
-  openChallenges?: boolean;
-}) {
+export async function FinesScreen({ user, show }: { user: TeamUser; show: (typeof FINE_PAGES)[number] }) {
   const db = teamDb(user.teamId);
   const [board, kings, history, matches, pending] = await Promise.all([
     fineBoard(user.teamId),
     monthKings(user.teamId),
     fineHistory(user.teamId, { take: HISTORY }),
     matchOptions(user.teamId),
-    db.challenge.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, include: challengeCardInclude }),
+    db.challenge.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, select: challengeRowSelect }),
   ]);
   const manages = canManageFines(user, user.teamId);
   const paying = board.paymentOpenedAt !== null;
   const mine = board.balances.find((row) => row.userId === user.id);
-  // What is waiting on the viewer goes first: it is the reason they opened the sheet.
-  const waiting = pending.filter((c) => waitsOn(c, user.id));
-  const others = pending.filter((c) => !waiting.includes(c));
-  // Challenges still waiting stand in the history too, among the fines.
+  // Challenges still waiting stand in the history, among the fines.
   const items = historyItems(history, pending);
-  const viewer = { viewerId: user.id, managesFines: manages, finePriceKr: board.finePriceKr };
-  const card = (c: (typeof pending)[number]) => (
-    <ChallengeCard key={c.id} challenge={c} viewerId={user.id} managesFines={manages} finePriceKr={board.finePriceKr} />
-  );
 
   return (
     <div>
@@ -120,52 +103,6 @@ export async function FinesScreen({
             )}
           </div>
         </div>
-        <DetailSheet
-          title="Udfordringer"
-          // Gone when none wait — but a sheet already open stays, so approving the last one
-          // in it does not snatch it away.
-          hidden={pending.length === 0}
-          initialOpen={openChallenges}
-          clearParam={CHALLENGES_PARAM}
-          triggerClassName="press-card flex w-full items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-left text-sm"
-          trigger={
-            <>
-              <span className="font-medium">⚔️ Udfordringer</span>
-              <span className="flex items-center gap-2 text-xs text-slate-500">
-                {pending.length} venter på godkendelse
-                {waiting.length > 0 && <Badge tone="amber">{waiting.length} på dig</Badge>}
-                <span aria-hidden>›</span>
-              </span>
-            </>
-          }
-        >
-          <p className="mb-4 text-sm text-slate-500">
-            Meld resultatet her eller under +, en anden godkender, og taberen overtager indsatsen. Alle udfordringer står også i historikken.
-          </p>
-          {/* Reporting one from here too, so the sheet is not a dead end; it lands in the sheet once sent. */}
-          {!paying && (
-            <div className="mb-6">
-              <ChallengeDialog
-                opponents={board.roster.filter((m) => m.userId !== user.id)}
-                finePriceKr={board.finePriceKr}
-                triggerClassName="w-full"
-              />
-            </div>
-          )}
-          {waiting.length > 0 && (
-            <section className="mb-8">
-              <SectionTitle>Venter på din godkendelse</SectionTitle>
-              <div className="space-y-3">{waiting.map(card)}</div>
-            </section>
-          )}
-          {others.length > 0 && (
-            <section className="mb-8">
-              <SectionTitle>Venter på en anden</SectionTitle>
-              <div className="space-y-3">{others.map(card)}</div>
-            </section>
-          )}
-          {pending.length === 0 && <EmptyState icon="⚔️">Ingen udfordringer venter. Hvem tør?</EmptyState>}
-        </DetailSheet>
       </Card>
 
       <SwipePages
@@ -183,7 +120,7 @@ export async function FinesScreen({
               items.length === 0 ? (
                 <EmptyState icon="😇">Ingen bøder endnu. Det varer nok ikke længe.</EmptyState>
               ) : (
-                <FineHistory items={items} viewer={viewer} />
+                <FineHistory items={items} finePriceKr={board.finePriceKr} />
               ),
           },
           {

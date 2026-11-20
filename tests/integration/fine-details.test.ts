@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { prisma } from "@/lib/prisma";
-import { loadFineDetails } from "@/app/actions/fine-details";
+import { loadChallengeDetails, loadFineDetails } from "@/app/actions/fine-details";
 import { makeSquad, signIn, signOut } from "../helpers/factories";
 import { expectRedirectToLogin } from "../helpers/expect";
 
@@ -59,5 +59,55 @@ describe("loadFineDetails", () => {
     const fine = await give(team.id, anna.id, treasurer.id, "For sent");
     signOut();
     await expectRedirectToLogin(() => loadFineDetails(fine.id));
+  });
+});
+
+describe("loadChallengeDetails", () => {
+  const report = (teamId: string, reportedById: string, winnerId: string, loserId: string) =>
+    prisma.challenge.create({ data: { teamId, reportedById, winnerId, loserId, description: "Første mål", units: 2 } });
+  const html = async (id: unknown) => renderToStaticMarkup((await loadChallengeDetails(id)) as ReactElement);
+
+  it("draws a waiting challenge as a fine's sheet, with exactly the buttons the viewer may press", async () => {
+    const { team, admin, treasurer, anna, bo } = await makeSquad();
+    const challenge = await report(team.id, anna.id, anna.id, bo.id);
+
+    // The opponent approves; the reporter only withdraws.
+    await signIn(bo);
+    const his = await html(challenge.id);
+    for (const text of ["Anna", "Bo", "Første mål", "Meldt af", "Godkend"]) expect(his).toContain(text);
+    expect(his).not.toContain("Træk tilbage");
+    await signIn(anna);
+    const hers = await html(challenge.id);
+    expect(hers).toContain("Træk tilbage");
+    expect(hers).not.toContain(">Godkend<");
+    // The treasurer may do both; so may an admin, on their own too.
+    await signIn(treasurer);
+    expect(await html(challenge.id)).toContain("Træk tilbage");
+    const own = await report(team.id, admin.id, admin.id, bo.id);
+    await signIn(admin);
+    const admins = await html(own.id);
+    expect(admins).toContain(">Godkend<");
+    expect(admins).toContain("Træk tilbage");
+  });
+
+  it("gives nothing for another team's challenge, a withdrawn one or no id at all", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const other = await makeSquad("Andre");
+    const theirs = await report(other.team.id, other.anna.id, other.anna.id, other.bo.id);
+    const gone = await report(team.id, anna.id, anna.id, bo.id);
+    await prisma.challenge.delete({ where: { id: gone.id } });
+
+    await signIn(bo);
+    expect(await loadChallengeDetails(theirs.id)).toBeNull();
+    expect(await loadChallengeDetails(gone.id)).toBeNull();
+    expect(await loadChallengeDetails("")).toBeNull();
+    expect(await loadChallengeDetails(42)).toBeNull();
+  });
+
+  it("sends somebody not logged in to the login page", async () => {
+    const { team, anna, bo } = await makeSquad();
+    const challenge = await report(team.id, anna.id, anna.id, bo.id);
+    signOut();
+    await expectRedirectToLogin(() => loadChallengeDetails(challenge.id));
   });
 });

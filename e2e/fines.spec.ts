@@ -318,35 +318,37 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
   await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
   await expect(dialog).toBeHidden();
 
-  // Reported, the challenges' sheet opens by itself with the new one pulsing in it;
-  // the reporter sees it waiting, but may not approve it.
-  const sheet = page.getByRole("dialog", { name: "Udfordringer" });
-  await expectPulse(sheet.locator("[data-fresh]").filter({ hasText: "Flest mål på træning" }));
-  await expect(
-    sheet.getByText("Venter på at en anden på holdet godkender."),
-  ).toBeVisible();
+  // Reported, it stands in the history among the fines, pulsing as a fine given does;
+  // the reporter sees it waiting, but may not approve it — only take it back.
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  const row = history(page).locator("[data-fresh^='challenge:']");
+  await expect(row).toContainText("Anna 🏆 slog Bo · Flest mål på træning");
+  await expectPulse(row);
+  // Nothing of it on the overview: the history is where it is.
+  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(0);
+  await row.getByRole("button").click();
+  const sheet = page.getByRole("dialog", { name: "Udfordring" });
+  await expect(sheet.getByText("Venter på at en anden på holdet godkender.")).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Godkend" })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Træk tilbage" })).toBeVisible();
   await sheet.getByRole("button", { name: "Luk" }).click();
   await expect(sheet).toBeHidden();
 
-  // The notification's old link lands on the fine box with the sheet already open.
+  // The notification's old links land in the history.
   await loginAs(admin);
   await page.goto("/boder/udfordringer");
-  await expect(page).toHaveURL(/\/boder\?udfordringer$/);
-  await expect(
-    sheet.getByRole("heading", { name: "Venter på din godkendelse" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await page.goto("/boder?udfordringer");
+  await expect(page).toHaveURL(/\/boder\/historik$/);
+  await history(page).getByRole("button", { name: /Anna 🏆 slog Bo/ }).click();
   await sheet.getByRole("button", { name: "Godkend" }).click();
-  // Approved, the sheet gets out of the way and the history slides in, with the two
-  // fines the challenge moved pulsing.
+  // Approved, the sheet gets out of the way, with the two fines the challenge moved pulsing.
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(/\/boder\/historik$/);
   const moved = history(page).locator("li").filter({ hasText: "udfordring" });
   await expect(moved).toHaveCount(2);
   await expectPulse(moved.first());
   await expectPulse(moved.last());
-  // With none waiting the overview says nothing of challenges.
-  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(0);
   await page.getByRole("tab", { name: "Bødetavlen" }).click();
   await expect(page.getByRole("link", { name: /Bo .*30 kr/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Anna .*20 kr/ })).toBeVisible();
@@ -361,66 +363,41 @@ test("a challenge is reported, approved in the sheet by a third player, and the 
   const lost = page.getByRole("button", { name: /Bo · Tabt udfordring/ });
   await expect(lost.getByText("Udfordring", { exact: true })).toHaveCount(1);
   await lost.click();
-  await expect(
-    page
-      .getByRole("dialog", { name: "Udfordring" })
-      .getByText(/3 bøder flyttet fra Anna til Bo · godkendt af/),
-  ).toBeVisible();
+  const fine = page.getByRole("dialog", { name: "Udfordring" });
+  await expect(fine.getByText("Godkendt af")).toBeVisible();
+  await expect(fine.getByText("Træner Tom")).toBeVisible();
 });
 
-test("a challenge is reported from inside the challenges' sheet and lands in it", async ({
-  page,
-  loginAs,
-}) => {
-  const { team, admin, anna, bo } = await squad();
-  await db.challenge.create({
-    data: {
-      teamId: team.id,
-      winnerId: bo.id,
-      loserId: admin.id,
-      reportedById: bo.id,
-      description: "Flest mål",
-      units: 1,
-    },
-  });
-  // The winner needs fines to win their way out of.
-  await db.fine.create({
-    data: {
-      teamId: team.id,
-      playerId: bo.id,
-      reason: "For sent",
-      units: 2,
-      unitPriceKr: 10,
-      issuedById: admin.id,
-    },
-  });
-  await loginAs(anna);
-  await page.goto("/boder?udfordringer");
-  const sheet = page.getByRole("dialog", { name: "Udfordringer" });
-  await sheet.getByRole("button", { name: "Meld udfordring" }).click();
-  const dialog = page.getByRole("dialog", { name: "Meld en udfordring" });
-  await choose(dialog.getByLabel("Hvem spillede du mod?"), "Bo");
-  await choose(dialog.getByLabel("Hvem vandt?"), "Min modstander vandt");
-  await dialog
-    .getByLabel("Hvad gik udfordringen ud på?")
-    .fill("Straffesparkskonkurrence");
-  await dialog.getByRole("button", { name: "Send til godkendelse" }).click();
-  await expect(dialog).toBeHidden();
+test("an admin approves their own challenge, and nobody else their own", async ({ page, loginAs }) => {
+  const { team, admin, treasurer, bo } = await squad();
+  for (const playerId of [admin.id, treasurer.id]) {
+    await db.fine.create({
+      data: { teamId: team.id, playerId, reason: "For sent", units: 2, unitPriceKr: 10, issuedById: admin.id },
+    });
+  }
+  const own = (reportedById: string, description: string) =>
+    db.challenge.create({
+      data: { teamId: team.id, winnerId: reportedById, loserId: bo.id, reportedById, description, units: 1 },
+    });
+  await own(admin.id, "Straffesparkskonkurrence");
+  await own(treasurer.id, "Hovedstød");
 
-  // The sheet is still open behind it, and now holds the new one too, pulsing, waiting on somebody else.
-  await expect(sheet.getByText("“Straffesparkskonkurrence”")).toBeVisible();
-  await expectPulse(sheet.locator("[data-fresh]").filter({ hasText: "Straffesparkskonkurrence" }));
-  await expect(sheet.getByText("“Flest mål”")).toBeVisible();
-  expect(
-    await db.challenge.count({
-      where: {
-        teamId: team.id,
-        reportedById: anna.id,
-        winnerId: bo.id,
-        loserId: anna.id,
-      },
-    }),
-  ).toBe(1);
+  // The treasurer may only take their own back.
+  await loginAs(treasurer);
+  await page.goto("/boder/historik");
+  await history(page).getByRole("button", { name: /Hovedstød/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Udfordring" });
+  await expect(sheet.getByRole("button", { name: "Træk tilbage" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Godkend" })).toHaveCount(0);
+
+  await loginAs(admin);
+  await page.goto("/boder/historik");
+  await history(page).getByRole("button", { name: /Straffesparkskonkurrence/ }).click();
+  await sheet.getByRole("button", { name: "Godkend" }).click();
+  await expect(sheet).toBeHidden();
+  await expect
+    .poll(async () => (await db.challenge.findFirstOrThrow({ where: { reportedById: admin.id } })).status)
+    .toBe("SETTLED");
 });
 
 test("a fine in the history opens with what it was for, who gave it and when, and a challenge's fine shows the challenge", async ({
@@ -501,10 +478,9 @@ test("a fine in the history opens with what it was for, who gave it and when, an
   await page.getByRole("button", { name: /Bo · Udfordring tabt/ }).click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
   await expect(sheet.getByText("“Flest mål”")).toBeVisible();
-  await expect(
-    sheet.getByText(/2 bøder flyttet fra Anna til Bo · godkendt af Træner/),
-  ).toBeVisible();
-  // One card tells it all: the fine's own facts sit under the challenge, not repeated beside it.
+  await expect(sheet.getByText("Godkendt af")).toBeVisible();
+  await expect(sheet.getByText("Træner Tom")).toBeVisible();
+  // One list tells it all: the challenge's facts, and of the fine's own only when.
   await expect(sheet.getByText("Hvornår")).toBeVisible();
   await expect(sheet.getByText("Pris pr. bøde")).toHaveCount(0);
   await expect(sheet.getByText("Givet af")).toHaveCount(0);
@@ -578,7 +554,7 @@ test("an admin opens the box for payment: no new fines, Betal for the player, an
   await expect(page.getByRole("link", { name: /Betal 40 kr/ })).toHaveCount(0);
 });
 
-test("the overview stays on top: what you owe, what is in the box and the way to the challenges", async ({
+test("the overview stays on top: what you owe and what is in the box", async ({
   page,
   loginAs,
 }) => {
@@ -612,11 +588,7 @@ test("the overview stays on top: what you owe, what is in the box and the way to
       .locator("[aria-hidden]")
       .last(),
   ).toHaveText("›");
-  // With no challenge waiting, the overview says nothing of them.
-  const challenges = page.getByRole("button", { name: /Udfordringer/ });
-  await expect(challenges).toHaveCount(0);
-
-  // A challenge between two others waits on Anna, and the overview says so on every page under it.
+  // The overview says nothing of challenges, even with one waiting: they are in the history.
   await db.challenge.create({
     data: {
       teamId: team.id,
@@ -629,16 +601,7 @@ test("the overview stays on top: what you owe, what is in the box and the way to
   });
   await page.goto("/boder/katalog");
   await expect(mine).toContainText("10 kr");
-  await expect(challenges).toContainText("1 venter på godkendelse");
-  await expect(challenges).toContainText("1 på dig");
-  await challenges.click();
-  const sheet = page.getByRole("dialog", { name: "Udfordringer" });
-  await expect(
-    sheet.getByRole("heading", { name: "Venter på din godkendelse" }),
-  ).toBeVisible();
-  await expect(page).toHaveURL(/\/boder\/katalog$/);
-  await sheet.getByRole("button", { name: "Luk" }).click();
-  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("button", { name: /Udfordringer/ })).toHaveCount(0);
 
   await mine.click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
@@ -940,7 +903,7 @@ test("a short page beside a long history ends where its own content does", async
   expect(await beyond()).toBe(0);
 });
 
-test("a challenge's card shows both whole names on a phone, one line each", async ({ page, loginAs }) => {
+test("a challenge's row names only first names; its sheet shows both whole names on a phone", async ({ page, loginAs }) => {
   const { team, anna, bo } = await squad();
   const winner = "Christian Ørbæk Andersen";
   const loser = "Frederik Lauritzen-Holm";
@@ -951,11 +914,15 @@ test("a challenge's card shows both whole names on a phone, one line each", asyn
   });
 
   await loginAs(anna);
-  await page.goto("/boder");
-  await page.getByRole("button", { name: /Udfordringer/ }).click();
-  const card = page.getByRole("dialog", { name: "Udfordringer" }).locator("[data-fresh^='card:']");
+  await page.goto("/boder/historik");
+  // The first names and the picture are enough; the room goes to what it was.
+  const row = history(page).getByRole("button", { name: /Christian 🏆 slog Frederik · Vhkl/ });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("Andersen");
+  await row.click();
+  const sheet = page.getByRole("dialog", { name: "Udfordring" });
   for (const name of [`${winner} 🏆`, loser]) {
-    const shown = card.getByText(name, { exact: true });
+    const shown = sheet.locator("dd").getByText(name, { exact: true });
     await expect(shown).toBeVisible();
     // Not cut off with "…": the text fits the room it is given.
     expect(await shown.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -993,8 +960,8 @@ test("a challenge still waiting stands in the history among the fines, on the fi
     const rows = list.getByRole("listitem");
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0)).toContainText("Glemt trøje");
-    await expect(rows.nth(1)).toContainText("Bo 🏆 slog Anna");
-    await expect(rows.nth(1)).toContainText("“Flest mål” · 1 bøde · 10 kr");
+    await expect(rows.nth(1)).toContainText("Bo 🏆 slog Anna · Flest mål");
+    await expect(rows.nth(1)).toContainText("1 bøde · 10 kr");
     await expect(rows.nth(1)).toContainText("Venter");
     await expect(rows.nth(2)).toContainText("For sent");
   };

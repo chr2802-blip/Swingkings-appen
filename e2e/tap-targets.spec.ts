@@ -93,7 +93,7 @@ test("every button and link on the team's pages presses in and is at least 32 by
     `/spiller/${admin.id}`,
   ]);
 
-  // The sheets a press opens: the "+", the bell and its settings, a fine, a job.
+  // The sheets a press opens: the "+", the bell and its settings, a fine, a challenge waiting, a job.
   problems.push(
     ...(await auditSheet(page, "/oversigt", () => page.locator("button.app-create").click())),
     ...(await auditSheet(page, "/oversigt", () => page.getByRole("button", { name: /^Notifikationer/ }).click())),
@@ -104,6 +104,13 @@ test("every button and link on the team's pages presses in and is at least 32 by
       () => page.getByRole("tab", { name: "Indstillinger" }).click(),
     )),
     ...(await auditSheet(page, "/boder/historik", () => page.getByRole("button", { name: /^Bøde / }).first().click())),
+    ...(await auditSheet(
+      page,
+      "/boder/historik",
+      () => page.getByRole("button", { name: /^Udfordring .*Venter$/ }).first().click(),
+      // Fetched when opened: measured once its buttons are there.
+      () => expect(page.getByRole("dialog").last().getByText("Meldt af")).toBeVisible(),
+    )),
     ...(await auditSheet(page, `/aktiviteter/${next.id}`, () => page.locator("button.app-create").click())),
     ...(await auditSheet(page, "/aktiviteter", () => page.getByRole("button", { name: "Ny aktivitet" }).click())),
   );

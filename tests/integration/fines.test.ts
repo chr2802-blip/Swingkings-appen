@@ -10,7 +10,7 @@ import {
   saveFineType,
   setFinePayment,
 } from "@/app/actions/fines";
-import { fineBoard, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
+import { fineBoard, fineDetails, fineHistory, matchOptions, monthKings } from "@/lib/fine-data";
 import { formData, makeMatch, makeMember, makeSquad, signIn } from "../helpers/factories";
 import { expectDenied, expectRedirectToLogin } from "../helpers/expect";
 
@@ -368,6 +368,28 @@ describe("challenges", () => {
     expect(await move(bo, "approve")).toEqual({ ok: false, error: "Det kan du ikke gøre med udfordringen nu." });
   });
 
+  it("lets an admin approve any, their own too — but not a treasurer their own", async () => {
+    const { team, admin, treasurer, anna } = await makeSquad("Swingkings", { finePriceKr: 10 });
+    for (const player of [admin, treasurer]) {
+      await prisma.fine.create({ data: { teamId: team.id, playerId: player.id, reason: "x", units: 4, unitPriceKr: 10, issuedById: admin.id } });
+    }
+    const report = async (as: { id: string }) => {
+      await signIn(as);
+      await createChallenge(undefined, formData({ opponentId: anna.id, outcome: "won", description: "Straffe", units: "2" }));
+      return prisma.challenge.findFirstOrThrow({ where: { reportedById: as.id } });
+    };
+    const mine = await report(admin);
+    expect(await moveChallenge(undefined, formData({ id: mine.id, move: "approve" }))).toEqual({ ok: true, created: [mine.id] });
+    expect(await prisma.challenge.findUniqueOrThrow({ where: { id: mine.id } })).toMatchObject({ status: "SETTLED", approvedById: admin.id });
+
+    const theirs = await report(treasurer);
+    expect(await moveChallenge(undefined, formData({ id: theirs.id, move: "approve" }))).toEqual({
+      ok: false,
+      error: "Det kan du ikke gøre med udfordringen nu.",
+    });
+    expect((await prisma.challenge.findUniqueOrThrow({ where: { id: theirs.id } })).status).toBe("PENDING");
+  });
+
   it("can be reported by the loser, and approved by the winner", async () => {
     const { anna, bo, row, move, owes } = await challenge(2, "lost");
     expect(row).toMatchObject({ winnerId: bo.id, loserId: anna.id });
@@ -464,7 +486,8 @@ describe("fine data", () => {
 
     const all = await fineHistory(team.id, { take: 10 });
     expect(all.map((f) => f.reason)).toEqual(["Nyest", "Midt", "Ældst"]);
-    expect(all[0]).toMatchObject({ issuedById: bo.id, player: { id: anna.id, name: "Anna" } });
+    expect(all[0]).toMatchObject({ player: { id: anna.id, name: "Anna" } });
+    expect(await fineDetails(team.id, all[0]!.id)).toMatchObject({ issuedById: bo.id });
     expect((await fineHistory(team.id, { take: 2 })).map((f) => f.reason)).toEqual(["Nyest", "Midt"]);
     expect(await fineHistory(other.team.id, { take: 10 })).toHaveLength(1);
   });
@@ -505,13 +528,21 @@ describe("fine data", () => {
     // Approved, it names the challenge, whose id both of its fines carry.
     expect(await moveChallenge(undefined, formData({ id: challenge.id, move: "approve" }))).toEqual({ ok: true, created: [challenge.id] });
 
+    // The rows carry only what a row shows; the sheet reads the rest of one fine.
     const fines = await fineHistory(team.id, { take: 10 });
+    expect(fines[0]).not.toHaveProperty("note");
     const plain = fines.find((f) => f.reason === "For sent")!;
-    expect(plain).toMatchObject({ note: "Ti minutter", issuedBy: { name: "Kasserer" }, match: { opponent: "FC Nabo" }, challenge: null });
+    expect(await fineDetails(team.id, plain.id)).toMatchObject({
+      note: "Ti minutter",
+      issuedBy: { name: "Kasserer" },
+      match: { opponent: "FC Nabo" },
+      challenge: null,
+    });
+    expect(await fineDetails((await makeSquad("Andre")).team.id, plain.id)).toBeNull();
     const moved = fines.filter((f) => f.challengeId === challenge.id);
     expect(moved.map((f) => f.units).sort()).toEqual([-2, 2]);
     for (const fine of moved) {
-      expect(fine.challenge).toMatchObject({
+      expect((await fineDetails(team.id, fine.id))?.challenge).toMatchObject({
         description: "Flest mål",
         units: 2,
         status: "SETTLED",

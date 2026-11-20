@@ -1,30 +1,29 @@
-import type { fineHistory } from "@/lib/fine-data";
+import type { challengeRowSelect, fineHistory } from "@/lib/fine-data";
+import type { Prisma } from "@prisma/client";
+import { firstName } from "@/lib/names";
 import { fineAmount, fineUnits, kr } from "@/lib/money";
 import { relativeDay } from "@/lib/time";
 import { Badge, Card } from "@/components/ui";
 import { Avatar } from "@/components/photo";
 import { FineSheet } from "@/components/fine-sheet";
 import { Star } from "@/components/crest";
-import { DetailSheet } from "@/components/detail-sheet";
-import { ChallengeCard, type ChallengeView } from "@/components/challenge-card";
 import type { ChallengeStatus } from "@prisma/client";
 
 export type HistoryFine = Awaited<ReturnType<typeof fineHistory>>[number];
+/** A challenge as its row reads it (`challengeRowSelect`); its sheet reads the rest when opened. */
+export type HistoryChallenge = Prisma.ChallengeGetPayload<{ select: typeof challengeRowSelect }>;
 
 /** A row of the history: a fine, or a challenge (one still waiting has no fine yet). */
 export type HistoryItem =
   | { kind: "fine"; at: Date; fine: HistoryFine }
-  | { kind: "challenge"; at: Date; challenge: ChallengeView };
-
-/** Who is looking, so a challenge's sheet shows exactly the buttons they may press. */
-export type HistoryViewer = { viewerId: string; managesFines: boolean; finePriceKr: number };
+  | { kind: "challenge"; at: Date; challenge: HistoryChallenge };
 
 /**
  * Fines and challenges as one list, newest first. A challenge still waiting has moved
  * nothing yet, so it stands in the history as itself until it is approved; then its fines
  * stand there instead.
  */
-export function historyItems(fines: HistoryFine[], challenges: ChallengeView[] = []): HistoryItem[] {
+export function historyItems(fines: HistoryFine[], challenges: HistoryChallenge[] = []): HistoryItem[] {
   return [
     ...fines.map((fine) => ({ kind: "fine" as const, at: fine.createdAt, fine })),
     ...challenges.map((challenge) => ({ kind: "challenge" as const, at: challenge.createdAt, challenge })),
@@ -32,7 +31,8 @@ export function historyItems(fines: HistoryFine[], challenges: ChallengeView[] =
 }
 
 /**
- * One fine as a row — the only way a fine is drawn in a list: who, what for, how much. A tap
+ * One fine as a row — the only way a fine is drawn in a list: who (the first name and the
+ * picture, or the initials, are enough; the reason gets the room), what for, how much. A tap
  * opens the fine, or the challenge it came from, with everything known about it, and
  * "Slet" for whoever may (`FineDetails`). The sheet is fetched when it is opened: drawn
  * beforehand for every row, it was most of the fine box's page, and nearly never looked at.
@@ -62,7 +62,7 @@ export function FineRow({ fine }: { fine: HistoryFine }) {
             <Avatar name={fine.player.name} photoId={fine.player.photoId} size="sm" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">
-                {fine.player.name} <span className="font-normal text-slate-500">· {fine.reason}</span>
+                {firstName(fine.player.name)} <span className="font-normal text-slate-500">· {fine.reason}</span>
               </span>
               <span className="block text-xs text-slate-500">
                 {fineUnits(fine.units)} · {kr(fineAmount(fine))} · {relativeDay(fine.createdAt)}
@@ -87,11 +87,18 @@ const CHALLENGE_TONE: Record<ChallengeStatus, "amber" | "green"> = {
   SETTLED: "green",
 };
 
-/** A challenge as a row beside the fines; tapped, it opens in full, with "Godkend" for whoever may. */
-export function ChallengeRow({ challenge: c, viewer }: { challenge: ChallengeView; viewer: HistoryViewer }) {
+/**
+ * A challenge still waiting, as a row beside the fines: the first names, what and the stake.
+ * Tapped, it opens in full — fetched then, as a fine's sheet is — with "Godkend" for whoever
+ * may. `data-fresh` (`challenge:<id>`): one just reported pulses here; the bare id is its
+ * fines', once approved.
+ */
+export function ChallengeRow({ challenge: c, finePriceKr }: { challenge: HistoryChallenge; finePriceKr: number }) {
   return (
-    <li>
-      <DetailSheet
+    <li data-fresh={`challenge:${c.id}`}>
+      <FineSheet
+        fineId={c.id}
+        kind="challenge"
         title="Udfordring"
         triggerClassName="press-card flex w-full items-center gap-3 px-4 py-3 text-left"
         trigger={
@@ -103,24 +110,23 @@ export function ChallengeRow({ challenge: c, viewer }: { challenge: ChallengeVie
             <Avatar name={c.winner.name} photoId={c.winner.photoId} size="sm" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm">
-                <span className="font-medium">{c.winner.name} 🏆</span> slog {c.loser.name}
+                <span className="font-medium">{firstName(c.winner.name)} 🏆</span> slog {firstName(c.loser.name)}
+                <span className="text-slate-500"> · {c.description}</span>
               </span>
               <span className="block truncate text-xs text-slate-500">
-                “{c.description}” · {fineUnits(c.units)} · {kr(c.units * viewer.finePriceKr)} · {relativeDay(c.createdAt)}
+                {fineUnits(c.units)} · {kr(c.units * finePriceKr)} · {relativeDay(c.createdAt)}
               </span>
             </span>
             <Badge tone={CHALLENGE_TONE[c.status]}>{CHALLENGE_SHORT[c.status]}</Badge>
           </>
         }
-      >
-        <ChallengeCard challenge={c} viewerId={viewer.viewerId} managesFines={viewer.managesFines} finePriceKr={viewer.finePriceKr} />
-      </DetailSheet>
+      />
     </li>
   );
 }
 
 /** The history: fines and challenges as rows, in the order given (`historyItems`). */
-export function FineHistory({ items, viewer }: { items: HistoryItem[]; viewer: HistoryViewer }) {
+export function FineHistory({ items, finePriceKr }: { items: HistoryItem[]; finePriceKr: number }) {
   return (
     <Card padded={false}>
       <ul className="divide-y divide-slate-100">
@@ -128,7 +134,7 @@ export function FineHistory({ items, viewer }: { items: HistoryItem[]; viewer: H
           item.kind === "fine" ? (
             <FineRow key={item.fine.id} fine={item.fine} />
           ) : (
-            <ChallengeRow key={item.challenge.id} challenge={item.challenge} viewer={viewer} />
+            <ChallengeRow key={item.challenge.id} challenge={item.challenge} finePriceKr={finePriceKr} />
           ),
         )}
       </ul>
