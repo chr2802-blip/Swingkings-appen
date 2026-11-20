@@ -13,11 +13,14 @@ export const PAYMENT_OPEN = "Bødekassen er åben for betaling. Nye bøder og ud
  * One transaction, and guarded on the status: two people pressing "Godkend" at once
  * must not move the fines twice. The `updateMany … where status PENDING` is the lock —
  * whichever press gets there second updates nothing and writes nothing.
+ *
+ * The reporter does not approve their own — unless `ownAllowed`: an admin may (`canMove`).
  */
 export async function settleChallenge(
   challengeId: string,
   approvedById: string,
   now: Date = new Date(),
+  { ownAllowed = false }: { ownAllowed?: boolean } = {},
 ): Promise<{ ok: true; units: number } | { ok: false; error: string }> {
   return prisma.$transaction(async (tx) => {
     const challenge = await tx.challenge.findUnique({
@@ -36,7 +39,7 @@ export async function settleChallenge(
       },
     });
     if (!challenge || challenge.status !== "PENDING") return { ok: false, error: "Udfordringen er ikke åben længere." };
-    if (challenge.reportedById === approvedById) return { ok: false, error: "En anden end dig skal godkende den." };
+    if (challenge.reportedById === approvedById && !ownAllowed) return { ok: false, error: "En anden end dig skal godkende den." };
     if (challenge.team.finePaymentOpenedAt) return { ok: false, error: PAYMENT_OPEN };
 
     // Two challenges for one winner approved at once would each see the same open fines and

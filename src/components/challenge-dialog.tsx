@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { FormDialog } from "@/components/form-dialog";
-import { CHALLENGES_HREF, useShowFresh } from "@/components/fresh";
+import { FINE_HISTORY_HREF, useShowFresh } from "@/components/fresh";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { createChallenge } from "@/app/actions/fines";
 import { fineUnits, kr } from "@/lib/money";
 
 /**
  * Reporting a challenge that has been played. It goes through when somebody else on the
- * team approves it, and the stake moves from the winner's fines to the loser's. It names
+ * team (or an admin) approves it, and the stake moves from the winner's fines to the loser's. It names
  * no match: a challenge is between two people, wherever it was played.
  */
 export function ChallengeDialog({
@@ -17,12 +17,15 @@ export function ChallengeDialog({
   finePriceKr,
   defaultOpponentId,
   triggerClassName,
+  showIn = FINE_HISTORY_HREF,
 }: {
   opponents: { userId: string; name: string }[];
   finePriceKr: number;
   /** Somebody chosen from the start: the person whose page the "+" is on. */
   defaultOpponentId?: string;
   triggerClassName?: string;
+  /** Where it then stands, pulsing: the fine box's history, or the player's own fines tab. */
+  showIn?: string;
 }) {
   const [units, setUnits] = useState(1);
   const show = useShowFresh();
@@ -34,8 +37,8 @@ export function ChallengeDialog({
       title="Meld en udfordring"
       action={createChallenge}
       submitLabel="Send til godkendelse"
-      // Reported, it waits among the challenges: their sheet opens with it pulsing.
-      onDone={(result) => void show(result, CHALLENGES_HREF)}
+      // Reported, it waits in the history among the fines, pulsing there as a fine given does.
+      onDone={(result) => void show(result, showIn, { reported: true })}
     >
       <Field label="Hvem spillede du mod?" htmlFor="opponentId">
         <Select id="opponentId" name="opponentId" defaultValue={defaultOpponentId ?? ""} required>

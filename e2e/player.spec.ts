@@ -76,7 +76,7 @@ test("a player's page shows their latest fines and challenges and their next job
   const details = page.getByRole("tabpanel", { name: "Detaljer" });
   const latest = details.getByRole("region", { name: "Seneste" });
   await expect(latest.getByText("Glemt trøje")).toBeVisible();
-  await expect(latest.getByText(/“Flest straffe”/)).toBeVisible();
+  await expect(latest.getByText(/Anna 🏆 slog Bo · Flest straffe/)).toBeVisible();
   await expect(
     details
       .getByRole("region", { name: "Næste opgave" })
@@ -127,7 +127,7 @@ test("a player's page shows their latest fines and challenges and their next job
     .getByRole("button", { name: /Anna 🏆 slog Bo.*Venter/ })
     .click();
   const sheet = page.getByRole("dialog", { name: "Udfordring" });
-  await sheet.getByRole("link", { name: /^Anna/ }).click();
+  await sheet.getByRole("link", { name: /^Anna/ }).first().click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
   await expect(
     page.getByRole("heading", { name: "Anna", level: 1 }),
@@ -242,11 +242,9 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   await expect
     .poll(() => db.challenge.count({ where: { teamId: team.id, winnerId: bo.id, loserId: anna.id } }))
     .toBe(1);
-  // Reported, the fine box opens with the challenges' sheet and the new one pulsing in it.
-  await expect(page).toHaveURL(/\/boder\?udfordringer$/);
-  await expect(
-    page.getByRole("dialog", { name: "Udfordringer" }).locator("[data-fresh]").filter({ hasText: "Flest straffe" }),
-  ).toHaveClass(/fresh-pulse/);
+  // Reported, the page stays on Bo as for a fine: his own fines, with it pulsing among them.
+  await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}/boder$`));
+  await expect(list.locator("[data-fresh^='challenge:']").filter({ hasText: "Flest straffe" })).toHaveClass(/fresh-pulse/);
   await page.goto(`/spiller/${bo.id}`);
 
   await page.getByRole("button", { name: "Opret" }).click();

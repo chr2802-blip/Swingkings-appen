@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { TeamUser } from "@/lib/auth";
 import { canManageFines, ROLE_LABEL, SUPER_ADMIN_LABEL } from "@/lib/access";
 import { teamDb } from "@/lib/team-db";
-import { fineBoard, fineHistory, matchOptions } from "@/lib/fine-data";
+import { challengeRowSelect, fineBoard, fineHistory, matchOptions } from "@/lib/fine-data";
 import { kr } from "@/lib/money";
 import Link from "next/link";
 import {
@@ -22,7 +22,6 @@ import { TaskDialog } from "@/components/task-dialog";
 import { CreateMenu } from "@/components/create-button";
 import { upcomingActivities } from "@/lib/activity-data";
 import { ActionButton } from "@/components/action-button";
-import { challengeCardInclude } from "@/components/challenge-card";
 import { TASK_SELECT, TaskRow } from "@/components/task-row";
 import { markFinesPaid } from "@/app/actions/fines";
 import { firstDaysTasks } from "@/lib/activity";
@@ -98,7 +97,7 @@ export async function PlayerScreen({
       db.challenge.findMany({
         where: { status: "PENDING", OR: [{ winnerId: id }, { loserId: id }] },
         orderBy: { createdAt: "desc" },
-        include: challengeCardInclude,
+        select: challengeRowSelect,
       }),
       db.challenge.findMany({
         where: {
@@ -107,7 +106,7 @@ export async function PlayerScreen({
         },
         orderBy: { createdAt: "desc" },
         take: RECENT,
-        include: challengeCardInclude,
+        select: challengeRowSelect,
       }),
       db.task.findMany({
         where: { ...openTask(), assignees: { some: { userId: id } } },
@@ -128,12 +127,11 @@ export async function PlayerScreen({
   const tasks = [...openTasks, ...doneTasks];
   // A settled challenge also left a fine on each side; the challenge stands for both.
   const latest = historyItems(
-    fines.filter((fine) => !fine.challenge),
+    fines.filter((fine) => !fine.challengeId),
     challenges,
   ).slice(0, LATEST);
   // The tab is the history: the fines, and the challenges still waiting among them.
   const history = historyItems(fines, openChallenges);
-  const viewer = { viewerId: user.id, managesFines, finePriceKr: board.finePriceKr };
   const nextTasks = firstDaysTasks(openTasks);
 
   return (
@@ -175,7 +173,7 @@ export async function PlayerScreen({
                   {latest.length === 0 ? (
                     <Empty>Ingen bøder eller udfordringer endnu. Ren tavle – indtil videre.</Empty>
                   ) : (
-                    <FineHistory items={latest} viewer={viewer} />
+                    <FineHistory items={latest} finePriceKr={board.finePriceKr} />
                   )}
                 </section>
 
@@ -209,7 +207,7 @@ export async function PlayerScreen({
                   Ingen bøder eller udfordringer. Mønsterspiller! 😇
                 </Empty>
               ) : (
-                <FineHistory items={history} viewer={viewer} />
+                <FineHistory items={history} finePriceKr={board.finePriceKr} />
               ),
           },
           {
@@ -289,6 +287,7 @@ function PlayerCreateMenu({
           opponents={board.roster.filter((m) => m.userId !== viewerId)}
           finePriceKr={board.finePriceKr}
           defaultOpponentId={other}
+          showIn={onTeam ? playerTabHref(id, "/boder") : undefined}
         />
       )}
       {activities.length > 0 && (

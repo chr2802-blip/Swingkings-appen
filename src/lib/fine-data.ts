@@ -81,11 +81,22 @@ export async function monthKings(teamId: string) {
   return fineKings(fines);
 }
 
+/** What a fine's row in a list shows: who, what for, how much, when — no more. */
+const FINE_ROW = {
+  id: true,
+  reason: true,
+  units: true,
+  unitPriceKr: true,
+  createdAt: true,
+  challengeId: true,
+  player: { select: { id: true, name: true, photoId: true } },
+} as const;
+
 /**
  * The team's newest fines — the history under the board and on its
  * own page, and (narrowed to one player or one activity) the fines on those pages, so a tap
- * opens the same sheet everywhere. Without `take`, all of them. With `id`, the one fine a
- * sheet is opened on (`loadFineDetails`), or none if it is not this team's.
+ * opens the same sheet everywhere. Without `take`, all of them. Only what the rows show:
+ * the rest is read when a sheet is opened (`fineDetails`).
  */
 export function fineHistory(
   teamId: string,
@@ -95,19 +106,23 @@ export function fineHistory(
     where: { id, playerId, matchId },
     orderBy: { createdAt: "desc" },
     take,
+    select: FINE_ROW,
+  });
+}
+
+/**
+ * Everything about one fine, for its sheet (`loadFineDetails`): who gave it, the activity,
+ * the note and the challenge it came from. Null if it is not this team's, or is gone.
+ */
+export function fineDetails(teamId: string, id: string) {
+  return teamDb(teamId).fine.findFirst({
+    where: { id },
     select: {
-      id: true,
-      reason: true,
-      units: true,
-      unitPriceKr: true,
-      createdAt: true,
-      challengeId: true,
+      ...FINE_ROW,
       issuedById: true,
       note: true,
-      player: { select: { id: true, name: true, photoId: true } },
       issuedBy: { select: { id: true, name: true } },
       match: { select: { opponent: true, title: true, startsAt: true } },
-      // What the history's sheet shows about the challenge a fine came from.
       challenge: {
         select: {
           id: true,
@@ -126,3 +141,14 @@ export function fineHistory(
     },
   });
 }
+
+/** A challenge's row in a list: who won, who lost, what and the stake. Its sheet reads the rest. */
+export const challengeRowSelect = {
+  id: true,
+  description: true,
+  units: true,
+  status: true,
+  createdAt: true,
+  winner: { select: { id: true, name: true, photoId: true } },
+  loser: { select: { id: true, name: true, photoId: true } },
+} as const;

@@ -5,6 +5,7 @@ import { Button, type Variant } from "@/components/ui";
 import { MenuForm, MenuTrigger, useMenuSlot } from "@/components/action-menu";
 import { Modal, ModalBody, ModalFooter } from "@/components/modal";
 import { useFormAction } from "@/components/use-form-action";
+import { useShowFresh } from "@/components/fresh";
 import type { ActionResult, FormAction } from "@/lib/action-result";
 
 /**
@@ -21,6 +22,7 @@ export function ActionButton({
   confirm,
   confirmLabel,
   onDone,
+  showMade = false,
 }: {
   action: FormAction;
   fields: Record<string, string>;
@@ -32,14 +34,21 @@ export function ActionButton({
   confirmLabel?: string;
   /** After the action has worked: where to show what it made. */
   onDone?: (result: ActionResult) => void;
+  /**
+   * After it has worked, the fine box's history shows what it made, pulsing (`useShowFresh`)
+   * — an approved challenge's fines. For a button the server draws, which cannot be handed `onDone`.
+   */
+  showMade?: boolean;
 }) {
   const [asking, setAsking] = useState(false);
   const menu = useMenuSlot();
+  const show = useShowFresh();
   const { state, pending, handleSubmit } = useFormAction(action, {
     onSuccess: (_form, result) => {
       setAsking(false);
       menu?.close();
       onDone?.(result);
+      if (showMade) void show(result);
     },
   });
 

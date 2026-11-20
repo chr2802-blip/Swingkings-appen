@@ -31,6 +31,8 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new NotFoundError();
   },
+  // A client component drawn by an action (a sheet's buttons) asks for the router; it is never pressed here.
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
 }));
 
 // `after()` only works inside a request. Here it queues, and `runAfter()` drains.

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { teamDb } from "@/lib/team-db";
 import { findActivitySeenBy } from "@/lib/club-reach";
 import { requireTeamUser } from "@/lib/auth";
-import { assertFineManager, assertTeamAdmin, canDeleteFine, canManageFines } from "@/lib/access";
+import { assertFineManager, assertTeamAdmin, canAdministerTeam, canDeleteFine, canManageFines } from "@/lib/access";
 import { fail, ok, type ActionResult } from "@/lib/action-result";
 import { field, optionalId, optionalText, readForm, requiredText, wholeNumber } from "@/lib/form";
 import { canMove } from "@/lib/challenges";
@@ -302,7 +302,7 @@ export async function createChallenge(_prev: ActionResult, formData: FormData): 
     challengeId: challenge.id,
     title: "Godkend udfordringen ⚔️",
     body: `${user.name} melder ${outcome === "won" ? `sig selv` : "dig"} som vinder: ${description} — ${fineUnits(units)}`,
-    url: "/boder?udfordringer",
+    url: "/boder/historik",
     tag: "challenge",
   });
   refresh(user.teamId);
@@ -327,21 +327,22 @@ export async function moveChallenge(_prev: ActionResult, formData: FormData): Pr
     include: { winner: { select: { name: true } }, loser: { select: { name: true } } },
   });
   if (!challenge) return fail("Udfordringen findes ikke.");
-  if (!canMove(challenge, move, user.id, canManageFines(user, user.teamId))) {
+  const rights = { managesFines: canManageFines(user, user.teamId), administers: canAdministerTeam(user, user.teamId) };
+  if (!canMove(challenge, move, user.id, rights)) {
     return fail("Det kan du ikke gøre med udfordringen nu.");
   }
 
   if (move === "cancel") {
     await db.challenge.deleteMany({ where: { id, status: "PENDING" } });
   } else {
-    const result = await settleChallenge(id, user.id);
+    const result = await settleChallenge(id, user.id, new Date(), { ownAllowed: rights.administers });
     if (!result.ok) return fail(result.error);
     await notify(user.teamId, [challenge.winnerId, challenge.loserId, challenge.reportedById], user.id, {
       category: "CHALLENGES",
       challengeId: challenge.id,
       title: "Udfordringen er godkendt 🏆",
       body: `${challenge.winner.name} sendte ${fineUnits(result.units)} videre til ${challenge.loser.name}: ${challenge.description}`,
-      url: "/boder?udfordringer",
+      url: "/boder/historik",
     });
   }
   refresh(user.teamId);

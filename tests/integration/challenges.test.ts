@@ -59,6 +59,12 @@ describe("settleChallenge", () => {
     expect(await prisma.fine.count({ where: { challengeId: challenge.id } })).toBe(0);
   });
 
+  it("lets the reporter approve their own only when allowed (an admin: `canMove`)", async () => {
+    const { anna, challenge } = await reported();
+    expect(await settleChallenge(challenge.id, anna.id, new Date(), { ownAllowed: true })).toEqual({ ok: true, units: 3 });
+    expect(await prisma.challenge.findUniqueOrThrow({ where: { id: challenge.id } })).toMatchObject({ status: "SETTLED", approvedById: anna.id });
+  });
+
   it("refuses the reporter, and a challenge no longer pending", async () => {
     const { anna, carl, challenge } = await reported();
     expect(await settleChallenge(challenge.id, anna.id)).toEqual({ ok: false, error: "En anden end dig skal godkende den." });

@@ -218,10 +218,12 @@ function ReactionMenu({
 }
 
 /**
- * The reactions on a thing in short: the kind most given, then how many reacted. Pressing it lists who, by kind (`ReactorsDrawer`). Nothing when
- * nobody has reacted.
+ * The reactions on a thing in short. Small (a comment, a chat bubble): the kind most given,
+ * then how many reacted. `stacked` (a post's bar, as on Facebook): every kind given, most
+ * first, drawn overlapping — the number stands on the reaction button instead. Pressing it
+ * lists who, by kind (`ReactorsDrawer`). Nothing when nobody has reacted.
  */
-export function ReactionSummary({ reactors, small = false }: { reactors: Reactor[]; small?: boolean }) {
+export function ReactionSummary({ reactors, small = false, stacked = false }: { reactors: Reactor[]; small?: boolean; stacked?: boolean }) {
   const [open, setOpen] = useState(false);
   if (reactors.length === 0) return null;
   const tally = tallyReactions(reactors, "");
@@ -240,11 +242,24 @@ export function ReactionSummary({ reactors, small = false }: { reactors: Reactor
         // The small chip on a chat bubble is drawn inside a finger-sized target that a
         // negative margin as big keeps from moving anything.
         className={`press-button flex shrink-0 items-center rounded-full text-slate-600 tabular-nums ${
-          small ? "-m-1.5 p-1.5" : "h-9 gap-1.5 px-2 text-sm"
+          small ? "-m-1.5 p-1.5" : stacked ? "h-9 min-w-9 justify-center px-1.5" : "h-9 gap-1.5 px-2 text-sm"
         }`}
       >
         {small ? (
           <span className="flex h-5 items-center gap-1 rounded-full bg-white px-1.5 text-[11px] shadow-sm ring-1 ring-slate-200">{count}</span>
+        ) : stacked ? (
+          <span className="flex items-center">
+            {tally.kinds.map(({ kind }, index) => (
+              // Each a white disc a little over the one before it, the most given in front.
+              <span
+                key={kind}
+                style={{ zIndex: tally.kinds.length - index }}
+                className={`relative flex h-6 w-6 items-center justify-center rounded-full bg-white ring-2 ring-white ${index > 0 ? "-ml-1.5" : ""}`}
+              >
+                <ReactionGlyph kind={kind} size="sm" />
+              </span>
+            ))}
+          </span>
         ) : (
           count
         )}
@@ -255,9 +270,11 @@ export function ReactionSummary({ reactors, small = false }: { reactors: Reactor
 }
 
 /**
- * A post's bar: the reaction button — a press gives the crest's crown, or takes the
- * viewer's reaction back; held, every reaction comes up — whatever else the bar holds
- * (`children`, the comments), and at its end how many reacted.
+ * A post's bar, as on Facebook: the reaction button — the crown until the viewer reacts,
+ * then their own reaction, and beside it how many reacted; a press gives the crest's
+ * crown, or takes the viewer's reaction back; held, every reaction comes up — whatever
+ * else the bar holds (`children`, the comments), and at its end the kinds given (who, on a
+ * press).
  */
 export function PostReactions({ children, ...thing }: Thing & { children?: React.ReactNode }) {
   const { list, tally, choose, toggle } = useReactions(thing);
@@ -296,7 +313,8 @@ export function PostReactions({ children, ...thing }: Thing & { children?: React
           }`}
         >
           {tally.mine ? <ReactionGlyph kind={tally.mine} size="md" /> : <CrownOutline />}
-          {meta ? meta.label : "Krone"}
+          {/* How many reacted, in all; said in words by the kinds at the bar's end. */}
+          {tally.total > 0 && <span aria-hidden className="tabular-nums">{tally.total}</span>}
         </button>
         <button
           type="button"
@@ -307,9 +325,9 @@ export function PostReactions({ children, ...thing }: Thing & { children?: React
           Flere
         </button>
         {children}
-        {/* How many reacted, on the same row, at its end. */}
+        {/* The kinds given, on the same row, at its end. */}
         <span className="ml-auto">
-          <ReactionSummary reactors={list} />
+          <ReactionSummary reactors={list} stacked />
         </span>
       </div>
       {open && <ReactionMenu anchor={button} mine={tally.mine} onPick={(kind) => { close(); toggle(kind); }} onClose={close} />}

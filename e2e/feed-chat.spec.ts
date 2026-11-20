@@ -21,6 +21,8 @@ test("a post with words shows in the feed, and a teammate reacts and comments", 
   await page.getByRole("button", { name: "Giv en krone 👑" }).click();
   await expect(page.getByRole("button", { name: "1 reaktion: Bo har reageret" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Fjern din reaktion (Krone 👑)" })).toHaveAttribute("aria-pressed", "true");
+  // As on Facebook: how many reacted stands beside the button's own reaction.
+  await expect(page.getByRole("button", { name: "Fjern din reaktion (Krone 👑)" })).toHaveText("1");
   await expect.poll(() => db.reaction.count({ where: { kind: "CROWN", userId: bo.id } })).toBe(1);
   // Held, it brings up the rest; the one chosen takes the crown's place — one reaction each.
   await hold(page, page.getByRole("button", { name: "Fjern din reaktion (Krone 👑)" }));
@@ -44,7 +46,8 @@ test("a post with words shows in the feed, and a teammate reacts and comments", 
   // A press on the button now takes the reaction back.
   await page.getByRole("button", { name: "Fjern din reaktion (Elsker ❤️)" }).click();
   await expect(page.getByRole("button", { name: /reaktion: / })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Giv en krone 👑" })).toBeVisible();
+  // Nobody has reacted: the crown alone, and no number.
+  await expect(page.getByRole("button", { name: "Giv en krone 👑" })).toHaveText("");
   await expect.poll(() => db.reaction.count()).toBe(0);
   await page.getByRole("button", { name: "0 kommentarer" }).click();
   const comments = page.getByRole("dialog", { name: "Kommentarer" });
