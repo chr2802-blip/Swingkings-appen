@@ -220,7 +220,7 @@ function ReactionMenu({
 /**
  * The reactions on a thing in short. Small (a comment, a chat bubble): the kind most given,
  * then how many reacted. `stacked` (a post's bar, as on Facebook): every kind given, most
- * first, drawn overlapping — the number stands on the reaction button instead. Pressing it
+ * first, side by side — the number stands on the reaction button instead. Pressing it
  * lists who, by kind (`ReactorsDrawer`). Nothing when nobody has reacted.
  */
 export function ReactionSummary({ reactors, small = false, stacked = false }: { reactors: Reactor[]; small?: boolean; stacked?: boolean }) {
@@ -248,16 +248,10 @@ export function ReactionSummary({ reactors, small = false, stacked = false }: { 
         {small ? (
           <span className="flex h-5 items-center gap-1 rounded-full bg-white px-1.5 text-[11px] shadow-sm ring-1 ring-slate-200">{count}</span>
         ) : stacked ? (
-          <span className="flex items-center">
-            {tally.kinds.map(({ kind }, index) => (
-              // Each a white disc a little over the one before it, the most given in front.
-              <span
-                key={kind}
-                style={{ zIndex: tally.kinds.length - index }}
-                className={`relative flex h-6 w-6 items-center justify-center rounded-full bg-white ring-2 ring-white ${index > 0 ? "-ml-1.5" : ""}`}
-              >
-                <ReactionGlyph kind={kind} size="sm" />
-              </span>
+          // Side by side, each whole: drawn over each other, the one behind was cut off.
+          <span className="flex items-center gap-1">
+            {tally.kinds.map(({ kind }) => (
+              <ReactionGlyph key={kind} kind={kind} size="md" />
             ))}
           </span>
         ) : (
