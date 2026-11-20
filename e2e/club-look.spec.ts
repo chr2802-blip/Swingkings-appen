@@ -97,8 +97,8 @@ test("the super admin puts in a club's logo under Admin, and it is shared by eve
   const { team } = await squad();
   const root = await db.user.create({ data: { email: "root@e2e.dk", name: "Root", passwordHash: "x", role: "SUPER_ADMIN", activeTeamId: team.id } });
   await loginAs(root);
-  await page.goto("/admin");
-  const logos = page.getByRole("region", { name: "Klublogoer" });
+  await page.goto("/admin/logoer");
+  const logos = page.getByRole("tabpanel", { name: "Klublogoer" });
   await logos.getByLabel("Klub").fill("Hvidovre IF");
   await logos.getByLabel("Logo").setInputFiles({ name: "hif.png", mimeType: "image/png", buffer: Buffer.from(demoPicture(1).full) });
   await logos.getByRole("button", { name: "Gem logo" }).click();

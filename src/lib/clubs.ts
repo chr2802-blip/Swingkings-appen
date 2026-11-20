@@ -81,15 +81,26 @@ export async function unshareActivity(matchId: string, teamIds: string[]) {
   ]);
 }
 
-/** Everything about the clubs for the super admin's page. */
+/** The clubs on the super admin's page, by name, with how many teams and club admins each has. */
 export function allClubs() {
   return prisma.club.findMany({
     orderBy: { name: "asc" },
+    select: { id: true, name: true, _count: { select: { teams: true, admins: true } } },
+  });
+}
+
+/** One club's page under /admin: its teams, with what is on them, and its club admins. Null if there is none. */
+export function clubForAdmin(clubId: string) {
+  return prisma.club.findUnique({
+    where: { id: clubId },
     select: {
       id: true,
       name: true,
-      teams: { orderBy: { name: "asc" }, select: { id: true, name: true } },
-      admins: { orderBy: { createdAt: "asc" }, select: { user: { select: { id: true, name: true, email: true } } } },
+      teams: {
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, photoId: true, _count: { select: { members: true, fines: true, matches: true } } },
+      },
+      admins: { orderBy: { createdAt: "asc" }, select: { user: { select: { id: true, name: true } } } },
     },
   });
 }

@@ -19,7 +19,7 @@ npm run e2e            # Playwright: builds, serves on :3210 against <db>_e2e, d
 npx playwright test e2e/x.spec.ts   # one spec, once `npm run e2e:build` has built
 npm run db:migrate     # new migration after a schema change
 npm run db:demo        # demo team for screenshots (mads@demo.swingkings.dk / demo-password); -- --remove deletes it
-                       # in production: "Opret testhold" / "Slet testhold" on /admin (super admin)
+                       # in production: "Opret testhold" / "Slet testhold" on /admin/testdata (super admin)
 ```
 
 In a bare cloud container: `service postgresql start`, set the postgres password, and point
@@ -68,9 +68,15 @@ one fails by name, and that test runs in the Vercel build. `EXEMPT` there takes 
   moderation), and one SUPER_ADMIN on the installation (a partial unique index allows only
   one). A fine is deleted by its giver or `canManageFines` (`canDeleteFine`). Never ask
   "the team on screen" alone.
-- **Clubs** (`Club`, `Team.clubId`, `src/lib/clubs.ts`): the super admin makes a club, puts
-  teams in it and names its club admins (`ClubAdmin`, `canAdministerClub`) under /admin — a
-  club admin always plays on one of its teams (`pruneClubAdmins` ends the role otherwise).
+- **Clubs** (`Club`, `Team.clubId`, `src/lib/clubs.ts`): the super admin makes a club ("+"
+  on /admin), makes its teams and names its club admins (`ClubAdmin`, `canAdministerClub`)
+  on its page, `/admin/klubber/<id>` — a club admin always plays on one of its teams
+  (`pruneClubAdmins` ends the role otherwise). **A team always has a club**: `createTeam`
+  requires `clubId`, `setTeamClubAction` only moves a team to another, and `deleteClub`
+  refuses while the club has teams. The column stays nullable for the test team and teams
+  from before clubs, which the Hold tab on /admin shows "Uden klub" and puts in one.
+  /admin's tabs (Klubber, Hold, Klublogoer, Testdata) are `AdminScreen`, a club's
+  (Hold, Klubadmins, Indstillinger) `ClubAdminScreen`, each drawn by its layout.
   A club admin writes club posts (`createClubPost`) and makes club activities
   (`saveClubActivity`) on `/klub`, each for the teams ticked: a `Post`/`Match`/`Poll` with
   `clubId` and **no `teamId`** (a CHECK allows exactly one), shown to the teams in its

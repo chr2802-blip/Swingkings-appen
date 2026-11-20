@@ -384,12 +384,14 @@ describe("switching teams", () => {
 });
 
 describe("super admin", () => {
-  it("creates a team with a one-place link for its coach, and never joins it", async () => {
+  it("creates a team in a club with a one-place link for its coach, and never joins it", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
+    const club = await prisma.club.create({ data: { name: "Swingkings FC" } });
     await signIn(root);
-    const result = await createTeam(undefined, formData({ name: "Nyt hold" }));
+    const result = await createTeam(undefined, formData({ name: "Nyt hold", clubId: club.id }));
     expect(result?.ok).toBe(true);
     const team = await prisma.team.findFirstOrThrow({ where: { name: "Nyt hold" } });
+    expect(team.clubId).toBe(club.id);
     const token = (result as { note: string }).note.replace(/^\/join\//, "");
     expect(await findInviteLink(token)).toMatchObject({ teamId: team.id, maxUses: 1 });
     expect(await prisma.teamMember.count({ where: { userId: root.id } })).toBe(0);
@@ -399,7 +401,15 @@ describe("super admin", () => {
   it("refuses a team with no name", async () => {
     const root = await makeUser({ role: "SUPER_ADMIN" });
     await signIn(root);
-    expect(await createTeam(undefined, formData({ name: " " }))).toEqual({ ok: false, error: "Giv holdet et navn." });
+    const club = await prisma.club.create({ data: { name: "Swingkings FC" } });
+    expect(await createTeam(undefined, formData({ name: " ", clubId: club.id }))).toEqual({ ok: false, error: "Giv holdet et navn." });
+    expect(await prisma.team.count()).toBe(0);
+  });
+
+  it("refuses a team with no club, or a club that is not there: a team always has one", async () => {
+    await signIn(await makeUser({ role: "SUPER_ADMIN" }));
+    expect(await createTeam(undefined, formData({ name: "Nyt hold" }))).toEqual({ ok: false, error: "Vælg holdets klub." });
+    expect(await createTeam(undefined, formData({ name: "Nyt hold", clubId: "findes-ikke" }))).toEqual({ ok: false, error: "Klubben findes ikke." });
     expect(await prisma.team.count()).toBe(0);
   });
 

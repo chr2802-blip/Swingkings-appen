@@ -18,25 +18,87 @@ async function club() {
   return { club: row, first, second, third };
 }
 
-test("the super admin makes a club, puts a team in it and names a club admin", async ({ page, loginAs }) => {
+test("the super admin makes a club with the +, makes a team in it, places an old team in it and names a club admin", async ({ page, loginAs }) => {
   const { team, anna } = await squad("Herrer 1");
   const root = await db.user.create({ data: { email: "root@e2e.dk", name: "Root", passwordHash: "x", role: "SUPER_ADMIN", activeTeamId: team.id } });
   await loginAs(root);
   await page.goto("/admin");
-  const clubs = page.getByRole("region", { name: "Klubber" });
-  await clubs.getByLabel("Klubbens navn").fill("Swingkings FC");
-  await clubs.getByRole("button", { name: "Opret klub" }).click();
-  await expect(clubs.getByRole("heading", { name: "Swingkings FC" })).toBeVisible();
+  await expect(page.getByText("Ingen klubber endnu. Opret den første med +.")).toBeVisible();
+  await page.getByRole("button", { name: "Opret" }).click();
+  await page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Ny klub" }).click();
+  const make = page.getByRole("dialog", { name: "Ny klub" });
+  await make.getByLabel("Klubbens navn").fill("Swingkings FC");
+  await make.getByRole("button", { name: "Opret klub" }).click();
+  // The new club's own page opens, where its teams are made.
+  await expect(page.getByRole("heading", { name: "Swingkings FC", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/klubber\/[^/]+$/);
+  const club = await db.club.findFirstOrThrow();
+  await expect(page.getByText("Ingen hold i klubben endnu. Opret det første med +.")).toBeVisible();
 
-  const row = page.getByRole("listitem").filter({ hasText: "Herrer 1" });
+  // One thing to make here, so the + is the team's dialog itself.
+  await page.getByRole("button", { name: "Nyt hold" }).click();
+  const newTeam = page.getByRole("dialog", { name: "Nyt hold" });
+  await newTeam.getByLabel("Holdets navn").fill("Damer 1");
+  await newTeam.getByRole("button", { name: "Opret hold" }).click();
+  await expect(newTeam.getByText("Linket er klar. Det vises kun nu — kopiér det og send det.")).toBeVisible();
+  await newTeam.getByRole("button", { name: "Færdig" }).click();
+  await expect(newTeam).toBeHidden();
+  const teams = page.getByRole("tabpanel", { name: "Hold" });
+  await expect(teams.getByRole("listitem").filter({ hasText: "Damer 1" })).toBeVisible();
+  expect((await db.team.findFirstOrThrow({ where: { name: "Damer 1" } })).clubId).toBe(club.id);
+
+  // A team from before clubs has none: it is put in one under the Hold tab.
+  await page.goto("/admin/hold");
+  const all = page.getByRole("tabpanel", { name: "Hold" });
+  const row = all.getByRole("listitem").filter({ hasText: "Herrer 1" });
+  await expect(row.getByText("Uden klub")).toBeVisible();
   await choose(row.getByLabel("Klub for Herrer 1"), "Swingkings FC");
   await row.getByRole("button", { name: "Gem klub" }).click();
-  await expect(clubs.getByText("Hold: Herrer 1")).toBeVisible();
+  await expect(row.getByRole("link", { name: "Swingkings FC" })).toBeVisible();
+  await expect(all.getByRole("listitem").filter({ hasText: "Damer 1" }).getByRole("link", { name: "Swingkings FC" })).toBeVisible();
 
-  await choose(clubs.getByLabel("Ny klubadmin"), "Anna");
-  await clubs.getByRole("button", { name: "Gør til klubadmin" }).click();
-  await expect(clubs.getByText(/Anna\s*· Klubadmin/)).toBeVisible();
+  await page.goto(`/admin/klubber/${club.id}/admins`);
+  const admins = page.getByRole("tabpanel", { name: "Klubadmins" });
+  await choose(admins.getByLabel("Ny klubadmin"), "Anna");
+  await admins.getByRole("button", { name: "Gør til klubadmin" }).click();
+  await expect(admins.getByText(/Anna\s*· Klubadmin/)).toBeVisible();
   await expect.poll(() => db.clubAdmin.count({ where: { userId: anna.id } })).toBe(1);
+
+  // The list of clubs counts them; the back arrow leads there.
+  await page.goto("/admin");
+  await expect(page.getByRole("link", { name: /Swingkings FC\s*2 hold · 1 klubadmin/ })).toBeVisible();
+});
+
+test("the super admin renames a club on its page, and deletes it only once it has no teams", async ({ page, loginAs }) => {
+  const { team } = await squad("Herrer 1");
+  const club = await db.club.create({ data: { name: "Swingkings FC" } });
+  const empty = await db.club.create({ data: { name: "Tom klub" } });
+  await db.team.update({ where: { id: team.id }, data: { clubId: club.id } });
+  const root = await db.user.create({ data: { email: "root@e2e.dk", name: "Root", passwordHash: "x", role: "SUPER_ADMIN", activeTeamId: team.id } });
+  await loginAs(root);
+
+  await page.goto(`/admin/klubber/${club.id}/indstillinger`);
+  const settings = page.getByRole("tabpanel", { name: "Indstillinger" });
+  await settings.getByLabel("Klubbens navn").fill("Swingkings IF");
+  await settings.getByRole("button", { name: "Gem" }).click();
+  await expect(settings.getByText("Gemt.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Swingkings IF", level: 1 })).toBeVisible();
+  // A team always has a club: this one has one, so it is not deleted.
+  await expect(settings.getByText(/Flyt eller slet klubbens hold/)).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Slet klub" })).toHaveCount(0);
+
+  // The tabs are swiped or tapped between.
+  await page.getByRole("tab", { name: "Hold" }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/klubber/${club.id}$`));
+  await expect(page.getByRole("tabpanel", { name: "Hold" }).getByRole("listitem").filter({ hasText: "Herrer 1" })).toBeVisible();
+
+  await page.goto(`/admin/klubber/${empty.id}/indstillinger`);
+  await page.getByRole("tabpanel", { name: "Indstillinger" }).getByRole("button", { name: "Slet klub" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Slet klubben" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("link", { name: /Tom klub/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Swingkings IF/ })).toBeVisible();
+  expect(await db.club.count()).toBe(1);
 });
 
 test("a club admin shares a post with the teams ticked, where players of every one of them comment on it", async ({ page, loginAs }) => {

@@ -8,6 +8,7 @@ import {
   deleteClub,
   deleteClubActivity,
   removeClubAdmin,
+  renameClub,
   saveClubActivity,
   setTeamClubAction,
 } from "@/app/actions/club";
@@ -58,9 +59,11 @@ describe("the super admin's clubs", () => {
     const { team, anna } = await makeSquad();
     const stranger = await makeSquad("Andre");
     await signIn(boss);
-    expect(await createClub(undefined, formData({ name: "  Swingkings FC " }))).toEqual({ ok: true });
+    const opened = await captureRedirect(() => createClub(undefined, formData({ name: "  Swingkings FC " })));
     const made = await prisma.club.findFirstOrThrow();
     expect(made.name).toBe("Swingkings FC");
+    // Made, the club's own page opens: its teams are made there.
+    expect(opened).toBe(`/admin/klubber/${made.id}`);
 
     // A club admin is always a player on one of the club's teams.
     expect(await addClubAdmin(undefined, formData({ clubId: made.id, userId: anna.id }))).toEqual({
@@ -74,6 +77,9 @@ describe("the super admin's clubs", () => {
     expect(await clubOfTeam(team.id)).toEqual({ id: made.id, name: "Swingkings FC" });
 
     expect(await setTeamClubAction(undefined, formData({ teamId: team.id, clubId: "findes-ikke" }))).toEqual({ ok: false, error: "Klubben findes ikke." });
+    // A team always has a club: it is moved to another, never taken out.
+    expect(await setTeamClubAction(undefined, formData({ teamId: team.id, clubId: "" }))).toEqual({ ok: false, error: "Et hold skal have en klub." });
+    expect(await clubOfTeam(team.id)).toEqual({ id: made.id, name: "Swingkings FC" });
     expect(await removeClubAdmin(undefined, formData({ clubId: made.id, userId: anna.id }))).toEqual({ ok: true });
     expect(await prisma.clubAdmin.count()).toBe(0);
     expect(await createClub(undefined, formData({ name: "" }))).toMatchObject({ ok: false });
@@ -88,20 +94,38 @@ describe("the super admin's clubs", () => {
       await expectRedirect(() => removeClubAdmin(undefined, formData({ clubId: setup.club.id, userId: setup.clubAdmin.id })), "/oversigt");
       await expectRedirect(() => setTeamClubAction(undefined, formData({ teamId: setup.outside.team.id, clubId: setup.club.id })), "/oversigt");
       await expectRedirect(() => deleteClub(undefined, formData({ clubId: setup.club.id })), "/oversigt");
+      await expectRedirect(() => renameClub(undefined, formData({ clubId: setup.club.id, name: "Min klub" })), "/oversigt");
     }
-    expect(await prisma.club.count()).toBe(1);
+    expect(await prisma.club.findMany({ select: { name: true } })).toEqual([{ name: "Swingkings FC" }]);
   });
 
-  it("deletes a club with its posts and activities, and leaves its teams", async () => {
+  it("renames a club, and refuses no name or a club that is not there", async () => {
+    const setup = await club();
+    await signIn(await makeUser({ role: "SUPER_ADMIN" }));
+    expect(await renameClub(undefined, formData({ clubId: setup.club.id, name: " Swingkings IF " }))).toEqual({ ok: true });
+    expect(await clubOfTeam(setup.first.team.id)).toEqual({ id: setup.club.id, name: "Swingkings IF" });
+    expect(await renameClub(undefined, formData({ clubId: setup.club.id, name: " " }))).toEqual({ ok: false, error: "Giv klubben et navn." });
+    expect(await renameClub(undefined, formData({ clubId: "findes-ikke", name: "X" }))).toEqual({ ok: false, error: "Klubben findes ikke." });
+    expect((await prisma.club.findUniqueOrThrow({ where: { id: setup.club.id } })).name).toBe("Swingkings IF");
+  });
+
+  it("deletes a club with its posts and activities once its teams are moved — a team always has a club", async () => {
     const setup = await club();
     await clubPost(setup, { [PHOTO_FIELD]: (await makePhoto(setup.first.team.id)).id });
     await prisma.match.create({ data: { clubId: setup.club.id, title: "Klubdag", startsAt: new Date(Date.now() + 864e5), kind: "OTHER" } });
     await signIn(await makeUser({ role: "SUPER_ADMIN" }));
-    expect(await deleteClub(undefined, formData({ clubId: setup.club.id }))).toEqual({ ok: true });
+    expect(await deleteClub(undefined, formData({ clubId: setup.club.id }))).toEqual({ ok: false, error: "Klubben har hold. Flyt eller slet dem først." });
+    expect(await prisma.club.count()).toBe(1);
+
+    const other = await prisma.club.create({ data: { name: "Naboklubben" } });
+    for (const team of [setup.first, setup.second, setup.third]) {
+      expect(await setTeamClubAction(undefined, formData({ teamId: team.team.id, clubId: other.id }))).toEqual({ ok: true });
+    }
+    await expectRedirect(() => deleteClub(undefined, formData({ clubId: setup.club.id })), "/admin");
     expect(await prisma.post.count({ where: { teamId: null } })).toBe(0);
     expect(await prisma.match.count({ where: { teamId: null } })).toBe(0);
     expect(await prisma.photo.count()).toBe(0);
-    expect(await prisma.team.count({ where: { clubId: null } })).toBe(4);
+    expect(await prisma.team.count({ where: { clubId: other.id } })).toBe(3);
     expect(await prisma.clubAdmin.count()).toBe(0);
   });
 });

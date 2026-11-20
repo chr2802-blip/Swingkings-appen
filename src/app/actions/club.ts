@@ -32,36 +32,51 @@ function refreshAll() {
 
 const clubName = z.object({ name: requiredText("Giv klubben et navn.", MAX_CLUB_NAME) });
 
+/** Makes a club and opens its page under /admin, where its teams are made. */
 export async function createClub(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSuperAdmin();
   const form = readForm(clubName, formData);
   if (!form.ok) return fail(form.error);
-  await prisma.club.create({ data: { name: form.fields.name } });
+  const club = await prisma.club.create({ data: { name: form.fields.name }, select: { id: true } });
+  refreshAll();
+  redirect(`/admin/klubber/${club.id}`);
+}
+
+/** Gives a club a new name. */
+export async function renameClub(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const form = readForm(clubName, formData);
+  if (!form.ok) return fail(form.error);
+  const renamed = await prisma.club.updateMany({ where: { id: field(formData, "clubId") }, data: { name: form.fields.name } });
+  if (renamed.count === 0) return fail("Klubben findes ikke.");
   refreshAll();
   return ok();
 }
 
 /**
  * Deletes a club and what it made — its posts and activities, with the comments, votes and
- * sign-ups on them. Its teams stay, on their own.
+ * sign-ups on them. A team always has a club, so a club with teams is not deleted: they are
+ * moved or deleted first.
  */
 export async function deleteClub(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSuperAdmin();
   const id = field(formData, "clubId");
+  if (await prisma.team.count({ where: { clubId: id } })) return fail("Klubben har hold. Flyt eller slet dem først.");
   const photos = await prisma.postPhoto.findMany({ where: { post: { clubId: id } }, select: { photoId: true } });
   await prisma.club.deleteMany({ where: { id } });
   await discardPhotosWhereFiled(photos.map((p) => p.photoId));
   refreshAll();
-  return ok();
+  redirect("/admin");
 }
 
-/** Puts a team in a club, moves it, or takes it out (`clubId` empty) — see `setTeamClub`. */
+/** Puts a team in a club or moves it to another — see `setTeamClub`. A team always has a club. */
 export async function setTeamClubAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireSuperAdmin();
   const teamId = field(formData, "teamId");
-  const clubId = field(formData, "clubId") || null;
+  const clubId = field(formData, "clubId");
+  if (!clubId) return fail("Et hold skal have en klub.");
   if (!(await prisma.team.count({ where: { id: teamId } }))) return fail("Holdet findes ikke.");
-  if (clubId && !(await prisma.club.count({ where: { id: clubId } }))) return fail("Klubben findes ikke.");
+  if (!(await prisma.club.count({ where: { id: clubId } }))) return fail("Klubben findes ikke.");
   await setTeamClub(teamId, clubId);
   refreshAll();
   return ok();
