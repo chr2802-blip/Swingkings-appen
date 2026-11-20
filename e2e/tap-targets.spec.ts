@@ -39,11 +39,13 @@ async function demoTeam(page: Page, loginAs: (user: { id: string }) => Promise<P
     data: { email: "root@e2e.dk", name: "Root", passwordHash: "x", role: "SUPER_ADMIN", activeTeamId: team.id },
   });
   await loginAs(root);
-  await page.goto("/admin");
+  await page.goto("/admin/testdata");
   await page.getByRole("button", { name: "Opret testhold" }).click();
+  // The sheet closes once the whole season has been written.
   await page.getByRole("dialog").getByRole("button", { name: "Opret testhold" }).click();
-  // The list of teams shows it once the whole season has been written.
-  await expect(page.getByText(/^18 spillere · \d+ aktiviteter/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("dialog")).toBeHidden({ timeout: 60_000 });
+  await page.goto("/admin/hold");
+  await expect(page.getByText(/^18 spillere · \d+ aktiviteter/)).toBeVisible();
   const demo = await db.team.findFirstOrThrow({ where: { isDemo: true } });
   const admin = await db.teamMember.findFirstOrThrow({ where: { teamId: demo.id, role: "ADMIN" }, include: { user: true } });
   await db.user.update({ where: { id: admin.userId }, data: { activeTeamId: demo.id } });
@@ -115,7 +117,9 @@ test("the super admin's page and the pages before signing in press in and are at
     data: { email: "root@e2e.dk", name: "Root", passwordHash: "x", role: "SUPER_ADMIN", activeTeamId: team.id },
   });
   await loginAs(root);
-  const signedIn = await audit(page, ["/admin", "/hold/vaelg"]);
+  const club = await db.club.create({ data: { name: "Swingkings FC" } });
+  await db.team.update({ where: { id: team.id }, data: { clubId: club.id } });
+  const signedIn = await audit(page, ["/admin", "/admin/hold", "/admin/logoer", "/admin/testdata", `/admin/klubber/${club.id}`, `/admin/klubber/${club.id}/admins`, `/admin/klubber/${club.id}/indstillinger`, "/hold/vaelg"]);
 
   await context.clearCookies();
   const signedOut = await audit(page, ["/login", "/privatliv", "/hent-appen"]);

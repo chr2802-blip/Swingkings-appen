@@ -12,9 +12,16 @@ describe("where the back arrow leads", () => {
       "/boder/katalog",
       "/aktiviteter",
       "/admin",
+      "/admin/hold",
+      "/admin/logoer",
     ]) {
       expect(backHref(path, me)).toBeNull();
     }
+  });
+
+  it("takes a club's page under Admin, and its tabs, up to the clubs", () => {
+    expect(backHref("/admin/klubber/abc", me)).toBe("/admin");
+    expect(backHref("/admin/klubber/abc/admins", me)).toBe("/admin");
   });
 
   it("takes an activity or a task up to the activities", () => {

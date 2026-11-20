@@ -14,7 +14,7 @@ import { demoPicture } from "./demo-pictures";
  * read through the real KampKlar import, standard jobs done and to do, sign-ups, a chat
  * that has been going for weeks, and a feed with pictures, likes, comments and polls open
  * and closed. Made (or remade) by `npm run db:demo` locally and by the super admin's
- * "Opret testhold" on /admin, and thrown away again by `removeDemoTeam`.
+ * "Opret testhold" on /admin/testdata, and thrown away again by `removeDemoTeam`.
  *
  * Everything it makes is marked `isDemo`, and removing it deletes what is marked and
  * nothing else — whatever a real team is called, and whatever address somebody signs up

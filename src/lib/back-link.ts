@@ -26,6 +26,9 @@ export function backHref(pathname: string, profileHref: string): string | null {
     case "profil":
       // Somebody on no team has only the settings; there is nothing above them.
       return profileHref === "/profil" ? null : profileHref;
+    case "admin":
+      // A club's page and its tabs lead up to the list of clubs; /admin's own tabs have none.
+      return second === "klubber" ? "/admin" : null;
     case "hold":
       if (second === "vaelg") return null;
       if (second === "saeson") return "/hold";

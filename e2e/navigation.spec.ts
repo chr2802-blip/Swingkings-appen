@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./helpers/fixtures";
+import { choose } from "./helpers/select";
 import { db, squad } from "./helpers/database";
 
 test("the front door sends the signed-in to the overview and everyone else to login", async ({
@@ -85,14 +86,26 @@ test("a super admin creates a team without joining it, looks into it, goes home 
     },
   });
   await db.teamMember.create({ data: { teamId: home.id, userId: root.id, role: "PLAYER" } });
+  await db.club.create({ data: { name: "Swingkings FC" } });
+  const other = await db.club.create({ data: { name: "Naboklubben" } });
   await loginAs(root);
+  // The admin page's "+" makes a team in the club chosen.
   await page.goto("/admin");
-  await page.getByLabel("Holdets navn").fill("Nyt hold");
-  await page.getByRole("button", { name: "Opret hold" }).click();
-  await expect(page.getByText(/Når personen har oprettet sig/)).toBeVisible();
+  await page.getByRole("button", { name: "Opret" }).click();
+  await page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Nyt hold" }).click();
+  const dialog = page.getByRole("dialog", { name: "Nyt hold" });
+  await dialog.getByLabel("Holdets navn").fill("Nyt hold");
+  await choose(dialog.getByLabel("Klub"), "Naboklubben");
+  await dialog.getByRole("button", { name: "Opret hold" }).click();
+  await expect(dialog.getByText(/Når personen har oprettet sig/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Færdig" }).click();
+  await expect(dialog).toBeHidden();
   expect(await db.teamMember.count({ where: { userId: root.id } })).toBe(1);
+  expect((await db.team.findFirstOrThrow({ where: { name: "Nyt hold" } })).clubId).toBe(other.id);
 
+  await page.goto("/admin/hold");
   await page
+    .getByRole("tabpanel", { name: "Hold" })
     .getByRole("listitem")
     .filter({ hasText: "Nyt hold" })
     .getByRole("button", { name: "Åbn" })
@@ -124,13 +137,14 @@ test("a super admin makes the test team, looks into it without joining, and take
     },
   });
   await loginAs(root);
-  await page.goto("/admin");
+  await page.goto("/admin/testdata");
   await page.getByRole("button", { name: "Opret testhold" }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Opret testhold" })
     .click();
   await expect(page.getByRole("dialog")).toBeHidden();
+  await page.goto("/admin/hold");
   await expect(
     page.getByRole("listitem").filter({ hasText: "Swingkings Demo" }),
   ).toBeVisible();
@@ -144,12 +158,14 @@ test("a super admin makes the test team, looks into it without joining, and take
     page.getByText("Husk mødetid 13:45 på lørdag! 💪"),
   ).toBeVisible();
 
-  await page.goto("/admin");
+  await page.goto("/admin/testdata");
   await page.getByRole("button", { name: "Slet testhold" }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Slet testholdet" })
     .click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await page.goto("/admin/hold");
   await expect(
     page.getByRole("listitem").filter({ hasText: "Swingkings Demo" }),
   ).toBeHidden();

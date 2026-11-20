@@ -278,18 +278,21 @@ export async function resetMemberPassword(_prev: ActionResult, formData: FormDat
 
 const createTeamSchema = z.object({
   name: requiredText("Giv holdet et navn."),
+  clubId: z.string({ error: "Vælg holdets klub." }).trim().min(1, "Vælg holdets klub."),
 });
 
 /**
- * The super admin creates a team and a one-use link for its first coach. They never join
- * it themselves: they are on their own team only, and look into any other from /admin.
+ * The super admin creates a team in a club — a team always has one — and a one-use link
+ * for its first coach. They never join it themselves: they are on their own team only, and
+ * look into any other from /admin.
  */
 export async function createTeam(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const user = await requireSuperAdmin();
   const form = readForm(createTeamSchema, formData);
   if (!form.ok) return fail(form.error);
+  if (!(await prisma.club.count({ where: { id: form.fields.clubId } }))) return fail("Klubben findes ikke.");
 
-  const team = await prisma.team.create({ data: { name: form.fields.name } });
+  const team = await prisma.team.create({ data: { name: form.fields.name, clubId: form.fields.clubId } });
   // One place: the coach joins as a player, and is made admin under Holdindstillinger
   // (the super admin can open any team's).
   const path = await makeInviteLink(team.id, user.id, INVITE_DAYS, 1);
