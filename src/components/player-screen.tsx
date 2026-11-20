@@ -40,7 +40,7 @@ const LATEST = 3;
 
 /**
  * A person's tabs, in the order they are swiped through: details, fines and challenges,
- * jobs — and, on one's own page only, "Rediger profil".
+ * jobs — and, on one's own page only, "Profil".
  */
 export const PLAYER_TABS = ["", "/boder", "/opgaver", "/profil"] as const;
 export type PlayerTab = (typeof PLAYER_TABS)[number];
@@ -55,15 +55,15 @@ export function playerTabHref(userId: string, tab: PlayerTab = "") {
  *
  * - **Detaljer**: the three latest fines or challenges, and their next jobs — every one
  *   due on the first day one is.
- * - **Bøder og udfordringer**: one list as in the fine history, the challenges still
+ * - **Bøder**: one list as in the fine history, the challenges still
  *   waiting above it.
  * - **Opgaver**: their jobs.
  *
  * What their fines come to, how many fines and open jobs they have (and, once the box is
  * open for payment, "Betal" on your own) stands above the tabs.
  * Every name in the app
- * links here. On your own page it is also your profile, with a fourth tab, "Rediger
- * profil", to change it (`ProfileSettings`).
+ * links here. On your own page it is also your profile, with a fourth tab, "Profil", to
+ * change it (`ProfileSettings`).
  *
  * The player's card rolls down out of the header when the page opens, and back up into it
  * when a menu item leads away (`PageBanner`), as the front page's banner does.
@@ -200,7 +200,7 @@ export async function PlayerScreen({
           },
           {
             href: playerTabHref(id, "/boder"),
-            title: "Bøder og udfordringer",
+            title: "Bøder",
             // One list as in the history: fines given (star), those a challenge moved and
             // the challenges still waiting (swords).
             children:
@@ -234,7 +234,7 @@ export async function PlayerScreen({
             ? [
                 {
                   href: playerTabHref(id, "/profil"),
-                  title: "Rediger profil",
+                  title: "Profil",
                   children: <ProfileSettings user={user} />,
                 },
               ]

@@ -11,7 +11,7 @@ import { LogoutButton } from "@/components/logout-button";
 
 /**
  * What one changes about oneself: name, picture and shirt number, the app, notifications,
- * the password and the account. On a team it is the "Rediger profil" tab of one's own page;
+ * the password and the account. On a team it is the "Profil" tab of one's own page;
  * somebody on no team (or a super admin only looking in) has it as `/profil`.
  */
 export async function ProfileSettings({ user }: { user: SessionUser }) {
