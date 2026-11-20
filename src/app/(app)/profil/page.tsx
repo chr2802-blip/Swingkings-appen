@@ -5,7 +5,7 @@ import { playerHref } from "@/components/player-link";
 import { ProfileSettings } from "@/components/profile-settings";
 
 /**
- * On a team the settings are the "Rediger profil" tab of one's own page; links here land
+ * On a team the settings are the "Profil" tab of one's own page; links here land
  * there. Somebody on no team, or a super admin only looking in, has only this page.
  */
 export default async function ProfilePage() {

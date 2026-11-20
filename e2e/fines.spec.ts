@@ -1005,7 +1005,7 @@ test("a challenge still waiting stands in the history among the fines, on the fi
   await expectInHistory(page.getByRole("tabpanel", { name: "Bøder (3)" }));
   await page.goto(`/spiller/${anna.id}/boder`);
   // Anna has no fine yet, only the challenge she lost.
-  const annas = page.getByRole("tabpanel", { name: "Bøder og udfordringer" }).getByRole("listitem");
+  const annas = page.getByRole("tabpanel", { name: "Bøder" }).getByRole("listitem");
   await expect(annas).toHaveCount(1);
   await expect(annas).toContainText("Bo 🏆 slog Anna");
 

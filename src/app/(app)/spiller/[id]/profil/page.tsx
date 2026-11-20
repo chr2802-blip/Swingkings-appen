@@ -3,7 +3,7 @@ import { requireTeamUser } from "@/lib/auth";
 import { PlayerScreen } from "@/components/player-screen";
 import { playerHref } from "@/components/player-link";
 
-/** The "Rediger profil" tab: only on one's own page; on anybody else's it is their page. */
+/** The "Profil" tab: only on one's own page; on anybody else's it is their page. */
 export default async function PlayerProfileTabPage({
   params,
 }: {
