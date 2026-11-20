@@ -3,7 +3,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useLeaveHome } from "./home-banner";
+import { useLeaveBanner } from "./home-banner";
 import { NAV_ITEMS, TAB_PATHS, isInTab, tabHref } from "./nav-items";
 import { PageLeaving } from "./page-transition";
 import { pageMotion } from "@/lib/page-motion";
@@ -21,7 +21,7 @@ type Pill = { x: number; y: number; moved: boolean };
  */
 export function BottomNav({ profileHref }: { profileHref: string }) {
   const pathname = usePathname();
-  const leaveHome = useLeaveHome(pathname);
+  const leaveBanner = useLeaveBanner();
   // The tab tapped while still on `from`; forgotten as soon as the address moves on.
   const [tapped, setTapped] = useState<{ href: string; from: string } | null>(null);
   const shown = tapped && tapped.from === pathname ? tapped.href : null;
@@ -99,7 +99,7 @@ export function BottomNav({ profileHref }: { profileHref: string }) {
                     if (!(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)) {
                       setTapped({ href, from: pathname });
                     }
-                    leaveHome(event, href);
+                    leaveBanner(event, href);
                   }}
                   aria-current={active ? "page" : undefined}
                   className="press-icon flex flex-col items-center gap-1 px-0.5 pt-2.5 pb-2"

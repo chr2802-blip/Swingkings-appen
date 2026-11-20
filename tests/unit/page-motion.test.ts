@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageMotion } from "@/lib/page-motion";
+import { leavesScope, pageMotion } from "@/lib/page-motion";
 import { NAV_ITEMS, TAB_PATHS } from "@/components/nav-items";
 
 describe("which way a page comes in", () => {
@@ -55,5 +55,25 @@ describe("which way a page comes in", () => {
     expect(pageMotion("/boder", "/spiller/me", TAB_PATHS)).toBe("open");
     expect(pageMotion("/spiller/me", "/profil", TAB_PATHS)).toBe("open");
     expect(pageMotion("/profil", "/boder", TAB_PATHS)).toBe("close");
+  });
+});
+
+describe("when a page's banner rolls up", () => {
+  it("rolls up for a link away from the page", () => {
+    expect(leavesScope("/boder", "/oversigt")).toBe(true);
+    expect(leavesScope("/spiller/me", "/oversigt")).toBe(true);
+    expect(leavesScope("/oversigt", "/spiller/me")).toBe(true);
+    // Another person's page is another page, however alike the address.
+    expect(leavesScope("/spiller/me2", "/spiller/me")).toBe(true);
+    expect(leavesScope("/spiller/bo", "/spiller/me")).toBe(true);
+  });
+
+  it("stays for the page itself and its own tabs", () => {
+    expect(leavesScope("/oversigt", "/oversigt")).toBe(false);
+    expect(leavesScope("/oversigt#feed", "/oversigt")).toBe(false);
+    expect(leavesScope("/spiller/me", "/spiller/me")).toBe(false);
+    expect(leavesScope("/spiller/me/profil", "/spiller/me")).toBe(false);
+    expect(leavesScope("/spiller/me/boder?x=1", "/spiller/me")).toBe(false);
+    expect(leavesScope("/spiller/me/", "/spiller/me")).toBe(false);
   });
 });

@@ -84,7 +84,8 @@ test("a player's page shows their latest fines and challenges and their next job
   ).toBeVisible();
   await expect(page.getByText("Kridte banen")).toHaveCount(0);
   await expect(page.getByText("Naboens bøde")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Rediger" })).toHaveCount(0);
+  // Changing the profile is a tab on one's own page only.
+  await expect(page.getByRole("tab", { name: "Rediger profil" })).toHaveCount(0);
 
   // A fine is a row; tapped, it opens as in the history, and Anna (not its giver) may not delete it.
   await latest.getByRole("button", { name: /Glemt trøje/ }).click();
@@ -182,12 +183,12 @@ test("your own page is your profile: the tab bar's Profil opens it, and Rediger 
   await expect(
     page.getByRole("heading", { name: "Anna", level: 1 }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Rediger" }).click();
-  await expect(page).toHaveURL(/\/profil$/);
-  await expect(page.getByLabel("Navn")).toHaveValue("Anna");
+  await page.getByRole("tab", { name: "Rediger profil" }).click();
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/profil$`));
+  await expect(page.getByRole("tabpanel", { name: "Rediger profil" }).getByLabel("Navn")).toHaveValue("Anna");
   // The settings are in the same tab.
   await expect(profileTab).toHaveAttribute("aria-current", "page");
-  await page.getByRole("link", { name: "Se min side" }).click();
+  await page.getByRole("tab", { name: "Detaljer" }).click();
   await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}$`));
 });
 
@@ -272,7 +273,7 @@ test("a person's + gives them a fine, reports a challenge against them or gives 
   expect(made.assignees.map((a) => a.userId)).toEqual([bo.id]);
 });
 
-test("on your own page the pencil is Rediger, and the name is never cut short", async ({ page, loginAs }) => {
+test("on your own page Rediger profil is a tab, and the name is never cut short", async ({ page, loginAs }) => {
   const { anna } = await squad();
   const long = "Anna-Sofie Kristiansen Vestergaard Holm-Nielsen";
   await db.user.update({ where: { id: anna.id }, data: { name: long } });
@@ -283,15 +284,74 @@ test("on your own page the pencil is Rediger, and the name is never cut short", 
   await expect(heading).toBeVisible();
   // All of it shows: nothing is hidden behind an ellipsis.
   expect(await heading.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  const edit = page.getByRole("link", { name: "Rediger" });
-  await expect(edit).toHaveText("");
+  const edit = page.getByRole("tab", { name: "Rediger profil" });
   // With no activity coming there is no job to make, but the fine and the challenge are there.
   await page.getByRole("button", { name: "Opret" }).click();
   await expect(page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Meld udfordring" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Opret" }).getByRole("button", { name: "Opret opgave" })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await edit.click();
-  await expect(page).toHaveURL(/\/profil$/);
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/profil$`));
+  await expect(page.getByRole("tabpanel", { name: "Rediger profil" }).getByLabel("Navn")).toHaveValue(long);
+});
+
+test("the settings are only a tab on one's own page: /profil and another's tab lead elsewhere", async ({ page, loginAs }) => {
+  const { anna, bo } = await squad();
+  await loginAs(anna);
+  await page.goto(`/spiller/${anna.id}/profil`);
+  await expect(page.getByRole("tab", { name: "Rediger profil" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Gem", exact: true })).toBeVisible();
+  // Old links to the settings land in the tab.
+  await page.goto("/profil");
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/profil$`));
+  // Somebody else's page has no such tab, and its address is their page.
+  await page.goto(`/spiller/${bo.id}/profil`);
+  await expect(page).toHaveURL(new RegExp(`/spiller/${bo.id}$`));
+  await expect(page.getByRole("tab", { name: "Rediger profil" })).toHaveCount(0);
+});
+
+test("a player's card is one with the header, rolls down on arrival and up on leaving", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/boder");
+  const stripes = page.locator("header .header-stripes");
+  await expect.poll(() => stripes.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(0);
+
+  await page.goto(`/spiller/${anna.id}`);
+  const card = page.locator(".page-banner.player-card");
+  await expect(card).toBeVisible();
+  // No stripes between the header and the card.
+  await expect.poll(() => stripes.evaluate((el) => el.getBoundingClientRect().height)).toBe(0);
+  // It came down out of the header, and the page under it with it: not slid in from the side.
+  expect(await card.evaluate((el) => getComputedStyle(el).animationName)).toBe("banner-down");
+  expect(await page.getByTestId("page").evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+  expect(
+    await page.getByRole("tabpanel", { name: "Detaljer" }).evaluate((el) => {
+      for (let node: Element | null = el; node; node = node.parentElement) {
+        if (getComputedStyle(node).animationName === "banner-follow") return true;
+      }
+      return false;
+    }),
+  ).toBe(true);
+
+  // Swiping between its own tabs leaves it where it is.
+  await page.getByRole("tab", { name: "Bøder og udfordringer" }).click();
+  await expect(page).toHaveURL(new RegExp(`/spiller/${anna.id}/boder$`));
+  await expect(card).not.toHaveAttribute("data-leaving");
+
+  // A menu item away rolls it up first; the page goes when it has.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/aktiviteter(\?|$)/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.getByRole("navigation").last().getByRole("link", { name: "Aktiviteter" }).click();
+  await expect(card).toHaveAttribute("data-leaving", "true");
+  await expect.poll(() => card.evaluate((el) => getComputedStyle(el).animationName)).toBe("banner-up");
+  release();
+  await expect(page).toHaveURL(/\/aktiviteter$/);
+  await expect.poll(() => stripes.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(0);
 });
 
 test("names in the feed, the comments and the chat open the person's page", async ({

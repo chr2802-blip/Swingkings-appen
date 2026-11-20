@@ -34,6 +34,8 @@ const INTENT_PX = 6;
 const SETTLE_MS = 120;
 /** A tap on a dot scrolls there; if the browser never arrives, it is put there. */
 const ARRIVE_MS = 1500;
+/** How long after a wheel or a key the row's scrolling is still somebody's own. */
+const HANDLED_MS = 1000;
 
 /**
  * Pages side by side that a finger swipes between, under a row of their names: the one
@@ -74,7 +76,7 @@ export function SwipePages({
   const line = useRef<HTMLSpanElement>(null);
   const tablist = useRef<HTMLDivElement>(null);
   // What the listeners read: they are attached once and outlive any one render.
-  const live = useRef({ active, resting, touching: false, target: null as number | null, timer: 0, deadline: 0 });
+  const live = useRef({ active, resting, touching: false, target: null as number | null, timer: 0, deadline: 0, handled: 0 });
   live.current.active = active;
 
   /** Puts the underline under page `at`, which is a fraction while the row is between two. */
@@ -194,8 +196,18 @@ export function SwipePages({
       now.timer = window.setTimeout(settle, SETTLE_MS);
     };
     // A trackpad or a keyboard scrolls the row without ever touching it.
+    const handled = () => {
+      now.handled = Date.now();
+    };
     const scrolled = () => {
-      if (Math.abs(el.scrollLeft - now.active * el.clientWidth) > 2) open();
+      const off = Math.abs(el.scrollLeft - now.active * el.clientWidth) > 2;
+      // Nobody moved it: the browser brought something on the page into view, and a page
+      // whose button sits to one side snapped to its neighbour. It goes back where it was.
+      if (off && now.resting && !now.touching && now.target === null && Date.now() - now.handled > HANDLED_MS) {
+        el.scrollLeft = now.active * el.clientWidth;
+        return;
+      }
+      if (off) open();
       // The names keep up with the finger: the underline every frame, the name at half way.
       if (!now.resting) {
         const at = Math.min(pages.length - 1, Math.max(0, el.scrollLeft / (el.clientWidth || 1)));
@@ -235,7 +247,11 @@ export function SwipePages({
     el.addEventListener("touchend", up, { passive: true });
     el.addEventListener("touchcancel", up, { passive: true });
     el.addEventListener("scroll", scrolled, { passive: true });
+    el.addEventListener("wheel", handled, { passive: true });
+    el.addEventListener("keydown", handled);
     return () => {
+      el.removeEventListener("wheel", handled);
+      el.removeEventListener("keydown", handled);
       window.clearTimeout(now.timer);
       el.removeEventListener("touchstart", down);
       el.removeEventListener("touchmove", move);

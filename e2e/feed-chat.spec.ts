@@ -781,3 +781,28 @@ test("the feed is searched by its words, its writers and its comments, and closi
   await expect(box).toBeHidden();
   await expect(page.getByText("Grill efter træning")).toBeVisible();
 });
+
+test("the feed follows the front page's banner down on arrival, and fades as it rolls up on leaving", async ({ page, loginAs }) => {
+  const { anna } = await squad();
+  await loginAs(anna);
+  await page.goto("/oversigt");
+  const banner = page.locator(".page-banner");
+  const feed = page.locator("#feed");
+  await expect(feed).toBeVisible();
+  expect(await banner.evaluate((el) => getComputedStyle(el).animationName)).toBe("banner-down");
+  expect(await feed.evaluate((el) => getComputedStyle(el).animationName)).toBe("banner-follow");
+  // Once down, nothing is left moved: the feed sits where it belongs.
+  await expect.poll(() => feed.evaluate((el) => getComputedStyle(el).translate)).toBe("none");
+
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/boder(\?|$)/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.getByRole("navigation").last().getByRole("link", { name: "Bøder" }).click();
+  await expect(banner).toHaveAttribute("data-leaving", "true");
+  await expect.poll(() => feed.evaluate((el) => getComputedStyle(el).animationName)).toBe("banner-content-out");
+  release();
+  await expect(page).toHaveURL(/\/boder$/);
+});

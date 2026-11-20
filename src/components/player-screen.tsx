@@ -30,14 +30,19 @@ import { openTask } from "@/lib/tasks";
 import { FineHistory, historyItems } from "@/components/fine-history";
 import { LiveRefresh } from "@/components/live-refresh";
 import { FINES_CHANGED } from "@/lib/realtime-topic";
+import { PageBanner } from "@/components/home-banner";
+import { ProfileSettings } from "@/components/profile-settings";
 
 /** How many settled challenges and finished jobs the page shows; the open ones are always all there. */
 const RECENT = 10;
 /** How many fines and challenges "Seneste" on the details shows. */
 const LATEST = 3;
 
-/** A person's tabs, in the order they are swiped through: details, fines, challenges, jobs. */
-export const PLAYER_TABS = ["", "/boder", "/opgaver"] as const;
+/**
+ * A person's tabs, in the order they are swiped through: details, fines and challenges,
+ * jobs — and, on one's own page only, "Rediger profil".
+ */
+export const PLAYER_TABS = ["", "/boder", "/opgaver", "/profil"] as const;
 export type PlayerTab = (typeof PLAYER_TABS)[number];
 
 export function playerTabHref(userId: string, tab: PlayerTab = "") {
@@ -57,7 +62,11 @@ export function playerTabHref(userId: string, tab: PlayerTab = "") {
  * What their fines come to, how many fines and open jobs they have (and, once the box is
  * open for payment, "Betal" on your own) stands above the tabs.
  * Every name in the app
- * links here. On your own page it is also your profile, with a pencil ("Rediger") to change it.
+ * links here. On your own page it is also your profile, with a fourth tab, "Rediger
+ * profil", to change it (`ProfileSettings`).
+ *
+ * The player's card rolls down out of the header when the page opens, and back up into it
+ * when a menu item leads away (`PageBanner`), as the front page's banner does.
  *
  * The "+" gives a fine, reports a challenge or makes a job on one of the coming activities —
  * on somebody else's page with them chosen from the start.
@@ -220,6 +229,16 @@ export async function PlayerScreen({
                 </List>
               ),
           },
+          // Only on one's own page: changing who one is.
+          ...(self
+            ? [
+                {
+                  href: playerTabHref(id, "/profil"),
+                  title: "Rediger profil",
+                  children: <ProfileSettings user={user} />,
+                },
+              ]
+            : []),
         ]}
       />
     </div>
@@ -319,9 +338,10 @@ function PlayerHeader({
   const place = board.standings.find((row) => row.userId === id)?.place;
   return (
     <div>
-      {/* The player's card, edge to edge under the header as the front page's banner: the
-          shirt number large behind them, their name, and their season on a card below. */}
-      <div className="player-card page-bleed">
+      {/* The player's card, edge to edge under the header as the front page's banner and
+          one with it (no stripes between): the shirt number large behind them, their name,
+          and their season on a card below. */}
+      <PageBanner className="player-card" scope={playerHref(id)}>
         <div className="relative mx-auto max-w-5xl overflow-hidden pt-6 pr-[max(1rem,env(safe-area-inset-right))] pb-14 pl-[max(1rem,env(safe-area-inset-left))]">
           {member?.shirtNumber != null && (
             <span
@@ -365,22 +385,9 @@ function PlayerHeader({
                 </p>
               )}
             </div>
-            {self && (
-              <Link
-                href="/profil"
-                aria-label="Rediger"
-                title="Rediger"
-                className="press-icon flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-full bg-white/15 text-white hover:bg-white/25"
-              >
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-              </Link>
-            )}
           </div>
         </div>
-      </div>
+      </PageBanner>
       {/* Their season, on a card lying over the foot of the band. */}
       <dl className="relative -mt-10 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl border border-slate-200 bg-white py-2.5 text-center shadow-sm">
         <Stat

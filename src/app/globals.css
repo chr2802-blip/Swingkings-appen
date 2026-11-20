@@ -671,36 +671,51 @@ h1,
 }
 
 /*
- * The front page's banner hangs from the header's stripe band, as wide as the screen, and
- * rolls down out of it on arrival and back up into it on leaving (`HomeBanner`).
+ * A page's banner (`PageBanner`: the front page's greeting, a player's card) hangs from
+ * the header, as wide as the screen. It rolls down out of it on arrival, and the rest of
+ * the page follows it down; on leaving it rolls back up and the rest of the page fades.
  */
-/* A band from edge to edge right under the header, as the front page's banner: a player's card. */
-.page-bleed {
-  margin-top: -1.5rem;
-  margin-inline: calc(50% - 50vw);
-}
-
-.home-banner {
+.page-banner {
   margin-top: -1.5rem;
   margin-inline: calc(50% - 50vw);
   animation: banner-down 460ms var(--ease-arrive) both;
 }
-.home-banner[data-leaving] {
+.page-banner[data-leaving] {
   animation: banner-up 220ms var(--ease-leave) both;
 }
-.home-banner > * {
+.page-banner > * {
   animation: banner-content 520ms var(--ease-arrive) 80ms both;
 }
-.home-banner[data-leaving] > * {
+.page-banner[data-leaving] > * {
   animation: banner-content-out 160ms var(--ease-leave) both;
 }
-/* The rest of the front page fades as the banner rolls up, so no empty band is left. */
-:has(> .home-banner[data-leaving]) > :not(.home-banner) {
+/*
+ * The rest of the page: beside the banner, and beside what holds it. It only fills
+ * backwards, so nothing is left translated once it is down: a `translate` that stays
+ * would make `fixed` inside it mean the page instead of the screen.
+ */
+.app-page:has(.page-banner) > * > :not(.page-banner, :has(.page-banner)),
+:has(> .page-banner) > :not(.page-banner) {
+  animation: banner-follow 520ms var(--ease-arrive) 60ms backwards;
+}
+.app-page:has(.page-banner[data-leaving]) > * > :not(.page-banner, :has(.page-banner)),
+:has(> .page-banner[data-leaving]) > :not(.page-banner) {
   animation: banner-content-out 160ms var(--ease-leave) both;
 }
-/* The banner is the page's arrival; the page's own slide would lift it off the band. */
-.app-page:has(> * > .home-banner, > .home-banner) {
+/* The banner is the page's arrival; the page's own slide would lift it off the header. */
+.app-page:has(.page-banner) {
   animation: none;
+}
+/*
+ * The crest's stripes under the header. A player's card is one with the header, so they
+ * fold away while one is on screen and open again when it has gone.
+ */
+.header-stripes {
+  height: 0.375rem;
+  transition: height var(--dur-base) var(--ease-arrive);
+}
+:root:has(.player-card.page-banner) .header-stripes {
+  height: 0;
 }
 @keyframes banner-down {
   from {
@@ -726,6 +741,12 @@ h1,
   to {
     opacity: 1;
     translate: 0 0;
+  }
+}
+@keyframes banner-follow {
+  from {
+    opacity: 0;
+    translate: 0 -24px;
   }
 }
 @keyframes banner-content-out {
