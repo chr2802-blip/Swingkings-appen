@@ -17,6 +17,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { unseenCount } from "@/lib/notifications";
 import { VisitingBanner } from "@/components/visiting-banner";
 import { FreshPulse } from "@/components/fresh";
+import { PushKeeper } from "@/components/push-keeper";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -75,6 +76,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ScrollBars />
       {/* What a press just made pulses wherever it is listed: the fine box, an activity, a player. */}
       <FreshPulse />
+      <PushKeeper />
       {user.teamId && <BottomNav profileHref={profileHref} />}
     </div>
   );
