@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { readPushState, turnOnPush, type PushState } from "@/lib/push-client";
+import { syncPushHere, turnOnPush, type PushState } from "@/lib/push-client";
 import { sendTestPush } from "@/app/actions/push";
 import { Button } from "@/components/ui";
 import { Bolt } from "@/components/crest";
@@ -13,7 +13,7 @@ export function NotificationSetup({ compact = false }: { compact?: boolean }) {
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
-    void readPushState().then(setState);
+    void syncPushHere().then(setState);
   }, []);
 
   if (state === null || state === "unconfigured") return null;
