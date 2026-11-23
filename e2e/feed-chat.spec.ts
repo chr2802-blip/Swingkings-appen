@@ -469,6 +469,10 @@ test("a poll's answers are ticked on the roster, with several answers allowed an
   await dialog.getByRole("button", { name: "Vælg fra holdlisten" }).click();
   // The roster is the app's own drop-down, with the whole team ticked to start with.
   const players = dialog.getByRole("group", { name: "Svarmuligheder" }).getByLabel("Spillere");
+  // A fieldset shrinks like any block, so the field truncates the whole team's names rather than
+  // widening the sheet past the phone's edge.
+  const group = dialog.getByRole("group", { name: "Svarmuligheder" });
+  expect(await group.evaluate((el) => getComputedStyle(el).minInlineSize)).toBe("0px");
   const list = await openChoices(players);
   const roster = list.getByRole("option");
   await expect(roster).toHaveCount(await db.teamMember.count({ where: { teamId: team.id } }));
