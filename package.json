@@ -27,11 +27,11 @@
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
     "@prisma/client": "6.19.3",
-    "@supabase/realtime-js": "^2.119.0",
+    "@supabase/realtime-js": "^2.119.2",
     "@vercel/analytics": "^2.0.1",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
-    "jose": "^6.2.17",
+    "jose": "^6.2.18",
     "next": "15.5.29",
     "prisma": "6.19.3",
     "react": "^19.3.1",
@@ -53,6 +53,6 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   }
 }
